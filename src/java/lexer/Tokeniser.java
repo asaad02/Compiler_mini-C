@@ -157,6 +157,23 @@ public class Tokeniser extends CompilerPass {
       }
     }
 
+    /*
+     *   [include]
+     *   INCLUDE,  '#include'
+     */
+
+    if (c == '#') {
+      StringBuilder sb = new StringBuilder();
+      sb.append(c);
+      while (scanner.hasNext() && Character.isLetter(scanner.peek())) {
+        sb.append(scanner.next());
+      }
+      String lexeme = sb.toString();
+      if (lexeme.equals("#include")) {
+        return new Token(Token.Category.INCLUDE, line, column);
+      }
+    }
+
     // if we reach this point, it means we did not recognise a valid token
     error(c, line, column);
     return new Token(Token.Category.INVALID, line, column);
