@@ -77,14 +77,14 @@ public class Tokeniser extends CompilerPass {
 
     /*
      *   [delimiters]
-     *   LBRA,  // '{' // left brace
-     *   RBRA,  // '}' // right brace
-     *   LPAR,  // '(' // left parenthesis
-     *   RPAR,  // ')' // right parenthesis
-     *   LSBR,  // '[' // left square brace
-     *   RSBR,  // ']' // left square brace
-     *   SC,    // ';' // semicolon
-     *   COMMA, // ','
+     *   LBRA,  '{' // left brace
+     *   RBRA,  '}' // right brace
+     *   LPAR,  '(' // left parenthesis
+     *   RPAR,  ')' // right parenthesis
+     *   LSBR,  '[' // left square brace
+     *   RSBR,  ']' // left square brace
+     *   SC,    ';' // semicolon
+     *   COMMA, ','
      */
     switch (c) {
       case '{':
@@ -103,6 +103,58 @@ public class Tokeniser extends CompilerPass {
         return new Token(Token.Category.SC, line, column);
       case ',':
         return new Token(Token.Category.COMMA, line, column);
+    }
+
+    /*
+     *   [types]
+     *   INT,  'int'
+     *   VOID, 'void'
+     *   CHAR, 'char'
+     *
+     *   [keywords]
+     *   IF,      'if'
+     *   ELSE,    'else'
+     *   WHILE,   'while'
+     *   RETURN,  'return'
+     *   STRUCT,  'struct'
+     *   SIZEOF,  'sizeof'
+     *   CONTINUE,  'continue'
+     *   BREAK, 'break'
+     */
+    if (Character.isLetter(c) || c == '_') {
+      StringBuilder sb = new StringBuilder();
+      sb.append(c);
+      while (scanner.hasNext()
+          && (Character.isLetterOrDigit(scanner.peek()) || scanner.peek() == '_')) {
+        sb.append(scanner.next());
+      }
+      String lexeme = sb.toString();
+      switch (lexeme) {
+        case "int":
+          return new Token(Token.Category.INT, line, column);
+        case "void":
+          return new Token(Token.Category.VOID, line, column);
+        case "char":
+          return new Token(Token.Category.CHAR, line, column);
+        case "if":
+          return new Token(Token.Category.IF, line, column);
+        case "else":
+          return new Token(Token.Category.ELSE, line, column);
+        case "while":
+          return new Token(Token.Category.WHILE, line, column);
+        case "return":
+          return new Token(Token.Category.RETURN, line, column);
+        case "struct":
+          return new Token(Token.Category.STRUCT, line, column);
+        case "sizeof":
+          return new Token(Token.Category.SIZEOF, line, column);
+        case "continue":
+          return new Token(Token.Category.CONTINUE, line, column);
+        case "break":
+          return new Token(Token.Category.BREAK, line, column);
+        default:
+          return new Token(Token.Category.IDENTIFIER, lexeme, line, column);
+      }
     }
 
     // if we reach this point, it means we did not recognise a valid token
