@@ -65,16 +65,6 @@ public class Tokeniser extends CompilerPass {
         return new Token(Token.Category.DIV, line, column);
       }
     }
-    // Handle the [= 'EQ'] and [== 'ASSIGN'] operators
-    if (c == '=') {
-      if (scanner.peek() == '=') {
-        scanner.next();
-        return new Token(Token.Category.EQ, line, column);
-      } else {
-        return new Token(Token.Category.ASSIGN, line, column);
-      }
-    }
-
     /*
      *   [delimiters]
      *   LBRA,  '{' // left brace
@@ -261,6 +251,71 @@ public class Tokeniser extends CompilerPass {
         sb.append(scanner.next());
       }
       return new Token(Token.Category.INT_LITERAL, sb.toString(), line, column);
+    }
+
+    /*
+     * logical operators
+     *   LOGAND, '&&'
+     *   LOGOR,  '||'
+     */
+
+    if (c == '&') {
+      if (scanner.peek() == '&') {
+        scanner.next();
+        return new Token(Token.Category.LOGAND, line, column);
+      }
+    }
+
+    if (c == '|') {
+      if (scanner.peek() == '|') {
+        scanner.next();
+        return new Token(Token.Category.LOGOR, line, column);
+      }
+    }
+
+    /*
+     * comparisons
+     *   EQ, '==' or ASSIGN, '='
+     *   NE, '!=' or NOT, '!'
+     *   LT, '<' or LE, '<='
+     *   GT, '>' or GE, '>='
+     */
+    // Handle the [= 'EQ'] and [== 'ASSIGN'] operators
+    if (c == '=') {
+      if (scanner.peek() == '=') {
+        scanner.next();
+        return new Token(Token.Category.EQ, line, column);
+      } else {
+        return new Token(Token.Category.ASSIGN, line, column);
+      }
+    }
+    // Handle the [! 'NE'] and [!= 'NOT'] operators
+    if (c == '!') {
+      if (scanner.peek() == '=') {
+        scanner.next();
+        return new Token(Token.Category.NE, line, column);
+      } else {
+        return new Token(Token.Category.INVALID, line, column);
+      }
+    }
+    // Handle the [< 'LT'] and [<= 'LE'] operators
+    if (c == '<') {
+      if (scanner.peek() == '=') {
+        scanner.next();
+        return new Token(Token.Category.LE, line, column);
+      } else {
+        return new Token(Token.Category.LT, line, column);
+      }
+    }
+
+    // Handle the [> 'GT'] and [>= 'GE'] operators
+    if (c == '>') {
+      if (scanner.peek() == '=') {
+        scanner.next();
+        return new Token(Token.Category.GE, line, column);
+      } else {
+        return new Token(Token.Category.GT, line, column);
+      }
     }
 
     // if we reach this point, it means we did not recognise a valid token
