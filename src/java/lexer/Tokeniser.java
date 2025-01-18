@@ -65,6 +65,45 @@ public class Tokeniser extends CompilerPass {
         return new Token(Token.Category.DIV, line, column);
       }
     }
+    // Handle the [= 'EQ'] and [== 'ASSIGN'] operators
+    if (c == '=') {
+      if (scanner.peek() == '=') {
+        scanner.next();
+        return new Token(Token.Category.EQ, line, column);
+      } else {
+        return new Token(Token.Category.ASSIGN, line, column);
+      }
+    }
+
+    /*
+     *   [delimiters]
+     *   LBRA,  // '{' // left brace
+     *   RBRA,  // '}' // right brace
+     *   LPAR,  // '(' // left parenthesis
+     *   RPAR,  // ')' // right parenthesis
+     *   LSBR,  // '[' // left square brace
+     *   RSBR,  // ']' // left square brace
+     *   SC,    // ';' // semicolon
+     *   COMMA, // ','
+     */
+    switch (c) {
+      case '{':
+        return new Token(Token.Category.LBRA, line, column);
+      case '}':
+        return new Token(Token.Category.RBRA, line, column);
+      case '(':
+        return new Token(Token.Category.LPAR, line, column);
+      case ')':
+        return new Token(Token.Category.RPAR, line, column);
+      case '[':
+        return new Token(Token.Category.LSBR, line, column);
+      case ']':
+        return new Token(Token.Category.RSBR, line, column);
+      case ';':
+        return new Token(Token.Category.SC, line, column);
+      case ',':
+        return new Token(Token.Category.COMMA, line, column);
+    }
 
     // if we reach this point, it means we did not recognise a valid token
     error(c, line, column);
