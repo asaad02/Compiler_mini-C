@@ -174,6 +174,95 @@ public class Tokeniser extends CompilerPass {
       }
     }
 
+    /*
+     *   // SpecialCharWithoutSingleQuote = One of the following 30 characters: ` ~ @ ! $ # ^ * % & ( ) [ ] { } < > + = _ - | / ; : , . ? "
+     *   // SpecialCharWithoutDoubleQuote = One of the following 30 characters: ` ~ @ ! $ # ^ * % & ( ) [ ] { } < > + = _ - | / ; : , . ? '
+     *   // WhiteSpace                    = ' '
+     *   // EscapedChar                   = '\a' | '\b' | '\n' | '\r' | '\t' | '\\' | '\'' | '\"' | '\0'
+     *   // literals
+     */
+
+    /*
+     *   CHAR_LITERAL,  ''' (LowerCaseAlpha | UpperCaseAlpha | Digit |  SpecialCharWithoutSingleQuote  | WhiteSpace | EscapedChar) '''  any character (except single quote) enclosed within  a pair of single quotes
+     */
+
+    if (c == '\'') {
+      StringBuilder sb = new StringBuilder();
+      c = scanner.next();
+      while (c != '\'') {
+        if (c == '\\') {
+          char escapedChar = scanner.next();
+          switch (escapedChar) {
+            case 'a':
+            case 'b':
+            case 'n':
+            case 'r':
+            case 't':
+            case '\\':
+            case '\'':
+            case '\"':
+            case '0':
+              sb.append(escapedChar);
+              break;
+            default:
+              error(escapedChar, line, column);
+              return new Token(Token.Category.INVALID, line, column);
+          }
+        } else {
+          sb.append(c);
+        }
+        c = scanner.next();
+      }
+      return new Token(Token.Category.CHAR_LITERAL, sb.toString(), line, column);
+    }
+
+    /*
+     *   STRING_LITERAL, '"' (LowerCaseAlpha | UpperCaseAlpha | Digit |  SpecialCharWithoutDoubleQuote  | WhiteSpace | EscapedChar)* '"'  any sequence of characters (except double quote) enclosed within two double quotes
+     */
+
+    if (c == '"') {
+      StringBuilder sb = new StringBuilder();
+      c = scanner.next();
+      while (c != '"') {
+        if (c == '\\') {
+          char escapedChar = scanner.next();
+          switch (escapedChar) {
+            case 'a':
+            case 'b':
+            case 'n':
+            case 'r':
+            case 't':
+            case '\\':
+            case '\'':
+            case '\"':
+            case '0':
+              sb.append(escapedChar);
+              break;
+            default:
+              error(escapedChar, line, column);
+              return new Token(Token.Category.INVALID, line, column);
+          }
+        } else {
+          sb.append(c);
+        }
+        c = scanner.next();
+      }
+      return new Token(Token.Category.STRING_LITERAL, sb.toString(), line, column);
+    }
+
+    /*
+     * INT_LITERAL Digit+
+     */
+
+    if (Character.isDigit(c)) {
+      StringBuilder sb = new StringBuilder();
+      sb.append(c);
+      while (scanner.hasNext() && Character.isDigit(scanner.peek())) {
+        sb.append(scanner.next());
+      }
+      return new Token(Token.Category.INT_LITERAL, sb.toString(), line, column);
+    }
+
     // if we reach this point, it means we did not recognise a valid token
     error(c, line, column);
     return new Token(Token.Category.INVALID, line, column);
