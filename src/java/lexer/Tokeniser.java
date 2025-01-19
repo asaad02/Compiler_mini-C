@@ -25,17 +25,27 @@ public class Tokeniser extends CompilerPass {
     int line = scanner.getLine();
     int column = scanner.getColumn();
 
-    if (!scanner.hasNext())
-      return new Token(Token.Category.EOF, scanner.getLine(), scanner.getColumn());
+    /*
+     * Debugging
+     */
+    // System.out.println("Current position: line " + line + ", column " + column);
 
+    // [EOF], signal end of file
+    if (!scanner.hasNext()) {
+      // debug message
+      // System.out.println("EOF detected at line " + line + ", column " + column);
+      return new Token(Token.Category.EOF, scanner.getLine(), scanner.getColumn());
+    }
     // get the next character
     char c = scanner.next();
 
     // skip white spaces between lexems
     if (Character.isWhitespace(c)) return nextToken();
+    // debug message
+    // System.out.println("Processing character: " + c);
 
     // recognises the plus operator
-    if (c == '+') return new Token(Token.Category.PLUS, line, column);
+    // if (c == '+') return new Token(Token.Category.PLUS, line, column);
 
     // ... to be completed
 
@@ -58,8 +68,16 @@ public class Tokeniser extends CompilerPass {
             scanner.next();
             break;
           }
+          // not closed comments
+          if (!scanner.hasNext()) {
+            error(nextChar, line, column);
+            return new Token(Token.Category.INVALID, line, column);
+          }
         }
         return nextToken();
+      } else if (scanner.peek() == '0') {
+        // return the end of the file token
+        return new Token(Token.Category.EOF, line, column);
       } else {
         // if it's not single or multi line comment then it's a division operator
         return new Token(Token.Category.DIV, line, column);
@@ -177,9 +195,9 @@ public class Tokeniser extends CompilerPass {
      */
 
     if (c == '\'') {
-      StringBuilder sb = new StringBuilder();
-      c = scanner.next();
-      while (c != '\'') {
+      try {
+        c = scanner.next();
+        // handle the scape characters
         if (c == '\\') {
           char escapedChar = scanner.next();
           switch (escapedChar) {
@@ -192,18 +210,31 @@ public class Tokeniser extends CompilerPass {
             case '\'':
             case '\"':
             case '0':
-              sb.append(escapedChar);
-              break;
+              // check the closing quote [']
+              if (scanner.next() == '\'') {
+                return new Token(Token.Category.CHAR_LITERAL, "\\" + escapedChar, line, column);
+              } else {
+                error(c, line, column); // Missing closing quote
+                return new Token(Token.Category.INVALID, line, column);
+              }
             default:
+              // Invalid escape sequence
               error(escapedChar, line, column);
               return new Token(Token.Category.INVALID, line, column);
           }
+        } // valid single character
+        else if (scanner.peek() == '\'') {
+          scanner.next();
+          return new Token(Token.Category.CHAR_LITERAL, String.valueOf(c), line, column);
         } else {
-          sb.append(c);
+          // more than one character or missing closing quote
+          error(c, line, column);
+          return new Token(Token.Category.INVALID, line, column);
         }
-        c = scanner.next();
+      } catch (Error e) {
+        error(c, line, column);
+        return new Token(Token.Category.INVALID, line, column);
       }
-      return new Token(Token.Category.CHAR_LITERAL, sb.toString(), line, column);
     }
 
     /*
@@ -212,32 +243,41 @@ public class Tokeniser extends CompilerPass {
 
     if (c == '"') {
       StringBuilder sb = new StringBuilder();
-      c = scanner.next();
-      while (c != '"') {
-        if (c == '\\') {
-          char escapedChar = scanner.next();
-          switch (escapedChar) {
-            case 'a':
-            case 'b':
-            case 'n':
-            case 'r':
-            case 't':
-            case '\\':
-            case '\'':
-            case '\"':
-            case '0':
-              sb.append(escapedChar);
-              break;
-            default:
-              error(escapedChar, line, column);
-              return new Token(Token.Category.INVALID, line, column);
-          }
-        } else {
-          sb.append(c);
-        }
+      try {
         c = scanner.next();
+        while (c != '"') {
+          // handle the scape characters
+          if (c == '\\') {
+            char escapedChar = scanner.next();
+            switch (escapedChar) {
+              case 'a':
+              case 'b':
+              case 'n':
+              case 'r':
+              case 't':
+              case '\\':
+              case '\'':
+              case '\"':
+              case '0':
+                sb.append("\\").append(escapedChar);
+                break;
+              default:
+                error(escapedChar, line, column);
+                return new Token(Token.Category.INVALID, line, column);
+            }
+          } else if (c == '\n') {
+            error(c, line, column);
+            return new Token(Token.Category.INVALID, line, column);
+          } else {
+            sb.append(c);
+          }
+          c = scanner.next();
+        }
+        return new Token(Token.Category.STRING_LITERAL, sb.toString(), line, column);
+      } catch (Error e) {
+        error('"', line, column);
+        return new Token(Token.Category.INVALID, line, column);
       }
-      return new Token(Token.Category.STRING_LITERAL, sb.toString(), line, column);
     }
 
     /*
@@ -295,6 +335,7 @@ public class Tokeniser extends CompilerPass {
         scanner.next();
         return new Token(Token.Category.NE, line, column);
       } else {
+        error(c, line, column);
         return new Token(Token.Category.INVALID, line, column);
       }
     }
@@ -317,6 +358,34 @@ public class Tokeniser extends CompilerPass {
         return new Token(Token.Category.GT, line, column);
       }
     }
+
+    /*
+     * operators
+     *   PLUS, '+'
+     *   MINUS, '-'
+     *   ASTERISK, '*'  // can be used for multiplication or pointers
+     *   DIV, '/', REM, '%'
+     *   AND, '&'
+     */
+
+    switch (c) {
+      case '+':
+        return new Token(Token.Category.PLUS, line, column);
+      case '-':
+        return new Token(Token.Category.MINUS, line, column);
+      case '*':
+        return new Token(Token.Category.ASTERISK, line, column);
+      case '%':
+        return new Token(Token.Category.REM, line, column);
+      case '&':
+        return new Token(Token.Category.AND, line, column);
+    }
+
+    /*
+     * struct member access
+     *   DOT, '.'
+     */
+    if (c == '.') return new Token(Token.Category.DOT, line, column);
 
     // if we reach this point, it means we did not recognise a valid token
     error(c, line, column);
