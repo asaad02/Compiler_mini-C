@@ -377,8 +377,15 @@ public class Parser extends CompilerPass {
   private void parseStmts() {
     // loop through the statements until we reach the right brace ['}']
     while (!accept(Category.RBRA)) {
+      // save the current token
+      Token currentToken = token;
       // parse each statement
       parseStmt();
+      // if the current token is the same as the token then we will throw an error
+      if (currentToken == token) {
+        error(Category.RBRA);
+        return;
+      }
     }
   }
 
@@ -518,6 +525,10 @@ public class Parser extends CompilerPass {
 
   // Parses a unary expression. [exp ::= ("-" | "+") exp]
   private void parseUnaryExp() {
+    // Handle multiple levels of pointer dereference (e.g., **ptr)
+    while (accept(Category.ASTERISK)) {
+      nextToken(); // Consume '*'
+    }
     // Check if the token is a unary operator
     if (accept(Category.MINUS, Category.PLUS)) {
       // Consume unary operator
@@ -551,6 +562,10 @@ public class Parser extends CompilerPass {
         nextToken();
         // parse the expression within the parenthesis
         parseExp();
+        if (!accept(Category.RPAR)) {
+          // if the token is not a right parenthesis [")"] then we will throw an error
+          error(Category.RPAR);
+        }
         // consume the right parenthesis [")"]
         expect(Category.RPAR);
       }
