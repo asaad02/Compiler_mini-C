@@ -188,7 +188,6 @@ public class Parser extends CompilerPass {
       parseStructType();
     } else {
       error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
-      return;
     }
 
     // valueat      ::= "*" exp  - Value at operator (pointer indirection)
@@ -278,7 +277,6 @@ public class Parser extends CompilerPass {
       // Expect semicolon to end the declaration and throw an error if it's not
       if (!accept(Category.SC)) {
         error(Category.SC);
-        return;
       }
       // Consume semicolon
       expect(Category.SC);
@@ -567,7 +565,6 @@ public class Parser extends CompilerPass {
         if (!accept(Category.RPAR)) {
           // if the token is not a right parenthesis [")"] then we will throw an error
           error(Category.RPAR);
-          return;
         }
         // consume the right parenthesis [")"]
         expect(Category.RPAR);
@@ -623,7 +620,6 @@ public class Parser extends CompilerPass {
           Category.CHAR_LITERAL,
           Category.STRING_LITERAL);
     }
-    return;
   }
   /*
    * Helper methods for Exp
