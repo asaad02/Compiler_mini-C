@@ -1,5 +1,6 @@
 struct Node {
-    int data;
+    //int data;
+    data = 5 ;
     struct Node* next;
 
     struct hello {
@@ -11,6 +12,7 @@ struct Node {
             struct hello {
 
                 struct Node* next;
+                
                 a = 2;
 
             };
@@ -22,9 +24,8 @@ struct Node {
     
 };
 
-void printList(struct Node* head) {
-    while (head != NULL) {
-        printf("%d ", head.data);  // Pointer dereference
-        head = head.next;
-    }
+int main() {
+    //int a ;
+    a = 7 ; 
+    b =  a + 5 ;
 }
