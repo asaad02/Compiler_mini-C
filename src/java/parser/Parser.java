@@ -86,7 +86,7 @@ public class Parser extends CompilerPass {
       if (e == token.category) {
         Token ret = token;
         // print the token and the expected token
-        System.out.println("Token: " + ret + " Expected: " + e);
+        // System.out.println("Token: " + ret + " Expected: " + e);
         nextToken();
         return ret;
       }
@@ -365,13 +365,19 @@ public class Parser extends CompilerPass {
   private void parseBlock() {
     // consume the left brace ['{']
     expect(Category.LBRA);
+    // System.out.println("Entering block...");
     // Parse variable declarations within the block
     parseVarDecls();
     // Parse statements within the block , the block will have the [while, if, return, continue,
     // break, exp]
     parseStmts();
+    // Ensure the block ends with a right brace '}'
+    if (!accept(Category.RBRA)) {
+      error(Category.RBRA);
+    }
     // consume the right brace ['}']
     expect(Category.RBRA);
+    // System.out.println("Exiting block...");
   }
   // parse all the statements within the block
   private void parseStmts() {
@@ -379,14 +385,25 @@ public class Parser extends CompilerPass {
     while (!accept(Category.RBRA)) {
       // save the current token
       Token currentToken = token;
+      // if its a integer or char or void or struct then we will parse the type and the identifier
+      // other than that we will parse the statement
+      if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
+        // Parse variable declarations within the block
+        parseVarDecls();
+      } else {
+        // parse the statement
+        parseStmt();
+      }
       // parse each statement
-      parseStmt();
+      // parseStmt();
       // if the current token is the same as the token then we will throw an error
       if (currentToken == token) {
         error(Category.RBRA);
         return;
       }
     }
+    // Parse variable declarations within the block
+    // parseVarDecls();
   }
 
   /**
@@ -611,6 +628,10 @@ public class Parser extends CompilerPass {
       // parse sizeof operator
       // sizeof ::= "sizeof" "(" type ")"
       parseSizeOf();
+    } else if (accept(Category.AND)) {
+      // parse address of operator
+      // addressof ::= "&" exp
+      parseAddressOf();
     } else {
       // if the token is not any of the above then we will throw an error
       error(
