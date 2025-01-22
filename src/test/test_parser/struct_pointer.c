@@ -11,7 +11,7 @@ struct Node {
             struct hello {
 
                 struct Node* next;
-                a = 2;
+                //a = 2;
 
             };
             int data;

@@ -1,7 +1,7 @@
 struct Node {
     //int data;
-    data = 5 ;
     struct Node* next;
+    //data = 5 ;
 
     struct hello {
         int data;
@@ -13,7 +13,7 @@ struct Node {
 
                 struct Node* next;
                 
-                a = 2;
+                //a = 2;
 
             };
             int data;
