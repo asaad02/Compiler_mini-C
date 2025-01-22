@@ -1,5 +1,5 @@
 struct Point {
-    int x, y;
+    int x;
     char label;
 };
 

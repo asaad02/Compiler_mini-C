@@ -127,8 +127,8 @@ public class Parser extends CompilerPass {
       if (token.category == Category.STRUCT
           && lookAhead(1).category == Category.IDENTIFIER
           && lookAhead(2).category == Category.LBRA) {
-        // System.out.println("\u001B[32m" + "Parsing struct declaration ... inside the program\n" +
-        // "\u001B[0m");
+        // System.out.println("\u001B[32m" + "Parsing struct declaration ... inside the program\n"
+        // +"\u001B[0m");
         // parsing the type of the struct
         parseType();
         // structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
@@ -210,13 +210,42 @@ public class Parser extends CompilerPass {
     // we parse already the key in parseType()
     // if the token is a left brace ["{"]
     expect(Category.LBRA);
-    // if struct is nasted within the struct
-    // if (accept(Category.STRUCT)) {
-    // Parsing the struct declaration within the struct
-    // parseStructDecl();
-    // variable declaration, (e.g. int a;), or multi-dimensional array declaration, (e.g. int
-    // a[2][5];)
-    parseVarDecls();
+
+    while (accept(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID)) {
+      if (token.category == Category.STRUCT
+          && lookAhead(1).category == Category.IDENTIFIER
+          && lookAhead(2).category == Category.LBRA) {
+        // System.out.println("\u001B[32m" + "Parsing struct declaration ... inside the program\n"
+        // +"\u001B[0m");
+        // parsing the type of the struct
+        parseType();
+        // structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
+        parseStructDecl();
+      } else {
+        // parseVarDeclOrFunc();
+        // type  ::= ("int" | "char" | "void" | structtype) ("*")*
+        parseType();
+        // check the type IDENT and return error if not found
+        if (!accept(Category.IDENTIFIER)) {
+          error(Category.IDENTIFIER);
+          return;
+        }
+        // consume the Identifier
+        expect(Category.IDENTIFIER);
+        // check the left parenthesis
+        // check the parameters ['(']
+        if (accept(Category.LPAR)) {
+          // fundecl   ::= type IDENT "(" params ")" ";"
+          // fundef    ::= type IDENT "(" params ")" block
+          parseFuncDefAndDec();
+        }
+        // if it's not LPAR, then it's a variable declaration
+        else {
+          // System.out.println("\u001B[32mParsing variable declaration ...\u001B[0m");
+          parseVarDecl(); // Parse variable declaration
+        }
+      }
+    }
     // if the token is a right brace ["}"]
     expect(Category.RBRA);
     // if the token is a semicolon [";"]

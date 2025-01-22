@@ -1,0 +1,31 @@
+struct Node {
+    int data;
+    struct Node* next;
+
+    struct hello {
+        int data;
+        struct Node* next;
+
+        struct hello {
+
+            struct hello {
+
+                
+                int data;
+                struct Node* next;
+
+            };
+            int data;
+            struct Node* next;
+
+        };
+    };
+    
+};
+
+void printList(struct Node* head) {
+    while (head != NULL) {
+        printf("%d ", head.data);  // Pointer dereference
+        head = head.next;
+    }
+}
