@@ -211,8 +211,7 @@ public class Parser extends CompilerPass {
     // if the token is a left brace ["{"]
     expect(Category.LBRA);
 
-    while (accept(
-        Category.STRUCT, Category.INT, Category.CHAR, Category.VOID, Category.IDENTIFIER)) {
+    while (accept(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID)) {
       if (token.category == Category.STRUCT
           && lookAhead(1).category == Category.IDENTIFIER
           && lookAhead(2).category == Category.LBRA) {
@@ -222,10 +221,10 @@ public class Parser extends CompilerPass {
         parseType();
         // structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
         parseStructDecl();
-      } else if (accept(Category.IDENTIFIER)) {
+        // } else if (accept(Category.IDENTIFIER)) {
         // Parse statements within the block , the block will have the [while, if, return, continue,
         // break, exp]
-        parseStmt();
+        // parseStmt();
         // System.out.println("Exiting block...");
 
       } else {
