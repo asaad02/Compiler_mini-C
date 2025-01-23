@@ -438,7 +438,7 @@ public class Parser extends CompilerPass {
       }
     }
     // Parse variable declarations within the block
-    // parseVarDecls();
+    parseVarDecls();
   }
 
   /**
@@ -595,7 +595,7 @@ public class Parser extends CompilerPass {
 
   /**
    * Parses a primary expression. [exp ::= "(" exp ")" | IDENT | INT_LITERAL | CHAR_LITERAL |
-   * STRING_LITERAL]
+   * STRING_LITERAL] | valueat | addressof | funcall | sizeof | typecast | arrayaccess | fieldaccess
    */
   private void parsePrimaryExp() {
     // check if the token is a left parenthesis ["("]
@@ -620,6 +620,10 @@ public class Parser extends CompilerPass {
         }
         // consume the right parenthesis [")"]
         expect(Category.RPAR);
+        // if next token not semicalon and right parenthesis then we will parse the expression
+        if (!accept(Category.SC) && !accept(Category.RPAR)) {
+          parseExp();
+        }
       }
     }
     // check if the token is an identifier
@@ -650,6 +654,7 @@ public class Parser extends CompilerPass {
       nextToken();
     }
     // check if the token is value at ["*"] - Value at operator (pointer indirection)
+    // valueat ::= "*" exp
     else if (accept(Category.ASTERISK)) {
       // parse value at operator
       // valueat      ::= "*" exp
@@ -659,14 +664,32 @@ public class Parser extends CompilerPass {
       parseAddressOf();
     }
     // check if the token is a sizeof ["sizeof"] - Sizeof operator
+    // sizeof ::= "sizeof" "(" type ")"
     else if (accept(Category.SIZEOF)) {
       // parse sizeof operator
       // sizeof ::= "sizeof" "(" type ")"
       parseSizeOf();
-    } else if (accept(Category.AND)) {
+    }
+    // check if the token is an address of ["&"] - Address of operator
+    // addressof ::= "&" exp
+    else if (accept(Category.AND)) {
       // parse address of operator
       // addressof ::= "&" exp
       parseAddressOf();
+    } // fieldaccess  ::= exp "." IDENT
+    else if (accept(Category.DOT)) {
+      // parse field access
+      parseFieldAccess();
+    } else if (accept(Category.LSBR)) {
+      // parse array access
+      // arrayaccess  ::= exp "[" exp "]"                  # array access
+      parseArrayAccess();
+    }
+    // typecast ::= "(" type ")" exp
+    else if (accept(Category.LPAR)) {
+      // parse typecast expression
+      // typecast ::= "(" type ")" exp
+      parseTypeCast();
     } else {
       // if the token is not any of the above then we will throw an error
       error(
@@ -793,7 +816,7 @@ public class Parser extends CompilerPass {
     parseExp();
     // Expect ')'
     expect(Category.RPAR);
-    // Parse loop body
+    // Parse body
     parseStmt();
   }
   // parser [If] statement - "if" "(" exp ")" stmt ["else" stmt]
