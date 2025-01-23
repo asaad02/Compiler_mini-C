@@ -621,8 +621,13 @@ public class Parser extends CompilerPass {
         // consume the right parenthesis [")"]
         expect(Category.RPAR);
         // if next token not semicalon and right parenthesis then we will parse the expression
-        if (!accept(Category.SC) && !accept(Category.RPAR)) {
-          parseExp();
+        // if (!accept(Category.SC) && !accept(Category.RPAR)) {
+        // parseExp();
+        // }
+        // if the token is a dot ["."]
+        if (accept(Category.DOT)) {
+          // parse field access
+          parseFieldAccess();
         }
       }
     }
@@ -680,7 +685,9 @@ public class Parser extends CompilerPass {
     else if (accept(Category.DOT)) {
       // parse field access
       parseFieldAccess();
-    } else if (accept(Category.LSBR)) {
+    }
+    // check if the token is a left square brace ["["]
+    else if (accept(Category.LSBR)) {
       // parse array access
       // arrayaccess  ::= exp "[" exp "]"                  # array access
       parseArrayAccess();
