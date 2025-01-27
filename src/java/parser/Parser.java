@@ -130,6 +130,8 @@ public class Parser extends CompilerPass {
    */
   private void parse_structdecl_VarDecl_fundecl_fundef() {
     while (accept(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID)) {
+      // Struct declaration
+      // structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
       // if the token is a struct and we have an identifier and a left brace ["{"]
       if (token.category == Category.STRUCT
           && lookAhead(1).category == Category.IDENTIFIER
@@ -139,12 +141,15 @@ public class Parser extends CompilerPass {
         parseType();
         // structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
         parseStructDecl();
-      } else {
+      }
+      // variable declaration | function declaration | function definition
+      // if the token is an integer or char or void {fundec | fundef | vardecl}
+      else {
         // type  ::= ("int" | "char" | "void" | structtype) ("*")*
         parseType();
-        // consume the Identifier
+        // consume the Identifier [IDENTIFIER]
         expect(Category.IDENTIFIER);
-        // check the left parenthesis ['(']
+        // check the left parenthesis ['('] then it's a function declaration or definition
         if (accept(Category.LPAR)) {
           // fundecl   ::= type IDENT "(" params ")" ";"
           // fundef    ::= type IDENT "(" params ")" block
@@ -178,8 +183,8 @@ public class Parser extends CompilerPass {
   private void parseType() {
     // Check the type ("int" | "char" | "void" | structtype ) ("*")*
     if (accept(Category.INT, Category.CHAR, Category.VOID)) {
-      // Consume the type token
-      nextToken();
+      // expect the token to be an integer or char or void
+      expect(Category.INT, Category.CHAR, Category.VOID);
     } else if (accept(Category.STRUCT)) {
       // Parse a struct type
       // structtype ::= "struct" IDENT
@@ -218,6 +223,7 @@ public class Parser extends CompilerPass {
     // if the token is a left brace ["{"]
     expect(Category.LBRA);
     // parse the at least one variable declaration within the block or more
+    // (vardecl)+
     parseVarDecls('+');
     // if the token is a right brace ["}"]
     expect(Category.RBRA);
@@ -236,7 +242,7 @@ public class Parser extends CompilerPass {
       if (mode == '*') {
         return;
       }
-      // if the mode is '+' then we will throw an error
+      // if the mode is '+' then we will throw an error because we need at least one declaration
       else if (mode == '+') {
         error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
       }
@@ -251,7 +257,7 @@ public class Parser extends CompilerPass {
           // Expect ']'
           expect(Category.RSBR);
         }
-        // Expect a semicolon to terminate the declaration of the variable
+        // Expect a semicolon
         expect(Category.SC);
         return;
       }
@@ -271,7 +277,7 @@ public class Parser extends CompilerPass {
       expect(Category.RSBR);
     }
 
-    // Expect a semicolon to terminate the declaration
+    // Expect a semicolon
     expect(Category.SC);
 
     // handle different mode if + then we will parse more declarations and if * then we will parse
@@ -288,10 +294,12 @@ public class Parser extends CompilerPass {
   /*
    * # function definition
    *  fundef    ::= type IDENT "(" params ")" block       # function definition
+   *  fundecl   ::= type IDENT "(" params ")" ";"
    */
   private void parseFuncDefAndDec() {
     // params     ::= [ type IDENT ("[" INT_LITERAL "]")* ("," type IDENT ("[" INT_LITERAL"]")*)*]
     parseParams();
+    // fundef    ::= type IDENT "(" params ")" block
     // consume the right parenthesis ['{']
     if (accept(Category.LBRA)) {
       // block      ::= "{" (vardecl)* (stmt)* "}"
@@ -319,7 +327,7 @@ public class Parser extends CompilerPass {
         parseType();
         // expect the identifier
         expect(Category.IDENTIFIER);
-        // check if it's an array
+        // check if it's an array '[' for the parameter
         while (accept(Category.LSBR)) {
           nextToken();
           expect(Category.INT_LITERAL);
@@ -345,36 +353,23 @@ public class Parser extends CompilerPass {
   private void parseBlock() {
     // consume the left brace ['{']
     expect(Category.LBRA);
-    // System.out.println("Entering block...");
-    // parse all the variable declarations within the block
-    // parseVarDecls('*');
     // Parse statements within the block , the block will have the [while, if, return, continue,
     // break, exp]
     while (!accept(Category.RBRA)) {
-      // save the current token
-      Token currentToken = token;
+
       // if its a integer or char or void or struct then we will parse the type and the identifier
       // other than that we will parse the statement
       if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
         // parse all the variable declarations within the block
         parseVarDecls('*');
       } else {
-        // parse the statement
+        // parse all the statements within the block
         parseStmt();
-      }
-      // if the current token is the same as the token then we will throw an error
-      if (currentToken == token) {
-        error(Category.RBRA);
-        return;
       }
     }
     // Ensure the block ends with a right brace '}'
-    if (!accept(Category.RBRA)) {
-      error(Category.RBRA);
-    }
     // consume the right brace ['}']
     expect(Category.RBRA);
-    // System.out.println("Exiting block...");
   }
   /**
    * stmt ::= block | "while" "(" exp ")" stmt # while loop | "if" "(" exp ")" stmt ["else" stmt] #
@@ -435,7 +430,7 @@ public class Parser extends CompilerPass {
     }
   }
 
-  // parser for the logical OR expression
+  // parser for the logical OR expression - exp "||" exp
   private void parseLogicalOrExp() {
     // Parse right-hand side of the logical OR expression
     parseLogicalAndExp();
@@ -444,6 +439,7 @@ public class Parser extends CompilerPass {
     while (accept(Category.LOGOR)) {
       // Consume '||'
       nextToken();
+      // Parse right-hand side of the logical OR expression
       parseLogicalAndExp();
     }
   }
@@ -461,7 +457,7 @@ public class Parser extends CompilerPass {
     }
   }
 
-  // Parses an equality expression. [Grammar: ]exp ::= exp ("==" | "!=") exp]
+  // Parses an equality expression. [ exp ::= exp ("==" | "!=") exp]
   private void parseEqualityExp() {
     // Parse left-hand side of the equality expression
     parseRelationalExp();
@@ -514,7 +510,8 @@ public class Parser extends CompilerPass {
   private void parseUnaryExp() {
     // Handle multiple levels of pointer dereference (e.g., **ptr)
     while (accept(Category.ASTERISK)) {
-      nextToken(); // Consume '*'
+      // Consume '*'
+      nextToken();
     }
     // Check if the token is a unary operator
     if (accept(Category.MINUS, Category.PLUS)) {
@@ -549,21 +546,12 @@ public class Parser extends CompilerPass {
         nextToken();
         // parse the expression within the parenthesis
         parseExp();
-        if (!accept(Category.RPAR)) {
-          // if the token is not a right parenthesis [")"] then we will throw an error
-          error(Category.RPAR);
-        }
         // consume the right parenthesis [")"]
         expect(Category.RPAR);
-        // if next token not semicalon and right parenthesis then we will parse the expression
-        // if (!accept(Category.SC) && !accept(Category.RPAR)) {
-        // parseExp();
-        // }
-        // if the token is a dot ["."]
-        if (accept(Category.DOT)) {
-          // parse field access
-          parseFieldAccess();
-        }
+      }
+      while (accept(Category.DOT)) {
+        // parse field access
+        parseFieldAccess();
       }
     }
     // check if the token is an identifier
@@ -599,7 +587,11 @@ public class Parser extends CompilerPass {
       // parse value at operator
       // valueat      ::= "*" exp
       parseValueAt();
-      // check if the token is an address of ["&"] - Address of operator
+    }
+    // check if the token is an address of ["&"] - Address of operator
+    // addressof ::= "&" exp
+    else if (accept(Category.AND)) {
+      // parse address of operator
       // addressof ::= "&" exp
       parseAddressOf();
     }
@@ -609,29 +601,6 @@ public class Parser extends CompilerPass {
       // parse sizeof operator
       // sizeof ::= "sizeof" "(" type ")"
       parseSizeOf();
-    }
-    // check if the token is an address of ["&"] - Address of operator
-    // addressof ::= "&" exp
-    else if (accept(Category.AND)) {
-      // parse address of operator
-      // addressof ::= "&" exp
-      parseAddressOf();
-    } // fieldaccess  ::= exp "." IDENT
-    else if (accept(Category.DOT)) {
-      // parse field access
-      parseFieldAccess();
-    }
-    // check if the token is a left square brace ["["]
-    else if (accept(Category.LSBR)) {
-      // parse array access
-      // arrayaccess  ::= exp "[" exp "]"                  # array access
-      parseArrayAccess();
-    }
-    // typecast ::= "(" type ")" exp
-    else if (accept(Category.LPAR)) {
-      // parse typecast expression
-      // typecast ::= "(" type ")" exp
-      parseTypeCast();
     } else {
       // if the token is not any of the above then we will throw an error
       error(
@@ -653,6 +622,7 @@ public class Parser extends CompilerPass {
     // consume the left parenthesis ["("]
     expect(Category.LPAR);
     // check if the token is not a right parenthesis [")"]
+    // optional expression after the left parenthesis
     if (!accept(Category.RPAR)) {
       do {
         // parse the expression
@@ -774,6 +744,7 @@ public class Parser extends CompilerPass {
     // Parse 'if' body
     parseStmt();
     // Parse 'else' body
+    // optional else body
     if (accept(Category.ELSE)) {
       // Consume 'else'
       nextToken();
@@ -787,6 +758,7 @@ public class Parser extends CompilerPass {
     // Consume 'return'
     nextToken();
     // if not [';'] then we need to parse the expression
+    // optional expression after 'return'
     if (!accept(Category.SC)) {
       parseExp();
     }
