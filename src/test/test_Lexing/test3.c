@@ -4,6 +4,7 @@ int main() {
     char c3 = '\n';
     char c4 = '\\';
     char c5 = '\'';
-    char* str = "Hello, world!\n";
+    char* str = "Hello, world!\n\n";
+    int a = 1;
     return 0;
 }

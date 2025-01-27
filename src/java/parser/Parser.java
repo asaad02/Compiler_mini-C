@@ -117,55 +117,52 @@ public class Parser extends CompilerPass {
      * program    ::= (include)*
      * include    ::= "#include" STRING_LITERAL
      */
-    // System.out.println("\u001B[32m" + "Parsing includes ... inside the program\n" + "\u001B[0m");
     parseIncludes();
-
     /*
      * program    ::= (structdecl | vardecl | fundecl | fundef)* EOF
      */
+    parse_structdecl_VarDecl_fundecl_fundef();
+    // expect the end of file
+    expect(Category.EOF);
+  }
+  /*
+   * program    ::= ( structdecl | vardecl | fundecl | fundef)* EOF
+   */
+  private void parse_structdecl_VarDecl_fundecl_fundef() {
     while (accept(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID)) {
+      // if the token is a struct and we have an identifier and a left brace ["{"]
       if (token.category == Category.STRUCT
           && lookAhead(1).category == Category.IDENTIFIER
           && lookAhead(2).category == Category.LBRA) {
-        // System.out.println("\u001B[32m" + "Parsing struct declaration ... inside the program\n"
-        // +"\u001B[0m");
         // parsing the type of the struct
+        // type  ::= ("int" | "char" | "void" | structtype) ("*")*
         parseType();
         // structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
         parseStructDecl();
       } else {
-
-        // parseVarDeclOrFunc();
         // type  ::= ("int" | "char" | "void" | structtype) ("*")*
         parseType();
-        // check the type IDENT and return error if not found
-        if (!accept(Category.IDENTIFIER)) {
-          error(Category.IDENTIFIER);
-          return;
-        }
         // consume the Identifier
         expect(Category.IDENTIFIER);
-        // check the left parenthesis
-        // check the parameters ['(']
+        // check the left parenthesis ['(']
         if (accept(Category.LPAR)) {
           // fundecl   ::= type IDENT "(" params ")" ";"
           // fundef    ::= type IDENT "(" params ")" block
           parseFuncDefAndDec();
         }
-        // if it's not LPAR, then it's a variable declaration
+        // if it's not LPAR ['('], then it's a variable declaration
         else {
-          // System.out.println("\u001B[32mParsing variable declaration ...\u001B[0m");
-          parseVarDecl(); // Parse variable declaration
+          // vardecl    ::= type IDENT ("[" INT_LITERAL "]")* ";"
+          // parse once the variable declaration
+          parseVarDecls('o');
         }
       }
     }
-    expect(Category.EOF);
   }
 
   /*
    *[include]
    *include    ::= "#include" STRING_LITERAL
-   *
    */
   private void parseIncludes() {
     if (accept(Category.INCLUDE)) {
@@ -185,16 +182,26 @@ public class Parser extends CompilerPass {
       nextToken();
     } else if (accept(Category.STRUCT)) {
       // Parse a struct type
+      // structtype ::= "struct" IDENT
       parseStructType();
     } else {
       error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
     }
-
-    // valueat      ::= "*" exp  - Value at operator (pointer indirection)
+    // followed by asterisks
     while (accept(Category.ASTERISK)) {
-      // Consume ['*']
+      // Consume the asterisk token
       nextToken();
     }
+  }
+
+  /*
+   * structtype ::= "struct" IDENT
+   */
+  private void parseStructType() {
+    // expect the token to be a struct
+    expect(Category.STRUCT);
+    // expect the token to be an identifier
+    expect(Category.IDENTIFIER);
   }
 
   /*
@@ -210,134 +217,72 @@ public class Parser extends CompilerPass {
     // we parse already the key in parseType()
     // if the token is a left brace ["{"]
     expect(Category.LBRA);
-
-    while (accept(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID)) {
-      if (token.category == Category.STRUCT
-          && lookAhead(1).category == Category.IDENTIFIER
-          && lookAhead(2).category == Category.LBRA) {
-        // System.out.println("\u001B[32m" + "Parsing struct declaration ... inside the program\n"
-        // +"\u001B[0m");
-        // parsing the type of the struct
-        parseType();
-        // structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
-        parseStructDecl();
-        // } else if (accept(Category.IDENTIFIER)) {
-        // Parse statements within the block , the block will have the [while, if, return, continue,
-        // break, exp]
-        // parseStmt();
-        // System.out.println("Exiting block...");
-
-      } else {
-        // parseVarDeclOrFunc();
-        // type  ::= ("int" | "char" | "void" | structtype) ("*")*
-        parseType();
-        // check the type IDENT and return error if not found
-        if (!accept(Category.IDENTIFIER)) {
-          error(Category.IDENTIFIER);
-          return;
-        }
-        // consume the Identifier
-        expect(Category.IDENTIFIER);
-        // check the left parenthesis
-        // check the parameters ['(']
-        if (accept(Category.LPAR)) {
-          // fundecl   ::= type IDENT "(" params ")" ";"
-          // fundef    ::= type IDENT "(" params ")" block
-          parseFuncDefAndDec();
-        }
-        // if it's not LPAR, then it's a variable declaration
-        else {
-          // System.out.println("\u001B[32mParsing variable declaration ...\u001B[0m");
-          parseVarDecl(); // Parse variable declaration
-        }
-      }
-    }
+    // parse the at least one variable declaration within the block or more
+    parseVarDecls('+');
     // if the token is a right brace ["}"]
     expect(Category.RBRA);
     // if the token is a semicolon [";"]
     expect(Category.SC);
-  }
-  // structtype ::= "struct" IDENT
-  private void parseStructType() {
-    // expect the token to be a struct
-    expect(Category.STRUCT);
-    // expect the token to be an identifier
-    expect(Category.IDENTIFIER);
   }
 
   /*
    * vardecl    ::= type IDENT ("[" INT_LITERAL "]")* ";"
    * variable declaration, (e.g. int a;), or multi-dimensional array declaration, (e.g. int a[2][5];)
    */
-  private void parseVarDecls() {
-    // loop through the variable declaration
-    while (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
-      // we parse the type and consume it
-      parseType();
-      // loop through the identifiers
-      boolean moreVariables = true;
-      while (moreVariables) {
-        // each variable declaration should have an identifier
-        if (!accept(Category.IDENTIFIER)) {
-          error(Category.IDENTIFIER);
-          break;
-        }
-        // consume the identifier
-        expect(Category.IDENTIFIER);
-        // check if it's an arrays
+  private void parseVarDecls(char mode) {
+    // Base case we will check if the token is an integer or char or void or struct
+    if (!accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
+      // if the mode is '*' then we will return
+      if (mode == '*') {
+        return;
+      }
+      // if the mode is '+' then we will throw an error
+      else if (mode == '+') {
+        error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
+      }
+      // if the mode is 'o' then we will parse a single declaration
+      else if (mode == 'o') {
+        // Check for array declarations ['['] for the variable declaration
         while (accept(Category.LSBR)) {
-          // consume the left square brace ["["]
+          // Consume '['
           nextToken();
-          // check if it's an integer literal , and we will throw an error if it's not
-          if (!accept(Category.INT_LITERAL)) {
-            error(Category.INT_LITERAL);
-            break;
-          }
-          // consume the integer literal
+          // Expect array size
           expect(Category.INT_LITERAL);
-          // check if it's a right square brace ["]"]
+          // Expect ']'
           expect(Category.RSBR);
         }
-
-        // Check if there's a comma for more variables in the same declaration
-        if (accept(Category.COMMA)) {
-          // Consume the comma
-          nextToken();
-        } else {
-          // No more variables in this declaration we break the loop
-          moreVariables = false;
-        }
+        // Expect a semicolon to terminate the declaration of the variable
+        expect(Category.SC);
+        return;
       }
-
-      // Expect semicolon to end the declaration and throw an error if it's not
-      if (!accept(Category.SC)) {
-        error(Category.SC);
-      }
-      // Consume semicolon
-      expect(Category.SC);
     }
-  }
+    // type       ::= ("int" | "char" | "void" | structtype) ("*")*
+    parseType();
+    // Expect the identifier
+    expect(Category.IDENTIFIER);
 
-  /*
-   * vardecl    ::= type IDENT ("[" INT_LITERAL "]")* ";"
-   * # variable declaration, (e.g. int a;), or multi-dimensional array declaration, (e.g. int a[2][5];)
-   */
-  private void parseVarDecl() {
-    // parseType();
-    // expect(Category.IDENTIFIER);
-    // System.out.println("Parsed variable: \n");
-    // Handle array dimensions such as int a[2][5];
-    // if the token is a left square brace ["["]
+    // Check for array declarations ['['] for the variable declaration
     while (accept(Category.LSBR)) {
-      // consume the left square brace ["["]
+      // Consume '['
       nextToken();
-      // consume the integer literal
+      // Expect array size
       expect(Category.INT_LITERAL);
-      // expect the right square brace ["]"]
+      // Expect ']'
       expect(Category.RSBR);
     }
-    // expect the semicolon [";"]
+
+    // Expect a semicolon to terminate the declaration
     expect(Category.SC);
+
+    // handle different mode if + then we will parse more declarations and if * then we will parse
+    // zero or more
+    if (mode == '+') {
+      // Parse more declarations
+      parseVarDecls('*');
+    } else if (mode == '*') {
+      // Parse zero or more declarations
+      parseVarDecls('*');
+    }
   }
 
   /*
@@ -349,9 +294,9 @@ public class Parser extends CompilerPass {
     parseParams();
     // consume the right parenthesis ['{']
     if (accept(Category.LBRA)) {
-      // System.out.println("\u001B[32mParsing function definition ...\u001B[0m");
       // block      ::= "{" (vardecl)* (stmt)* "}"
-      parseBlock(); // Parse function body
+      // Parse function body
+      parseBlock();
     } else {
       /*
        * fundecl   ::= type IDENT "(" params ")" ";"
@@ -401,11 +346,28 @@ public class Parser extends CompilerPass {
     // consume the left brace ['{']
     expect(Category.LBRA);
     // System.out.println("Entering block...");
-    // Parse variable declarations within the block
-    parseVarDecls();
+    // parse all the variable declarations within the block
+    // parseVarDecls('*');
     // Parse statements within the block , the block will have the [while, if, return, continue,
     // break, exp]
-    parseStmts();
+    while (!accept(Category.RBRA)) {
+      // save the current token
+      Token currentToken = token;
+      // if its a integer or char or void or struct then we will parse the type and the identifier
+      // other than that we will parse the statement
+      if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
+        // parse all the variable declarations within the block
+        parseVarDecls('*');
+      } else {
+        // parse the statement
+        parseStmt();
+      }
+      // if the current token is the same as the token then we will throw an error
+      if (currentToken == token) {
+        error(Category.RBRA);
+        return;
+      }
+    }
     // Ensure the block ends with a right brace '}'
     if (!accept(Category.RBRA)) {
       error(Category.RBRA);
@@ -414,33 +376,6 @@ public class Parser extends CompilerPass {
     expect(Category.RBRA);
     // System.out.println("Exiting block...");
   }
-  // parse all the statements within the block
-  private void parseStmts() {
-    // loop through the statements until we reach the right brace ['}']
-    while (!accept(Category.RBRA)) {
-      // save the current token
-      Token currentToken = token;
-      // if its a integer or char or void or struct then we will parse the type and the identifier
-      // other than that we will parse the statement
-      if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
-        // Parse variable declarations within the block
-        parseVarDecls();
-      } else {
-        // parse the statement
-        parseStmt();
-      }
-      // parse each statement
-      // parseStmt();
-      // if the current token is the same as the token then we will throw an error
-      if (currentToken == token) {
-        error(Category.RBRA);
-        return;
-      }
-    }
-    // Parse variable declarations within the block
-    parseVarDecls();
-  }
-
   /**
    * stmt ::= block | "while" "(" exp ")" stmt # while loop | "if" "(" exp ")" stmt ["else" stmt] #
    * if then else | "return" [exp] ";" # return | exp ";" # expression statement, e.g. a function

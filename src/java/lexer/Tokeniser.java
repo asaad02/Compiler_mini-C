@@ -193,7 +193,7 @@ public class Tokeniser extends CompilerPass {
     /*
      *   CHAR_LITERAL,  ''' (LowerCaseAlpha | UpperCaseAlpha | Digit |  SpecialCharWithoutSingleQuote  | WhiteSpace | EscapedChar) '''  any character (except single quote) enclosed within  a pair of single quotes
      */
-
+    // check if the character is a single quote
     if (c == '\'') {
       try {
         c = scanner.next();
@@ -214,7 +214,8 @@ public class Tokeniser extends CompilerPass {
               if (scanner.next() == '\'') {
                 return new Token(Token.Category.CHAR_LITERAL, "\\" + escapedChar, line, column);
               } else {
-                error(c, line, column); // Missing closing quote
+                // else would be missing closing quote
+                error(c, line, column);
                 return new Token(Token.Category.INVALID, line, column);
               }
             default:
@@ -222,9 +223,11 @@ public class Tokeniser extends CompilerPass {
               error(escapedChar, line, column);
               return new Token(Token.Category.INVALID, line, column);
           }
-        } // valid single character
+        }
+        // valid single character
         else if (scanner.peek() == '\'') {
           scanner.next();
+          // return the token with the character  and convert the character to string
           return new Token(Token.Category.CHAR_LITERAL, String.valueOf(c), line, column);
         } else {
           // more than one character or missing closing quote
@@ -259,13 +262,15 @@ public class Tokeniser extends CompilerPass {
               case '\'':
               case '\"':
               case '0':
+                // append the scape character to the string builder
                 sb.append("\\").append(escapedChar);
                 break;
               default:
                 error(escapedChar, line, column);
                 return new Token(Token.Category.INVALID, line, column);
             }
-          } else if (c == '\n') {
+          } // if the character is a new line then it's an invalid string
+          else if (c == '\n') {
             error(c, line, column);
             return new Token(Token.Category.INVALID, line, column);
           } else {
@@ -320,7 +325,7 @@ public class Tokeniser extends CompilerPass {
      *   LT, '<' or LE, '<='
      *   GT, '>' or GE, '>='
      */
-    // Handle the [= 'EQ'] and [== 'ASSIGN'] operators
+    // Handle the [== 'EQ'] and [= 'ASSIGN'] operators
     if (c == '=') {
       if (scanner.peek() == '=') {
         scanner.next();
