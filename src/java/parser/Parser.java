@@ -129,7 +129,8 @@ public class Parser extends CompilerPass {
    * program    ::= ( structdecl | vardecl | fundecl | fundef)* EOF
    */
   private void parse_structdecl_VarDecl_fundecl_fundef() {
-    while (accept(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID)) {
+    while (accept(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID)
+        && !accept(Category.EOF)) {
       // Struct declaration
       // structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
       // if the token is a struct and we have an identifier and a left brace ["{"]
@@ -249,7 +250,7 @@ public class Parser extends CompilerPass {
       // if the mode is 'o' then we will parse a single declaration
       else if (mode == 'o') {
         // Check for array declarations ['['] for the variable declaration
-        while (accept(Category.LSBR)) {
+        while (accept(Category.LSBR) && !accept(Category.EOF)) {
           // Consume '['
           nextToken();
           // Expect array size
@@ -268,7 +269,7 @@ public class Parser extends CompilerPass {
     expect(Category.IDENTIFIER);
 
     // Check for array declarations ['['] for the variable declaration
-    while (accept(Category.LSBR)) {
+    while (accept(Category.LSBR) && !accept(Category.EOF)) {
       // Consume '['
       nextToken();
       // Expect array size
@@ -321,14 +322,14 @@ public class Parser extends CompilerPass {
     // consume the left parenthesis ['(']
     expect(Category.LPAR);
     // if the token is not a right parenthesis [')']
-    if (!accept(Category.RPAR)) {
+    if (!accept(Category.RPAR) && !accept(Category.EOF)) {
       do {
         // parse the type
         parseType();
         // expect the identifier
         expect(Category.IDENTIFIER);
         // check if it's an array '[' for the parameter
-        while (accept(Category.LSBR)) {
+        while (accept(Category.LSBR) && !accept(Category.EOF)) {
           nextToken();
           expect(Category.INT_LITERAL);
           // expect the right square brace ["]"]
@@ -355,7 +356,7 @@ public class Parser extends CompilerPass {
     expect(Category.LBRA);
     // Parse statements within the block , the block will have the [while, if, return, continue,
     // break, exp]
-    while (!accept(Category.RBRA)) {
+    while (!accept(Category.RBRA) && !accept(Category.EOF)) {
 
       // if its a integer or char or void or struct then we will parse the type and the identifier
       // other than that we will parse the statement
@@ -397,7 +398,14 @@ public class Parser extends CompilerPass {
     } else {
       // Parse an expression statement
       parseExp();
-      expect(Category.SC);
+      // if it's not a semicolon then we will throw an error
+      if (accept(Category.SC)) {
+        expect(Category.SC);
+      } else {
+        error(Category.SC);
+        // consume the token
+        nextToken();
+      }
     }
   }
 
@@ -588,19 +596,35 @@ public class Parser extends CompilerPass {
       // valueat      ::= "*" exp
       parseValueAt();
     }
-    // check if the token is an address of ["&"] - Address of operator
-    // addressof ::= "&" exp
-    else if (accept(Category.AND)) {
-      // parse address of operator
-      // addressof ::= "&" exp
-      parseAddressOf();
-    }
     // check if the token is a sizeof ["sizeof"] - Sizeof operator
     // sizeof ::= "sizeof" "(" type ")"
     else if (accept(Category.SIZEOF)) {
       // parse sizeof operator
       // sizeof ::= "sizeof" "(" type ")"
       parseSizeOf();
+
+    } // check if the token is an address of ["&"] - Address of operator
+    // addressof ::= "&" exp
+    else if (accept(Category.AND)) {
+      // parse address of operator
+      // addressof ::= "&" exp
+      parseAddressOf();
+    } // fieldaccess  ::= exp "." IDENT
+    else if (accept(Category.DOT)) {
+      // parse field access
+      parseFieldAccess();
+    }
+    // check if the token is a left square brace ["["]
+    else if (accept(Category.LSBR)) {
+      // parse array access
+      // arrayaccess  ::= exp "[" exp "]"                  # array access
+      parseArrayAccess();
+    }
+    // typecast ::= "(" type ")" exp
+    else if (accept(Category.LPAR)) {
+      // parse typecast expression
+      // typecast ::= "(" type ")" exp
+      parseTypeCast();
     } else {
       // if the token is not any of the above then we will throw an error
       error(
@@ -623,7 +647,7 @@ public class Parser extends CompilerPass {
     expect(Category.LPAR);
     // check if the token is not a right parenthesis [")"]
     // optional expression after the left parenthesis
-    if (!accept(Category.RPAR)) {
+    if (!accept(Category.RPAR) && !accept(Category.EOF)) {
       do {
         // parse the expression
         parseExp();
