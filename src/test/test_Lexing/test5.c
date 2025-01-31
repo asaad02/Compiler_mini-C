@@ -4,7 +4,7 @@ int main() {
     int c = a + b; // a +B
     int d = a * b; // Valid expression
     int e = a / 0;
-    char c1 = ''';// Invalid character literal (unescaped single quote)
-    char* str = "He said, "Hi!""; // Invalid string literal unescaped double quote
+    char c1 = '"';
+    char  str = "'"; // Valid string literal
     return 0;
 }

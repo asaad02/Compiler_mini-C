@@ -1,6 +1,7 @@
 int main() {
-    int a = 10;
-    int b = 20;
+    int a12 ;
+    a12 = 10;
+    b = 20;
     if (a == b) {
         return 0;
     } else {

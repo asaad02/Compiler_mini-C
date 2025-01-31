@@ -52,8 +52,8 @@ run_tests() {
       echo -e "${CYAN}Running test: $file${NC}"
       if [[ "$mode" == "parser" ]]; then
         java -cp "$BUILD_DIR" Main1 -parser "$file"
-      #elif [[ "$mode" == "lexer" ]]; then
-        #java -cp "$BUILD_DIR" Main1 -lexer "$file"
+      elif [[ "$mode" == "lexer" ]]; then
+        java -cp "$BUILD_DIR" Main1 -lexer "$file"
       fi
 
       # Check if the test passed or failed
