@@ -16,6 +16,65 @@ public class Tokeniser extends CompilerPass {
     System.out.println(msg);
     incError();
   }
+  /*
+   * isLetter(char c) true if c is a letter  upper or lower case
+   * The ASCII code of a letter is between 65 and 90 for upper case letters and  97 to 122 for lower case letters.
+   */
+  private boolean isLetter(char c) {
+    int ascii = (int) c;
+    return (ascii >= 65 && ascii <= 90) || (ascii >= 97 && ascii <= 122);
+  }
+  /*
+   * isDigit(char c)  true if c is a digit
+   * The ASCII code of a digit is between 48 and 57.
+   */
+  private boolean isDigit(char c) {
+    int ascii = (int) c;
+    return (ascii >= 48 && ascii <= 57);
+  }
+  /*
+   * isLetterOrDigit char c  true if c is a letter or a digit
+   */
+  private boolean isLetterOrDigit(char c) {
+    return isLetter(c) || isDigit(c);
+  }
+  /*
+   * isSpecialCharWithoutSingleQuote char c
+   * SpecialCharWithoutSingleQuote = One of the following 30 characters: ` ~ @ ! $ # ^ * % & ( ) [ ] { } < > + = _ - | / ; : , . ? "
+   */
+  private boolean isSpecialCharWithoutSingleQuote(char c) {
+    return "`~@!$#^*%&()[]{}<>+=_-|/;:,.?\"".indexOf(c) >= 0;
+  }
+
+  /*
+   * isSpecialCharWithoutDoubleQuote char c
+   * SpecialCharWithoutDoubleQuote = One of the following 30 characters: ` ~ @ ! $ # ^ * % & ( ) [ ] { } < > + = _ - | / ; : , . ? '
+   */
+  private boolean isSpecialCharWithoutDoubleQuote(char c) {
+    return "`~@!$#^*%&()[]{}<>+=_-|/;:,.?'".indexOf(c) >= 0;
+  }
+  /*
+   * isEscapedChar char c returns true if c is an escaped character and false otherwise
+   * EscapedChar    = '\a' | '\b' | '\n' | '\r' | '\t' | '\\' | '\'' | '\"' | '\0'
+   */
+  private boolean isEscapedChar(char c) {
+    return c == 'a' || c == 'b' || c == 'n' || c == 'r' || c == 't' || c == '\\' || c == '\''
+        || c == '"' || c == '0';
+  }
+  /*
+   * isValidIdentifierPart char c  true if c is a valid identifier part and false
+   *  lower case letters, upper case letters, digits and underscore
+   */
+  private boolean isValidIdentifierPart(char c) {
+    return isLetterOrDigit(c) || c == '_';
+  }
+  /*
+   * isValidIdentifierStart char c
+   * not start with a digit and can only contain lower case letters upper case letters and underscore
+   */
+  private boolean isValidIdentifierStart(char c) {
+    return isLetter(c) || c == '_';
+  }
 
   /*
    * To be completed
@@ -48,7 +107,6 @@ public class Tokeniser extends CompilerPass {
     // if (c == '+') return new Token(Token.Category.PLUS, line, column);
 
     // ... to be completed
-
     // Handle the comments such as [//] [/*] [*/] [//- DIV]
     if (c == '/') {
       // will peak at the next character if it's '/' then it's a single line comment
@@ -129,11 +187,11 @@ public class Tokeniser extends CompilerPass {
      *   CONTINUE,  'continue'
      *   BREAK, 'break'
      */
-    if (Character.isLetter(c) || c == '_') {
+
+    if (isValidIdentifierStart(c)) {
       StringBuilder sb = new StringBuilder();
       sb.append(c);
-      while (scanner.hasNext()
-          && (Character.isLetterOrDigit(scanner.peek()) || scanner.peek() == '_')) {
+      while (scanner.hasNext() && isValidIdentifierPart(scanner.peek())) {
         sb.append(scanner.next());
       }
       String lexeme = sb.toString();
@@ -173,7 +231,7 @@ public class Tokeniser extends CompilerPass {
     if (c == '#') {
       StringBuilder sb = new StringBuilder();
       sb.append(c);
-      while (scanner.hasNext() && Character.isLetter(scanner.peek())) {
+      while (scanner.hasNext() && isLetter(scanner.peek())) {
         sb.append(scanner.next());
       }
       String lexeme = sb.toString();
@@ -191,49 +249,37 @@ public class Tokeniser extends CompilerPass {
      */
 
     /*
-     *   CHAR_LITERAL,  ''' (LowerCaseAlpha | UpperCaseAlpha | Digit |  SpecialCharWithoutSingleQuote  | WhiteSpace | EscapedChar) '''  any character (except single quote) enclosed within  a pair of single quotes
+     *   CHAR_LITERAL,  ''' (LowerCaseAlpha | UpperCaseAlpha | Digit |  SpecialCharWithoutSingleQuote  | WhiteSpace | EscapedChar) '''
+     *   any character (except single quote) enclosed within  a pair of single quotes
      */
-    // check if the character is a single quote
+    // if the character is a single quote then it's a char literal
     if (c == '\'') {
       try {
-        c = scanner.next();
-        // handle the scape characters
-        if (c == '\\') {
+        char charValue = scanner.next();
+        // if the character is a backslash then it's an escaped character
+        if (charValue == '\\') {
           char escapedChar = scanner.next();
-          switch (escapedChar) {
-            case 'a':
-            case 'b':
-            case 'n':
-            case 'r':
-            case 't':
-            case '\\':
-            case '\'':
-            case '\"':
-            case '0':
-              // check the closing quote [']
-              if (scanner.next() == '\'') {
-                return new Token(Token.Category.CHAR_LITERAL, "\\" + escapedChar, line, column);
-              } else {
-                // else would be missing closing quote
-                error(c, line, column);
-                return new Token(Token.Category.INVALID, line, column);
-              }
-            default:
-              // Invalid escape sequence
-              error(escapedChar, line, column);
-              return new Token(Token.Category.INVALID, line, column);
+          // if the escaped character is a valid escaped character then it's a char literal
+          if (isEscapedChar(escapedChar) && scanner.next() == '\'') {
+            // return the char literal token
+            return new Token(Token.Category.CHAR_LITERAL, "\\" + escapedChar, line, column);
+          } else {
+            error(escapedChar, line, column);
+            return new Token(Token.Category.INVALID, line, column);
           }
         }
-        // valid single character
-        else if (scanner.peek() == '\'') {
-          scanner.next();
-          // return the token with the character  and convert the character to string
-          return new Token(Token.Category.CHAR_LITERAL, String.valueOf(c), line, column);
-        } else {
-          // more than one character or missing closing quote
-          error(c, line, column);
-          return new Token(Token.Category.INVALID, line, column);
+        // if the character is a letter and digit and special character without single quote or
+        // white space then it's a char literal
+        else if (isLetter(charValue)
+            || isDigit(charValue)
+            || isSpecialCharWithoutSingleQuote(charValue)
+            || charValue == ' ') {
+          if (scanner.next() == '\'') {
+            return new Token(Token.Category.CHAR_LITERAL, String.valueOf(charValue), line, column);
+          }
         }
+        error(charValue, line, column);
+        return new Token(Token.Category.INVALID, line, column);
       } catch (Error e) {
         error(c, line, column);
         return new Token(Token.Category.INVALID, line, column);
@@ -241,44 +287,49 @@ public class Tokeniser extends CompilerPass {
     }
 
     /*
-     *   STRING_LITERAL, '"' (LowerCaseAlpha | UpperCaseAlpha | Digit |  SpecialCharWithoutDoubleQuote  | WhiteSpace | EscapedChar)* '"'  any sequence of characters (except double quote) enclosed within two double quotes
+     *   STRING_LITERAL, '"' (LowerCaseAlpha | UpperCaseAlpha | Digit |  SpecialCharWithoutDoubleQuote  | WhiteSpace | EscapedChar)* '"'
+     *   any sequence of characters (except double quote) enclosed within two double quotes
+     *   // SpecialCharWithoutSingleQuote = One of the following 30 characters: ` ~ @ ! $ # ^ * % & ( ) [ ] { } < > + = _ - | / ; : , . ? "
+     *   // SpecialCharWithoutDoubleQuote = One of the following 30 characters: ` ~ @ ! $ # ^ * % & ( ) [ ] { } < > + = _ - | / ; : , . ? '
+     *   // WhiteSpace                    = ' '
+     *   // EscapedChar                   = '\a' | '\b' | '\n' | '\r' | '\t' | '\\' | '\'' | '\"' | '\0'
+     *   // literals
      */
-
     if (c == '"') {
       StringBuilder sb = new StringBuilder();
       try {
-        c = scanner.next();
-        while (c != '"') {
-          // handle the scape characters
-          if (c == '\\') {
-            char escapedChar = scanner.next();
-            switch (escapedChar) {
-              case 'a':
-              case 'b':
-              case 'n':
-              case 'r':
-              case 't':
-              case '\\':
-              case '\'':
-              case '\"':
-              case '0':
-                // append the scape character to the string builder
-                sb.append("\\").append(escapedChar);
-                break;
-              default:
-                error(escapedChar, line, column);
-                return new Token(Token.Category.INVALID, line, column);
-            }
-          } // if the character is a new line then it's an invalid string
-          else if (c == '\n') {
-            error(c, line, column);
-            return new Token(Token.Category.INVALID, line, column);
-          } else {
-            sb.append(c);
-          }
-          c = scanner.next();
+        if (!scanner.hasNext()) {
+          error('"', line, column);
+          return new Token(Token.Category.INVALID, line, column);
         }
-        return new Token(Token.Category.STRING_LITERAL, sb.toString(), line, column);
+        while (scanner.hasNext()) {
+          char charValue = scanner.next();
+          if (charValue == '"') {
+            if (sb.length() == 0) {
+              error('"', line, column);
+              return new Token(Token.Category.INVALID, line, column);
+            }
+            return new Token(Token.Category.STRING_LITERAL, sb.toString(), line, column);
+          }
+          // if the character is a backslash then it's an escaped character
+          if (charValue == '\\') {
+            char escapedChar = scanner.next();
+            if (isEscapedChar(escapedChar)) {
+              sb.append("\\").append(escapedChar);
+            } else {
+              error(escapedChar, line, column);
+              return new Token(Token.Category.INVALID, line, column);
+            }
+          } else if (isLetter(charValue)
+              || isDigit(charValue)
+              || isSpecialCharWithoutDoubleQuote(charValue)
+              || charValue == ' ') {
+            sb.append(charValue);
+          } else {
+            error(charValue, line, column);
+            return new Token(Token.Category.INVALID, line, column);
+          }
+        }
       } catch (Error e) {
         error('"', line, column);
         return new Token(Token.Category.INVALID, line, column);
@@ -289,12 +340,23 @@ public class Tokeniser extends CompilerPass {
      * INT_LITERAL Digit+
      */
 
-    if (Character.isDigit(c)) {
+    if (isDigit(c)) {
       StringBuilder sb = new StringBuilder();
       sb.append(c);
-      while (scanner.hasNext() && Character.isDigit(scanner.peek())) {
+
+      while (scanner.hasNext() && isDigit(scanner.peek())) {
         sb.append(scanner.next());
       }
+
+      // If a letter or underscore follows so the whole thing is an invalid identifier
+      if (scanner.hasNext() && (isLetter(scanner.peek()) || scanner.peek() == '_')) {
+        while (scanner.hasNext() && isValidIdentifierPart(scanner.peek())) {
+          sb.append(scanner.next());
+        }
+        error(c, line, column);
+        return new Token(Token.Category.INVALID, sb.toString(), line, column);
+      }
+
       return new Token(Token.Category.INT_LITERAL, sb.toString(), line, column);
     }
 
