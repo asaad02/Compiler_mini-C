@@ -262,7 +262,43 @@ public class Tokeniser extends CompilerPass {
           // if the escaped character is a valid escaped character then it's a char literal
           if (isEscapedChar(escapedChar) && scanner.next() == '\'') {
             // return the char literal token
-            return new Token(Token.Category.CHAR_LITERAL, "\\" + escapedChar, line, column);
+            // if it's scape character then it will be returned as it is
+            // EscapedChar    = '\a' | '\b' | '\n' | '\r' | '\t' | '\\' | '\'' | '\"' | '\0'
+            String escapeString;
+            switch (escapedChar) {
+              case 'a':
+                escapeString = "\\a";
+                break;
+              case 'b':
+                escapeString = "\\b";
+                break;
+              case 'n':
+                escapeString = "\\n";
+                break;
+              case 'r':
+                escapeString = "\\r";
+                break;
+              case 't':
+                escapeString = "\\t";
+                break;
+              case '\\':
+                escapeString = "\\";
+                break;
+              case '\'':
+                escapeString = "\'";
+                break;
+              case '"':
+                escapeString = "\"";
+                break;
+              case '0':
+                escapeString = "\\0";
+                break;
+              default:
+                // If the escape sequence is invalid
+                error(escapedChar, line, column);
+                return new Token(Token.Category.INVALID, line, column);
+            }
+            return new Token(Token.Category.CHAR_LITERAL, escapeString, line, column);
           } else {
             error(escapedChar, line, column);
             return new Token(Token.Category.INVALID, line, column);
@@ -312,10 +348,39 @@ public class Tokeniser extends CompilerPass {
             return new Token(Token.Category.STRING_LITERAL, sb.toString(), line, column);
           }
           // if the character is a backslash then it's an escaped character
+          // EscapedChar    = '\a' | '\b' | '\n' | '\r' | '\t' | '\\' | '\'' | '\"' | '\0'
           if (charValue == '\\') {
             char escapedChar = scanner.next();
             if (isEscapedChar(escapedChar)) {
-              sb.append("\\").append(escapedChar);
+              switch (escapedChar) {
+                case 'a':
+                  sb.append("\\a");
+                  break;
+                case 'b':
+                  sb.append("\\b");
+                  break;
+                case 'n':
+                  sb.append("\\n");
+                  break;
+                case 'r':
+                  sb.append("\\r");
+                  break;
+                case 't':
+                  sb.append("\\t");
+                  break;
+                case '\\':
+                  sb.append("\\");
+                  break;
+                case '\'':
+                  sb.append("\'");
+                  break;
+                case '"':
+                  sb.append("\"");
+                  break;
+                case '0':
+                  sb.append("\\0");
+                  break;
+              }
             } else {
               error(escapedChar, line, column);
               return new Token(Token.Category.INVALID, line, column);
