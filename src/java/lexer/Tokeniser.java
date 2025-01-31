@@ -412,16 +412,6 @@ public class Tokeniser extends CompilerPass {
       while (scanner.hasNext() && isDigit(scanner.peek())) {
         sb.append(scanner.next());
       }
-
-      // If a letter or underscore follows so the whole thing is an invalid identifier
-      if (scanner.hasNext() && (isLetter(scanner.peek()) || scanner.peek() == '_')) {
-        while (scanner.hasNext() && isValidIdentifierPart(scanner.peek())) {
-          sb.append(scanner.next());
-        }
-        error(c, line, column);
-        return new Token(Token.Category.INVALID, sb.toString(), line, column);
-      }
-
       return new Token(Token.Category.INT_LITERAL, sb.toString(), line, column);
     }
 
