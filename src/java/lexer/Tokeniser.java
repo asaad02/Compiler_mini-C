@@ -341,10 +341,10 @@ public class Tokeniser extends CompilerPass {
         while (scanner.hasNext()) {
           char charValue = scanner.next();
           if (charValue == '"') {
-            if (sb.length() == 0) {
-              error('"', line, column);
-              return new Token(Token.Category.INVALID, line, column);
-            }
+            // if (sb.length() == 0) {
+            // error('"', line, column);
+            // return new Token(Token.Category.INVALID, line, column);
+            // }
             return new Token(Token.Category.STRING_LITERAL, sb.toString(), line, column);
           }
           // if the character is a backslash then it's an escaped character
