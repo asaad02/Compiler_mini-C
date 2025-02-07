@@ -1,47 +1,35 @@
 package parser;
 
-import java.util.LinkedList;
-import java.util.Queue;
-// part 2 
 import ast.Decl;
 import ast.Program;
-import ast.StructTypeDecl;
-// part 2 merge end 
-
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
 import lexer.Token;
 import lexer.Token.Category;
 import lexer.Tokeniser;
 import util.CompilerPass;
 
-// part 2 merge 
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
-// part 2 merge end 
-
-/**
- * @author cdubach
- */
+/** @author cdubach */
 public class Parser extends CompilerPass {
 
   private Token token;
 
-    // p1 : private final Queue<Token> buffer = new LinkedList<>();
-    private Queue<Token> buffer = new LinkedList<>();
+  private Queue<Token> buffer = new LinkedList<>();
 
   private final Tokeniser tokeniser;
 
   public Parser(Tokeniser tokeniser) {
     this.tokeniser = tokeniser;
   }
-    // part 1 public void parse() {
-    public Program parse() {
-        // get the first token
-        nextToken();
-        // part 1 : parseProgram();
-        return parseProgram();
-    }
+
+  public Program parse() {
+    // get the first token
+    nextToken();
+
+    return parseProgram();
+  }
 
   // private int error = 0;
   private Token lastErrorToken;
@@ -91,8 +79,6 @@ public class Parser extends CompilerPass {
   private void nextToken() {
     if (!buffer.isEmpty()) token = buffer.remove();
     else token = tokeniser.nextToken();
-    // debugging the token and seeing the next token in the buffer
-    // System.out.println("Token: " + token + " Buffer: " + buffer);
   }
 
   /*
@@ -102,8 +88,6 @@ public class Parser extends CompilerPass {
     for (Category e : expected) {
       if (e == token.category) {
         Token ret = token;
-        // print the token and the expected token
-        // System.out.println("Token: " + ret + " Expected: " + e);
         nextToken();
         return ret;
       }
@@ -121,6 +105,7 @@ public class Parser extends CompilerPass {
     }
     return false;
   }
+
   // part 1 : private void parseProgram() {
   private Program parseProgram() {
 
@@ -135,8 +120,8 @@ public class Parser extends CompilerPass {
      * include    ::= "#include" STRING_LITERAL
      */
     parseIncludes();
-        // part 2 : List<Decl> decls = new ArrayList<>();
-        List<Decl> decls = new ArrayList<>();
+    // part 2 : List<Decl> decls = new ArrayList<>();
+    List<Decl> decls = new ArrayList<>();
     /*
      * program    ::= (structdecl | vardecl | fundecl | fundef)* EOF
      */
@@ -145,10 +130,10 @@ public class Parser extends CompilerPass {
     expect(Category.EOF);
 
     // to be completed ... for part 2
-        // code part 2:
-        //expect(Category.EOF);
-        //return new Program(decls);
-        // end code for part 2
+    // code part 2:
+    // expect(Category.EOF);
+    // return new Program(decls);
+    // end code for part 2
   }
   /*
    * program    ::= ( structdecl | vardecl | fundecl | fundef)* EOF
@@ -168,9 +153,9 @@ public class Parser extends CompilerPass {
         // structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
         // part 1 : parseStructDecl();
         parseStructDecl();
-        
+
         // part 2 : decls.add(parseStructDecl());
-        //decls.add(parseStructDecl());
+        // decls.add(parseStructDecl());
       }
       // variable declaration | function declaration | function definition
       // if the token is an integer or char or void {fundec | fundef | vardecl}
@@ -188,46 +173,43 @@ public class Parser extends CompilerPass {
         // part 1 :
         // if it's not LPAR ['('], then it's a variable declaration
         else {
-            // vardecl    ::= type IDENT ("[" INT_LITERAL "]")* ";"
-            // parse once the variable declaration
-            parseVarDecls('o');
-          }
+          // vardecl    ::= type IDENT ("[" INT_LITERAL "]")* ";"
+          // parse once the variable declaration
+          parseVarDecls('o');
         }
       }
-        
-        // to be completed ... for part 2
-        // code part 2:
-        //expect(Category.EOF);
-        //return new Program(decls);
-        // end code for part 2
     }
 
-    // includes are ignored, so does not need to return an AST node
-    private void parseIncludes() {
-        if (accept(Category.INCLUDE)) {
-            nextToken();
-            expect(Category.STRING_LITERAL);
-            parseIncludes();
-        }
+    // to be completed ... for part 2
+    // code part 2:
+    // expect(Category.EOF);
+    // return new Program(decls);
+    // end code for part 2
+  }
+
+  // includes are ignored, so does not need to return an AST node
+  private void parseIncludes() {
+    if (accept(Category.INCLUDE)) {
+      nextToken();
+      expect(Category.STRING_LITERAL);
+      parseIncludes();
     }
-    // part 2 :
-    //private StructTypeDecl parseStructDecl(){
-        //expect(Category.STRUCT);
-        //Token id = expect(Category.IDENTIFIER);
-        //expect(Category.LBRA);
-        // to be completed ...
-        //return null; // to be changed
-    //}
+  }
+  // part 2 :
+  // private StructTypeDecl parseStructDecl(){
+  // expect(Category.STRUCT);
+  // Token id = expect(Category.IDENTIFIER);
+  // expect(Category.LBRA);
+  // to be completed ...
+  // return null; // to be changed
+  // }
 
+  // to be completed  for part 2:
 
-
-    // to be completed  for part 2:
-
-
-    /*
-     * old code for part 1
-     */
-    /*
+  /*
+   * old code for part 1
+   */
+  /*
    * type ::= ("int" | "char" | "void" | structtype) ("*")*
    */
   private void parseType() {
