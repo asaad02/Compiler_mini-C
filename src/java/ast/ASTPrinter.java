@@ -5,9 +5,21 @@ import java.io.PrintWriter;
 public class ASTPrinter {
 
     private final PrintWriter writer;
+    private int indentLevel = 0;  
 
     public ASTPrinter(PrintWriter writer) {
             this.writer = writer;
+    }
+
+    private void indent() {
+        for (int i = 0; i < indentLevel; i++) {
+            writer.print("  "); 
+        }
+    }
+
+    private void newline() {
+        writer.println();
+        indent();
     }
 
     public void visit(ASTNode node) {
@@ -59,6 +71,8 @@ public class ASTPrinter {
             }
         }
 
+        indentLevel--;
+        newline();
         writer.print(")");
 
         switch(node) {
