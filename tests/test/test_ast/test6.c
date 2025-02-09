@@ -1,1 +1,3 @@
-int
+int main() {
+    int a;
+}
