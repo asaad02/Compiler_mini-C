@@ -1,6 +1,9 @@
 package parser;
 
+import ast.*;
+import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 import lexer.Token;
 import lexer.Token.Category;
@@ -12,7 +15,7 @@ public class Parser extends CompilerPass {
 
   private Token token;
 
-  private final Queue<Token> buffer = new LinkedList<>();
+  private Queue<Token> buffer = new LinkedList<>();
 
   private final Tokeniser tokeniser;
 
@@ -20,10 +23,11 @@ public class Parser extends CompilerPass {
     this.tokeniser = tokeniser;
   }
 
-  public void parse() {
+  public Program parse() {
     // get the first token
     nextToken();
-    parseProgram();
+
+    return parseProgram();
   }
 
   // private int error = 0;
@@ -73,9 +77,10 @@ public class Parser extends CompilerPass {
    */
   private void nextToken() {
     if (!buffer.isEmpty()) token = buffer.remove();
-    else token = tokeniser.nextToken();
-    // debugging the token and seeing the next token in the buffer
-    // System.out.println("Token: " + token + " Buffer: " + buffer);
+    else {
+      token = tokeniser.nextToken();
+      System.out.println(token);
+    }
   }
 
   /*
@@ -85,8 +90,6 @@ public class Parser extends CompilerPass {
     for (Category e : expected) {
       if (e == token.category) {
         Token ret = token;
-        // print the token and the expected token
-        // System.out.println("Token: " + ret + " Expected: " + e);
         nextToken();
         return ret;
       }
@@ -104,71 +107,34 @@ public class Parser extends CompilerPass {
     }
     return false;
   }
-
-  private void parseProgram() {
-
-    // parsing the include
-    /*
-     * program    ::= (include)* (structdecl | vardecl | fundecl | fundef)* EOF
-     */
-
-    /*
-     * Parsing includes for the program
-     * program    ::= (include)*
-     * include    ::= "#include" STRING_LITERAL
-     */
+  /*
+   *  ===================== PROGRAM PARSING =====================
+   * program    ::= (include)* (structdecl | vardecl | fundecl | fundef)* EOF
+   * The program top AST node (a list of declarations)
+   * AST : Program    ::= (Decl)*
+   * A program consists of zero or more declarations.
+   */
+  private Program parseProgram() {
+    // includes are ignored, so does not need to return an AST node
     parseIncludes();
-    /*
-     * program    ::= (structdecl | vardecl | fundecl | fundef)* EOF
-     */
-    parse_structdecl_VarDecl_fundecl_fundef();
+    // decls is the list of declarations in the program (Program    ::= (Decl)*)
+    List<Decl> decls = new ArrayList<>();
+    // while we have not reached the end of the file
+    while (!accept(Category.EOF)) {
+      decls.add(parseDecl());
+    }
     // expect the end of file
     expect(Category.EOF);
-  }
-  /*
-   * program    ::= ( structdecl | vardecl | fundecl | fundef)* EOF
-   */
-  private void parse_structdecl_VarDecl_fundecl_fundef() {
-    while (accept(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID)
-        && !accept(Category.EOF)) {
-      // Struct declaration
-      // structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
-      // if the token is a struct and we have an identifier and a left brace ["{"]
-      if (token.category == Category.STRUCT
-          && lookAhead(1).category == Category.IDENTIFIER
-          && lookAhead(2).category == Category.LBRA) {
-        // parsing the type of the struct
-        // type  ::= ("int" | "char" | "void" | structtype) ("*")*
-        parseType();
-        // structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
-        parseStructDecl();
-      }
-      // variable declaration | function declaration | function definition
-      // if the token is an integer or char or void {fundec | fundef | vardecl}
-      else {
-        // type  ::= ("int" | "char" | "void" | structtype) ("*")*
-        parseType();
-        // consume the Identifier [IDENTIFIER]
-        expect(Category.IDENTIFIER);
-        // check the left parenthesis ['('] then it's a function declaration or definition
-        if (accept(Category.LPAR)) {
-          // fundecl   ::= type IDENT "(" params ")" ";"
-          // fundef    ::= type IDENT "(" params ")" block
-          parseFuncDefAndDec();
-        }
-        // if it's not LPAR ['('], then it's a variable declaration
-        else {
-          // vardecl    ::= type IDENT ("[" INT_LITERAL "]")* ";"
-          // parse once the variable declaration
-          parseVarDecls('o');
-        }
-      }
-    }
+    // return the program AST node
+    return new Program(decls);
   }
 
   /*
-   *[include]
-   *include    ::= "#include" STRING_LITERAL
+   * ===================== INCLUDE PARSING =====================
+   * Parsing includes for the program
+   * program    ::= (include)*
+   * include    ::= "#include" STRING_LITERAL
+   * The include directive is not part of the AST
    */
   private void parseIncludes() {
     if (accept(Category.INCLUDE)) {
@@ -178,165 +144,247 @@ public class Parser extends CompilerPass {
     }
   }
 
-  /*
-   * type ::= ("int" | "char" | "void" | structtype) ("*")*
-   */
-  private void parseType() {
-    // Check the type ("int" | "char" | "void" | structtype ) ("*")*
-    if (accept(Category.INT, Category.CHAR, Category.VOID)) {
-      // expect the token to be an integer or char or void
-      expect(Category.INT, Category.CHAR, Category.VOID);
-    } else if (accept(Category.STRUCT)) {
-      // Parse a struct type
-      // structtype ::= "struct" IDENT
-      parseStructType();
-    } else {
-      error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
+  private Decl parseDecl() {
+    /*
+     *  ===================== STRUCT DECLARATION PARSING =====================
+     * structdecl ::= structtype "{" (vardecl)+ "}" ";"
+     * structtype ::= "struct" IDENT
+     * if the token is a struct and we have an identifier and a left brace ["{"]
+     * AST : StructType  ::= String
+     * AST : StructTypeDecl ::= StructType VarDecl*
+     * represents a struct type (the String is the name of the declared struct type)Struct declaration
+     */
+    if (token.category == Category.STRUCT
+        && lookAhead(1).category == Category.IDENTIFIER
+        && lookAhead(2).category == Category.LBRA) {
+      Type structType = structtype();
+      return parseStructDecl(structType);
     }
-    // followed by asterisks
-    while (accept(Category.ASTERISK)) {
-      // Consume the asterisk token
-      nextToken();
+    // if the token is an integer or char or void {fundec | fundef | vardecl}
+    else if (accept(Category.INT, Category.CHAR, Category.VOID) ) {
+      // type  ::= ("int" | "char" | "void" | structtype) ("*")*
+      //Type type = parseType();
+      //Token id = expect(Category.IDENTIFIER);
+      //if (accept(Category.LPAR)) {
+        if (lookAhead(1).category == Category.IDENTIFIER
+        && lookAhead(2).category == Category.LPAR ) {
+            Type type = parseType();
+            Token id = expect(Category.IDENTIFIER);
+          // if the next token is an identifier and the one after that is a left parenthesis ['(']
+          // then it's a function declaration or definition
+        /*
+         *  ===================== FUNCTION PARSING =====================
+         * function declaration | function definition
+         * fundecl   ::= type IDENT "(" params ")" ";"
+         * fundef    ::= type IDENT "(" params ")" block
+         * AST:
+         * FunDecl definition (the String is the name of the FunDecl)
+         * funDef     ::= Type String VarDecl* Block
+         * Function prototype (the String is the name of the function)
+         * FunDecl    ::= Type String VarDecl*
+         */
+        // parseFuncDefAndDec(type, id);
+        // return empty AST node for now
+        return parseFuncDefOrDecl(type, id);
+      }
+      // if it's not LPAR ['('], then it's a variable declaration
+      else {
+        /*
+         * ===================== VARIABLE DECLARATION PARSING =====================
+         * vardecl    ::= type IDENT ("[" INT_LITERAL "]")* ";"
+         * Variable declaration
+         * VarDecl    ::= Type String
+         */
+        return parseVarDecl();
+      }
     }
-  }
+    //expect(Category.SC);
 
+    //error(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID);
+    throw new RuntimeException("Unexpected token in declaration: " + token);
+  }
   /*
+   * ===================== STRUCT TYPE PARSING =====================
    * structtype ::= "struct" IDENT
+   * AST : StructType  ::= String
    */
-  private void parseStructType() {
+  private StructType structtype() {
     // expect the token to be a struct
     expect(Category.STRUCT);
-    // expect the token to be an identifier
-    expect(Category.IDENTIFIER);
+    // expect the token to be an identifier and return the struct type AST node
+    return new StructType(expect(Category.IDENTIFIER).data);
   }
-
   /*
-   * [structdecl]
-   * structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
-   * structtype ::= "struct" IDENT
-   * vardecl    ::= type IDENT ("[" INT_LITERAL "]")* ";"
-   * ";"
+   * ===================== TYPE PARSING =====================
+   * type ::= ("int" | "char" | "void" | structtype) ("*")*
+   * Type        ::= BaseType | PointerType | StructType | ArrayType
+   * NONE should be used mostly for statements and UNKNOWN in case where no type can be inferred
+   * BaseType    ::= INT | CHAR | VOID | NONE | UNKNOWN
+   * use to represent pointers to other types
+   * PoInterType ::= Type
+   * represents a struct type (the String is the name of the declared struct type)
+   * StructType  ::= String
+   * Type represents the element type, Int represents the number of elements in the declared array
+   * ArrayType   ::= Type Int
    */
-
-  private void parseStructDecl() {
-    // structtype ::= "struct" IDENT
-    // we parse already the key in parseType()
-    // if the token is a left brace ["{"]
-    expect(Category.LBRA);
-    // parse the at least one variable declaration within the block or more
-    // (vardecl)+
-    parseVarDecls('+');
-    // if the token is a right brace ["}"]
-    expect(Category.RBRA);
-    // if the token is a semicolon [";"]
-    expect(Category.SC);
-  }
-
-  /*
-   * vardecl    ::= type IDENT ("[" INT_LITERAL "]")* ";"
-   * variable declaration, (e.g. int a;), or multi-dimensional array declaration, (e.g. int a[2][5];)
-   */
-  private void parseVarDecls(char mode) {
-    // Base case we will check if the token is an integer or char or void or struct
-    if (!accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
-      // if the mode is '*' then we will return
-      if (mode == '*') {
-        return;
+  private Type parseType() {
+    /*
+     * Check the type ("int" | "char" | "void" | structtype ) ("*")*
+     * if the token is an integer or char or void
+     * BaseType ::= INT | CHAR | VOID | NONE | UNKNOWN
+     * PoInterType ::= Type
+     */
+    if (accept(Category.INT, Category.CHAR, Category.VOID)) {
+      // expect the token to be an integer or char or void
+      Token typeToken = expect(Category.INT, Category.CHAR, Category.VOID);
+      // baseType is the base type of the token
+      Type baseType;
+      // return the base type
+      switch (typeToken.category) {
+        case INT:
+          baseType = BaseType.INT;
+          break;
+        case CHAR:
+          baseType = BaseType.CHAR;
+          break;
+        case VOID:
+          baseType = BaseType.VOID;
+          break;
+        default:
+          baseType = BaseType.UNKNOWN;
       }
-      // if the mode is '+' then we will throw an error because we need at least one declaration
-      else if (mode == '+') {
-        error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
-      }
-      // if the mode is 'o' then we will parse a single declaration
-      else if (mode == 'o') {
-        // Check for array declarations ['['] for the variable declaration
-        while (accept(Category.LSBR) && !accept(Category.EOF)) {
-          // Consume '['
-          nextToken();
-          // Expect array size
-          expect(Category.INT_LITERAL);
-          // Expect ']'
-          expect(Category.RSBR);
-        }
-        // Expect a semicolon
-        expect(Category.SC);
-        return;
-      }
-    }
-    // type       ::= ("int" | "char" | "void" | structtype) ("*")*
-    parseType();
-    // Expect the identifier
-    expect(Category.IDENTIFIER);
-
-    // Check for array declarations ['['] for the variable declaration
-    while (accept(Category.LSBR) && !accept(Category.EOF)) {
-      // Consume '['
-      nextToken();
-      // Expect array size
-      expect(Category.INT_LITERAL);
-      // Expect ']'
-      expect(Category.RSBR);
-    }
-
-    // Expect a semicolon
-    expect(Category.SC);
-
-    // handle different mode if + then we will parse more declarations and if * then we will parse
-    // zero or more
-    if (mode == '+') {
-      // Parse more declarations
-      parseVarDecls('*');
-    } else if (mode == '*') {
-      // Parse zero or more declarations
-      parseVarDecls('*');
-    }
-  }
-
-  /*
-   * # function definition
-   *  fundef    ::= type IDENT "(" params ")" block       # function definition
-   *  fundecl   ::= type IDENT "(" params ")" ";"
-   */
-  private void parseFuncDefAndDec() {
-    // params     ::= [ type IDENT ("[" INT_LITERAL "]")* ("," type IDENT ("[" INT_LITERAL"]")*)*]
-    parseParams();
-    // fundef    ::= type IDENT "(" params ")" block
-    // consume the right parenthesis ['{']
-    if (accept(Category.LBRA)) {
-      // block      ::= "{" (vardecl)* (stmt)* "}"
-      // Parse function body
-      parseBlock();
-    } else {
       /*
-       * fundecl   ::= type IDENT "(" params ")" ";"
-       * # function declaration
+       * if the token is an asterisk ["*"]
+       * PoInterType ::= Type
        */
-      // consume the semicolon [';']
-      expect(Category.SC);
+      while (accept(Category.ASTERISK)) {
+        nextToken();
+        baseType = new PointerType(baseType); 
+        }
+      return baseType;
+    }
+    /*
+     * if the token is a struct and we have an identifier and a left brace ["{"]
+     * StructType  ::= String
+     * StructTypeDecl ::= StructType VarDecl*
+     * represents a struct type (the String is the name of the declared struct type)Struct declaration
+     */
+
+    /*
+     * ArrayType   ::= Type Int
+     * if the token is a left square bracket ["["]
+     * type ::= ("int" | "char" | "void" | structtype) ("*")*
+     * Type        ::= BaseType | PointerType | StructType | ArrayType
+     */
+    else if (accept(Category.LSBR)) {
+      Type elementType = parseType();
+      expect(Category.RSBR);
+      return new ArrayType(elementType, Integer.parseInt(expect(Category.INT_LITERAL).data));
+
+    }
+    /*
+     * if its LPAR ['('] then it's a type
+     * type ::= ("int" | "char" | "void" | structtype) ("*")*
+     * PoInterType ::= Type
+     */
+    else if (accept(Category.LPAR)) {
+      nextToken();
+      Type innerType = parseType();
+      // expect(Category.RPAR);
+      return innerType;
+    }
+    /*
+     * if the type is not int, char, void, struct, or *, then it's an error
+     */
+    else {
+      // if the type is not int, char, void, struct, or *, then it's an error
+      error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
+      // return unknown type
+      return BaseType.UNKNOWN;
     }
   }
   /*
-   * params     ::= [ type IDENT ("[" INT_LITERAL "]")* ("," type IDENT ("[" INT_LITERAL "]")*)* ]
+   *  ===================== STRUCT DECLARATION PARSING =====================
+   * structdecl ::= structtype "{" (vardecl)+ "}" ";"
+   * StructTypeDecl ::= StructType VarDecl*
+   * represents a struct type (the String is the name of the declared struct type)Struct declaration
+   * structdecl ::= structtype "{" (vardecl)+ "}" ";"    # structure declaration
    */
-  private void parseParams() {
-    // consume the left parenthesis ['(']
+  private StructTypeDecl parseStructDecl(Type structType) {
+    // expect the left brace ["{"]
+    expect(Category.LBRA);
+    // varDecls is the list of variable declarations in the struct
+    List<VarDecl> varDecls = new ArrayList<>();
+    // while we have not reached the right brace ["}"]
+    while (!accept(Category.RBRA)) {
+      varDecls.add(parseVarDecl());
+    }
+    // expect the right brace ["}"]
+    expect(Category.RBRA);
+    // expect the semicolon [";"]
+    expect(Category.SC);
+    // return the struct type declaration AST node
+    return new StructTypeDecl((StructType) structType, varDecls);
+  }
+  /*
+   * ===================== VARIABLE DECLARATION PARSING =====================
+   * vardecl    ::= type IDENT ("[" INT_LITERAL "]")* ";"
+   * Variable declaration
+   * VarDecl    ::= Type String
+   */
+  private VarDecl parseVarDecl() {
+    Type type = parseType();
+    String varName = expect(Category.IDENTIFIER).data;
+    // Handle array declarations (e.g., int a[10];)
+    while (accept(Category.LSBR)) {
+      nextToken();
+      int size = Integer.parseInt(expect(Category.INT_LITERAL).data);
+      expect(Category.RSBR);
+      type = new ArrayType(type, size);
+    }
+    expect(Category.SC);
+    return new VarDecl(type, varName);
+  }
+  /*
+   * ===================== FUNCTION PARSING =====================
+   * function declaration | function definition
+   * fundecl   ::= type IDENT "(" params ")" ";"
+   * fundef    ::= type IDENT "(" params ")" block
+   * AST:
+   * FunDecl definition (the String is the name of the FunDecl)
+   * funDef     ::= Type String VarDecl* Block
+   * Function prototype (the String is the name of the function)
+   * FunDecl    ::= Type String VarDecl*
+   */
+  private Decl parseFuncDefOrDecl(Type type, Token id) {
+    List<VarDecl> params = new ArrayList<>();
+    // expect the left parenthesis ["("]
     expect(Category.LPAR);
+    // params     ::= [ type IDENT ("[" INT_LITERAL "]")* ("," type IDENT ("[" INT_LITERAL"]")*)*]
+    // parseParams();
+    // Parse parameters if they exist
+    /*
+     * params     ::= [ type IDENT ("[" INT_LITERAL "]")* ("," type IDENT ("[" INT_LITERAL "]")*)* ]
+     */
     // if the token is not a right parenthesis [')']
     if (!accept(Category.RPAR) && !accept(Category.EOF)) {
       do {
         // parse the type
-        parseType();
+        Type paramType = parseType();
         // expect the identifier
-        expect(Category.IDENTIFIER);
+        String paramName = expect(Category.IDENTIFIER).data;
         // check if it's an array '[' for the parameter
         while (accept(Category.LSBR) && !accept(Category.EOF)) {
           nextToken();
-          expect(Category.INT_LITERAL);
+          int size = Integer.parseInt(expect(Category.INT_LITERAL).data);
           // expect the right square brace ["]"]
           expect(Category.RSBR);
+          paramType = new ArrayType(paramType, size);
         }
+        params.add(new VarDecl(paramType, paramName));
         // check if there's a comma for more parameters
         if (accept(Category.COMMA)) {
+          System.out.println("i'm here COMMA");
           nextToken();
         } else {
           // if no comma so we don't have more parameters so we break the loop
@@ -344,457 +392,347 @@ public class Parser extends CompilerPass {
         }
       } while (true);
     }
-    // expect the right parenthesis [')']
     expect(Category.RPAR);
+    // FunDecl(type, id.data, params);
+    if (accept(Category.LBRA)) {
+        // funDef     ::= Type String VarDecl* Block
+      return new FunDef(type, id.data, params, parseBlock());
+    } 
+    else if (accept(Category.SC)) {
+         // consume the semicolon [';']
+      expect(Category.SC);
+      // FunDecl    ::= Type String VarDecl*
+      return new FunDecl(type, id.data, params);
+    } 
+    
+    // Handle unexpected cases explicitly
+    error(Category.LBRA, Category.SC);
+    throw new RuntimeException("Unexpected token after function declaration: " + token);
   }
-
   /*
+   * ===================== BLOCK PARSING =====================
    * block      ::= "{" (vardecl)* (stmt)* "}"
+   * AST:
+   * Block ::= VarDecl* Stmt*
    */
-  private void parseBlock() {
-    // consume the left brace ['{']
+  private Block parseBlock() {
     expect(Category.LBRA);
+    List<Stmt> stmts = new ArrayList<>();
+    List<VarDecl> varDecls = new ArrayList<>();
     // Parse statements within the block , the block will have the [while, if, return, continue,
     // break, exp]
     while (!accept(Category.RBRA) && !accept(Category.EOF)) {
 
-      // if its a integer or char or void or struct then we will parse the type and the identifier
-      // other than that we will parse the statement
       if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
         // parse all the variable declarations within the block
-        parseVarDecls('*');
+        varDecls.add(parseVarDecl());
       } else {
         // parse all the statements within the block
-        parseStmt();
+        stmts.add(parseStmt());
       }
     }
     // Ensure the block ends with a right brace '}'
     // consume the right brace ['}']
     expect(Category.RBRA);
+    return new Block(varDecls, stmts);
   }
   /**
    * stmt ::= block | "while" "(" exp ")" stmt # while loop | "if" "(" exp ")" stmt ["else" stmt] #
    * if then else | "return" [exp] ";" # return | exp ";" # expression statement, e.g. a function
-   * call | "continue" ";" # continue | "break" ";"
+   * call | "continue" ";" # continue | "break" ";" Stmt ::= Block | While | If | Return | Continue
+   * | Break | ExprStmt
    */
-  private void parseStmt() {
-    // case 1 : block [if started with ["{"] - we will parse all the statements within the block
-    if (accept(Category.LBRA)) {
-      // parsing the block
-      parseBlock();
-      // case 2 : if started with ["while"] - we will parse the while loop
-    } else if (accept(Category.WHILE)) {
-      parseWhileStmt();
-      // case 3 : if started with ["if"] - we will parse the if statement
-    } else if (accept(Category.IF)) {
-      parseIfStmt();
-      // case 4 : if started with ["return"] - we will parse the return statement
-    } else if (accept(Category.RETURN)) {
-      parseReturnStmt();
-      // case 5 : if started with ["continue"] and [Break] we will parse the continue statement
-    } else if (accept(Category.CONTINUE, Category.BREAK)) {
-      parseContinueAndBreakStmt();
-      // case 6 : if started with an expression - we will parse the expression statement
-    } else {
-      // Parse an expression statement
-      parseExp();
-      // if it's not a semicolon then we will throw an error
-      if (accept(Category.SC)) {
-        expect(Category.SC);
-      } else {
-        error(Category.SC);
-        // consume the token
-        nextToken();
-      }
-    }
-  }
-
-  /*
-   * exp      ::= "(" exp ")"
-   *          | exp "=" exp                           # assignment
-   *          | (IDENT | INT_LITERAL)
-   *          | ("-" | "+") exp
-   *          | CHAR_LITERAL
-   *          | STRING_LITERAL
-   *          | exp (">" | "<" | ">=" | "<=" | "!=" | "==" | "+" | "-" | "/" | "*" | "%" | "||" | "&&") exp  # binary operators
-   *          | arrayaccess | fieldaccess | valueat | addressof | funcall | sizeof | typecast
-   */
-
-  // parser for the expression statement - exp ";"
-  private void parseExp() {
-    // parse the expression statement - exp
-    parseAssignmentExp();
-  }
-
-  // parser for the assignment expression - exp "=" exp
-  private void parseAssignmentExp() {
-    // parse the logical OR expression (right-hand side)
-    parseLogicalOrExp();
-    // exp "=" exp
-    if (accept(Category.ASSIGN)) {
-      nextToken();
-      // Parse right-hand side after '=' sign
-      parseAssignmentExp();
-    }
-  }
-
-  // parser for the logical OR expression - exp "||" exp
-  private void parseLogicalOrExp() {
-    // Parse right-hand side of the logical OR expression
-    parseLogicalAndExp();
-    // exp "||" exp
-    // loop through the logical OR expression
-    while (accept(Category.LOGOR)) {
-      // Consume '||'
-      nextToken();
-      // Parse right-hand side of the logical OR expression
-      parseLogicalAndExp();
-    }
-  }
-
-  // Parses a logical AND expression. [exp ::= exp "&&" exp]
-  private void parseLogicalAndExp() {
-    // Parse left-hand side of the logical AND expression
-    parseEqualityExp();
-    // loop through the logical AND expression
-    while (accept(Category.LOGAND)) {
-      // Consume '&&'
-      nextToken();
-      // Parse right-hand side of the logical AND expression
-      parseEqualityExp();
-    }
-  }
-
-  // Parses an equality expression. [ exp ::= exp ("==" | "!=") exp]
-  private void parseEqualityExp() {
-    // Parse left-hand side of the equality expression
-    parseRelationalExp();
-    // loop through the equality expression - exp ("==" | "!=") exp
-    while (accept(Category.EQ, Category.NE)) {
-      // Consume '==' or '!='
-      nextToken();
-      // Parse right-hand side of the equality expression
-      parseRelationalExp();
-    }
-  }
-
-  // Parses a relational expression. [exp ::= exp (">" | "<" | ">=" | "<=") exp]
-  private void parseRelationalExp() {
-    // Parse left-hand side of the relational expression - exp
-    parseAdditiveExp();
-    while (accept(Category.LT, Category.GT, Category.LE, Category.GE)) {
-      // Consume relational operator
-      nextToken();
-      // Parse right-hand side of the relational expression
-      parseAdditiveExp();
-    }
-  }
-
-  // Parses an additive expression. [exp ::= exp ("+" | "-") exp]
-  private void parseAdditiveExp() {
-    parseMultiplicativeExp();
-    while (accept(Category.PLUS, Category.MINUS)) {
-      // Consume '+' or '-'
-      nextToken();
-      // Parse right-hand side of the additive expression
-      parseMultiplicativeExp();
-    }
-  }
-
-  // Parses a multiplicative expression. [exp ::= exp ("*" | "/" | "%") exp]
-  private void parseMultiplicativeExp() {
-    // Parse left-hand side of the multiplicative expression
-    parseUnaryExp();
-    // loop through the multiplicative expression
-    while (accept(Category.ASTERISK, Category.DIV, Category.REM)) {
-      // Consume '*' or '/' or '%'
-      nextToken();
-      // Parse right-hand side of the multiplicative expression
-      parseUnaryExp();
-    }
-  }
-
-  // Parses a unary expression. [exp ::= ("-" | "+") exp]
-  private void parseUnaryExp() {
-    // Handle multiple levels of pointer dereference (e.g., **ptr)
-    while (accept(Category.ASTERISK)) {
-      // Consume '*'
-      nextToken();
-    }
-    // Check if the token is a unary operator
-    if (accept(Category.MINUS, Category.PLUS)) {
-      // Consume unary operator
-      nextToken();
-      // Parse the operand
-      parseUnaryExp();
-    } else {
-      // Parse primary expression
-      parsePrimaryExp();
-    }
-  }
-
-  /**
-   * Parses a primary expression. [exp ::= "(" exp ")" | IDENT | INT_LITERAL | CHAR_LITERAL |
-   * STRING_LITERAL] | valueat | addressof | funcall | sizeof | typecast | arrayaccess | fieldaccess
-   */
-  private void parsePrimaryExp() {
-    // check if the token is a left parenthesis ["("]
-    if (accept(Category.LPAR)) {
-      // if the token is a left parenthesis ["("] then we parse the expression within the
-      // parenthesis
-      Token lookahead = lookAhead(1);
-      if (lookahead.category == Category.INT
-          || lookahead.category == Category.CHAR
-          || lookahead.category == Category.VOID
-          || lookahead.category == Category.STRUCT) {
-        // parse typecast expression [typecast     ::= "(" type ")" exp  ]
-        parseTypeCast();
-      } else {
-        // consume the left parenthesis ["("]
-        nextToken();
-        // parse the expression within the parenthesis
-        parseExp();
-        // consume the right parenthesis [")"]
-        expect(Category.RPAR);
-      }
-      while (accept(Category.DOT)) {
-        // parse field access
-        parseFieldAccess();
-      }
-    }
-    // check if the token is an identifier
-    else if (accept(Category.IDENTIFIER)) {
-      // consume the identifier
-      nextToken();
-      // check if the token is a left parenthesis ["("]
-      if (accept(Category.LPAR)) {
-        // parse function call
-        // funcall      ::= IDENT "(" [ exp ("," exp)* ] ")" # function call
-        parseFuncall();
-        // if the token is a left square brace ["["]
-      } else if (accept(Category.LSBR)) {
-        // parse array access
-        // arrayaccess  ::= exp "[" exp "]"                  # array access
-        parseArrayAccess();
-      } // if the token is a dot ["."]
-      else if (accept(Category.DOT)) {
-        // parse field access
-        // fieldaccess  ::= exp "." IDENT
-        parseFieldAccess();
-      }
-    }
-    // check if the token is an integer literal ["INT_LITERAL"] or a character literal
-    // ["CHAR_LITERAL"] or a string literal ["STRING_LITERAL"]
-    else if (accept(Category.INT_LITERAL, Category.CHAR_LITERAL, Category.STRING_LITERAL)) {
-      // Parse literals
-      nextToken();
-    }
-    // check if the token is value at ["*"] - Value at operator (pointer indirection)
-    // valueat ::= "*" exp
-    else if (accept(Category.ASTERISK)) {
-      // parse value at operator
-      // valueat      ::= "*" exp
-      parseValueAt();
-    }
-    // check if the token is a sizeof ["sizeof"] - Sizeof operator
-    // sizeof ::= "sizeof" "(" type ")"
-    else if (accept(Category.SIZEOF)) {
-      // parse sizeof operator
-      // sizeof ::= "sizeof" "(" type ")"
-      parseSizeOf();
-
-    } // check if the token is an address of ["&"] - Address of operator
-    // addressof ::= "&" exp
-    else if (accept(Category.AND)) {
-      // parse address of operator
-      // addressof ::= "&" exp
-      parseAddressOf();
-    } // fieldaccess  ::= exp "." IDENT
-    else if (accept(Category.DOT)) {
-      // parse field access
-      parseFieldAccess();
-    }
-    // check if the token is a left square brace ["["]
-    else if (accept(Category.LSBR)) {
-      // parse array access
-      // arrayaccess  ::= exp "[" exp "]"                  # array access
-      parseArrayAccess();
-    }
-    // typecast ::= "(" type ")" exp
-    else if (accept(Category.LPAR)) {
-      // parse typecast expression
-      // typecast ::= "(" type ")" exp
-      parseTypeCast();
-    } else {
-      // if the token is not any of the above then we will throw an error
-      error(
-          Category.LPAR,
-          Category.IDENTIFIER,
-          Category.INT_LITERAL,
-          Category.CHAR_LITERAL,
-          Category.STRING_LITERAL);
-    }
-  }
-  /*
-   * Helper methods for Exp
-   */
-
-  /*
-   * funcall      ::= IDENT "(" [ exp ("," exp)* ] ")" # function call
-   */
-  private void parseFuncall() {
-    // consume the left parenthesis ["("]
-    expect(Category.LPAR);
-    // check if the token is not a right parenthesis [")"]
-    // optional expression after the left parenthesis
-    if (!accept(Category.RPAR) && !accept(Category.EOF)) {
-      do {
-        // parse the expression
-        parseExp();
-        // check if there's a comma for more expressions
-        if (accept(Category.COMMA)) {
-          // consume the comma
-          nextToken();
-        } else {
-          // if no comma so we don't have more expressions so we break the loop
-          break;
-        }
-      } while (true);
-    }
-    // consume the right parenthesis [")"]
-    expect(Category.RPAR);
-  }
-
-  /*
-   * Parses an array access.
-   * arrayaccess ::= exp "[" exp "]"
-   */
-  private void parseArrayAccess() {
-    // expect the left square brace '['
-    expect(Category.LSBR);
-    // Parse the expression within the square brackets
-    parseExp();
-    // Parse the closing square bracket ']'
-    expect(Category.RSBR);
-  }
-
-  /** Parses a structure field access. fieldaccess ::= exp "." IDENT # field access */
-  private void parseFieldAccess() {
-    // expect the dot operator
-    expect(Category.DOT);
-    // expect the identifier
-    expect(Category.IDENTIFIER);
-  }
-
-  /*
-   * Parses a pointer dereference.
-   * valueat ::= "*" exp
-   */
-  private void parseValueAt() {
-    // expect the asterisk operator [*]
-    expect(Category.ASTERISK);
-    // parse the expression
-    parseExp();
-  }
-
-  /*
-   * Parses an address-of operation.
-   * Grammar: addressof ::= "&" exp
-   */
-  private void parseAddressOf() {
-    // expect the ampersand operator [&]
-    expect(Category.AND);
-    // parse the expression
-    parseExp();
-  }
-
-  /*
-   * Parses a sizeof operation.
-   * sizeof ::= "sizeof" "(" type ")"
-   */
-  private void parseSizeOf() {
-    // expect the sizeof operator ['sizeof']
-    expect(Category.SIZEOF);
-    // expect the left parenthesis ['(']
-    expect(Category.LPAR);
-    // parse the type
-    parseType();
-    // expect the right parenthesis [')']
-    expect(Category.RPAR);
-  }
-
-  /*
-   * Parses a typecast operation.
-   * typecast ::= "(" type ")" exp
-   */
-  private void parseTypeCast() {
-    // expect the left parenthesis ['(']
-    expect(Category.LPAR);
-    // parse the type
-    parseType();
-    // expect the right parenthesis [')']
-    expect(Category.RPAR);
-    // parse the expression
-    parseExp();
-  }
-
+  private Stmt parseStmt() {
+    return switch (token.category) {
+        case RETURN -> parseReturnStmt();
+        case WHILE -> parseWhileStmt();
+        case IF -> parseIfStmt();
+        case CONTINUE -> { nextToken(); expect(Category.SC); yield new Continue(); }
+        case BREAK -> { nextToken(); expect(Category.SC); yield new Break(); }
+        case LBRA -> parseBlock();
+        case ELSE -> throw new RuntimeException("Unexpected 'else' without matching 'if'"); 
+        default -> parseExprStmt(); 
+    };
+}
   /*
    * Helper methods for Stmt
    */
 
   // parser [While] statement - "while" "(" exp ")" stmt
-  private void parseWhileStmt() {
+  private Stmt parseWhileStmt() {
     // Consume 'while'
-    nextToken();
+    expect(Category.WHILE);
     // Expect '('
     expect(Category.LPAR);
     // Parse condition
-    parseExp();
+    Expr condition = parseExpr();
     // Expect ')'
     expect(Category.RPAR);
     // Parse body
-    parseStmt();
+    return new While(condition, parseStmt());
   }
   // parser [If] statement - "if" "(" exp ")" stmt ["else" stmt]
-  private void parseIfStmt() {
+  private Stmt parseIfStmt() {
     // Consume 'if'
-    nextToken();
+    expect(Category.IF);
     // Expect '('
     expect(Category.LPAR);
     // Parse condition
-    parseExp();
+    Expr condition = parseExpr();
     // Expect ')'
     expect(Category.RPAR);
     // Parse 'if' body
-    parseStmt();
+    Stmt thenBranch = parseStmt();
     // Parse 'else' body
     // optional else body
+    Stmt elseBranch = null;
     if (accept(Category.ELSE)) {
       // Consume 'else'
       nextToken();
       // Parse 'else' body
-      parseStmt();
+      elseBranch = parseStmt();
     }
+    return new If(condition, thenBranch, elseBranch);
   }
 
   // parser [return] statement - "return" [exp] ";"
-  private void parseReturnStmt() {
+  private Stmt parseReturnStmt() {
     // Consume 'return'
-    nextToken();
+    expect(Category.RETURN);
     // if not [';'] then we need to parse the expression
     // optional expression after 'return'
+    Expr expr = null;
     if (!accept(Category.SC)) {
-      parseExp();
+      expr = parseExpr();
     }
     // Expect ';'
     expect(Category.SC);
+    return new Return(expr);
   }
 
   // parser for for continue and break statement
-  private void parseContinueAndBreakStmt() {
+  //private Stmt parseContinueStmt() {
     // Consume 'continue' or 'break'
-    nextToken();
+    //nextToken();
     // Expect ';'
+    //expect(Category.SC);
+    //return new Continue();
+  //}
+
+  //private Stmt parseBreakStmt() {
+    // Consume 'continue' or 'break'
+    //nextToken();
+    // Expect ';'
+    //expect(Category.SC);
+    //return new Break();
+  //}
+  private Stmt parseExprStmt() {
+    Expr expr = parseExpr();
     expect(Category.SC);
-  }
+    return new ExprStmt(expr);
+    }
+
+
+
+    private Expr parseExpr() {
+        Expr lhs = parseLogicalOrExpr(); 
+        if (accept(Category.ASSIGN)) { 
+            nextToken();
+            return new Assign(lhs, parseExpr()); 
+        }
+        return lhs;
+    }
+
+
+    private Expr parseLogicalOrExpr() {
+        Expr expr = parseLogicalAndExpr();
+        while (accept(Category.LOGOR)) {
+            nextToken();
+            expr = new BinOp(expr, Op.OR, parseLogicalAndExpr());
+        }
+        return expr;
+    }
+
+
+    private Expr parseLogicalAndExpr() {
+        Expr expr = parseEqualityExpr();
+        while (accept(Category.LOGAND)) {
+            nextToken();
+            expr = new BinOp(expr, Op.AND, parseEqualityExpr());
+        }
+        return expr;
+    }
+
+
+    private Expr parseEqualityExpr() {
+        Expr expr = parseRelationalExpr();
+        while (accept(Category.EQ, Category.NE)) {
+            Op op = (token.category == Category.EQ) ? Op.EQ : Op.NE;
+            nextToken();
+            expr = new BinOp(expr, op, parseRelationalExpr());
+        }
+        return expr;
+    }
+
+
+    private Expr parseRelationalExpr() {
+        Expr expr = parseAdditiveExpr();
+        while (accept(Category.LT, Category.GT, Category.LE, Category.GE)) {
+            Op op = switch (token.category) {
+                case LT -> Op.LT;
+                case GT -> Op.GT;
+                case LE -> Op.LE;
+                case GE -> Op.GE;
+                default -> throw new IllegalArgumentException("Invalid relational operator");
+            };
+            nextToken();
+            expr = new BinOp(expr, op, parseAdditiveExpr());
+        }
+        return expr;
+    }
+
+
+    private Expr parseAdditiveExpr() {
+        Expr expr = parseMultiplicativeExpr();
+        while (accept(Category.PLUS, Category.MINUS)) {
+            Op op = (token.category == Category.PLUS) ? Op.ADD : Op.SUB;
+            nextToken();
+            expr = new BinOp(expr, op, parseMultiplicativeExpr());
+        }
+        return expr;
+    }
+
+
+    private Expr parseMultiplicativeExpr() {
+        Expr expr = parseUnaryExpr(); 
+        while (accept(Category.ASTERISK, Category.DIV, Category.REM)) {
+            Op op = switch (token.category) {
+                case ASTERISK -> Op.MUL;
+                case DIV -> Op.DIV;
+                case REM -> Op.MOD;
+                default -> throw new IllegalArgumentException("Unsupported operator");
+            };
+            nextToken();
+            expr = new BinOp(expr, op, parseUnaryExpr());
+        }
+        return expr;
+    }
+
+    private Expr parseUnaryExpr() {
+        if (accept(Category.PLUS, Category.MINUS, Category.ASTERISK, Category.AND, Category.SIZEOF)) {
+            Category op = token.category;
+            nextToken();
+            Expr operand = parseUnaryExpr(); 
+            return switch (op) {
+                case PLUS -> operand; 
+                case MINUS -> new BinOp(new IntLiteral(0), Op.SUB, operand); 
+                case ASTERISK -> new ValueAtExpr(operand); 
+                case AND -> new AddressOfExpr(operand); 
+                case SIZEOF -> new SizeOfExpr(parseType());
+                default -> throw new IllegalArgumentException("Invalid unary operator");
+            };
+        }
+        return parsePostfixExpr();
+    }
+
+
+    private Expr parsePostfixExpr() {
+        Expr expr = parsePrimaryExpr(); 
+
+        while (accept(Category.LSBR, Category.LPAR)) { 
+            if (accept(Category.LSBR)) { 
+                nextToken();
+                Expr index = parseExpr(); 
+                expect(Category.RSBR); 
+                expr = new ArrayAccessExpr(expr, index);
+            } else { 
+                nextToken();
+                List<Expr> args = new ArrayList<>();
+                if (!accept(Category.RPAR)) {
+                    args.add(parseExpr());
+                    while (accept(Category.COMMA)) {
+                        nextToken();
+                        args.add(parseExpr());
+                    }
+                }
+                expect(Category.RPAR);
+                expr = new FunCallExpr(((VarExpr) expr).name, args);
+            }
+        }
+        return expr;
+    }
+
+    private Expr parseFuncCallExpr(Token id) {
+        expect(Category.LPAR);
+        List<Expr> args = new ArrayList<>();
+        if (!accept(Category.RPAR)) {
+            args.add(parseExpr());
+            while (accept(Category.COMMA)) {
+                nextToken();
+                args.add(parseExpr());
+            }
+        }
+        expect(Category.RPAR);
+        return new FunCallExpr(id.data, args);
+    }
+
+    private Expr parsePrimaryExpr() {
+        if (accept(Category.INT_LITERAL)) {
+            return new IntLiteral(Integer.parseInt(expect(Category.INT_LITERAL).data));
+        } 
+        else if (accept(Category.CHAR_LITERAL)) {
+            return new ChrLiteral(expect(Category.CHAR_LITERAL).data.charAt(0));
+        } 
+        else if (accept(Category.STRING_LITERAL)) {
+            return new StrLiteral(expect(Category.STRING_LITERAL).data);
+        } 
+        else if (accept(Category.IDENTIFIER)) {
+            Token id = expect(Category.IDENTIFIER);
+            if (accept(Category.LPAR)) {
+                return parseFuncCallExpr(id);
+            }
+            return new VarExpr(id.data);
+        } 
+        if (accept(Category.LPAR)) {
+            nextToken();
+            if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
+                Type castType = parseType();
+                while (accept(Category.ASTERISK)) { 
+                    nextToken();
+                    castType = new PointerType(castType);
+                }
+                expect(Category.RPAR);               
+                Expr castExpr = parsePrimaryExpr();  
+                return new TypecastExpr(castType, castExpr);  
+            }
+            Expr expr = parseExpr();
+            expect(Category.RPAR);
+            return expr;
+        }
+        
+        
+        else if (accept(Category.ASTERISK)) {  
+            nextToken();
+            return new ValueAtExpr(parsePrimaryExpr());
+        } 
+        else if (accept(Category.AND)) {  
+            nextToken();
+            return new AddressOfExpr(parsePrimaryExpr());
+        } 
+        else if (accept(Category.SIZEOF)) {  
+            nextToken();
+            expect(Category.LPAR);
+            Type sizeOfType = parseType();
+            expect(Category.RPAR);
+            return new SizeOfExpr(sizeOfType);
+        }
+        if (accept(Category.ELSE)) {  
+            throw new RuntimeException("Unexpected 'else' in expression.");
+        }
+
+        throw new RuntimeException("Unexpected token in expression: " + token);
+    }
+
+
+
 }

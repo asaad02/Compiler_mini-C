@@ -1,0 +1,1 @@
+void foo(int a, char b, int arr[10], char names[5][20]);

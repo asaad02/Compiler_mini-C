@@ -4,5 +4,5 @@ bin/
 out/
 project/
 target/
-lib/
-test-reports/
+out.log
+tests/test/test_ast_output/*

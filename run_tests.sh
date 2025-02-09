@@ -50,10 +50,12 @@ run_tests() {
   for file in "$dir"/*.c; do
     if [ -f "$file" ]; then
       echo -e "${CYAN}Running test: $file${NC}"
-      if [[ "$mode" == "parser" ]]; then
-        java -cp "$BUILD_DIR" Main1 -parser "$file"
-      elif [[ "$mode" == "lexer" ]]; then
-        java -cp "$BUILD_DIR" Main1 -lexer "$file"
+      #if [[ "$mode" == "parser" ]]; then
+        #java -cp "$BUILD_DIR" Main1 -parser "$file"
+      #elif [[ "$mode" == "lexer" ]]; then
+        #java -cp "$BUILD_DIR" Main1 -lexer "$file"
+      if [[ "$mode" == "ast" ]]; then
+        java -cp "$BUILD_DIR" Main2 -ast "$file"
       fi
 
       # Check if the test passed or failed
@@ -78,10 +80,13 @@ main() {
   run_ant_build
 
   # Run parser tests
-  run_tests "$TEST_PARSER_DIR" "parser"
+  #run_tests "$TEST_PARSER_DIR" "parser"
 
   # Run lexer tests
-  run_tests "$TEST_LEXER_DIR" "lexer"
+  #run_tests "$TEST_LEXER_DIR" "lexer"
+
+   # Run AST tests
+   run_tests "$TEST_PARSER_DIR" "ast"
 
   display_completion_message
 }
