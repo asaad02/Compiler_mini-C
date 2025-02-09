@@ -25,208 +25,222 @@ public class ASTPrinter {
     public void visit(ASTNode node) {
         if (node == null)
             throw new IllegalStateException("Unexpected null value");
-        writer.print(node.getClass().getSimpleName()+"(");
-        indentLevel++; 
-        newline();
-
+        
         switch(node) {
-            case FunDef fd -> {
-                visit(fd.type);
-                writer.print(","+fd.name);
-                for (VarDecl vd : fd.params) {
-                    writer.print(",");
-                    newline();
-                    visit(vd);
-                }
-                writer.print(",");
-                newline();
-                visit(fd.block);
+            case BaseType bt -> {
+                writer.print(bt.name()); 
+                return;       
             }
 
-            case FunDecl fd -> {
-                visit(fd.type);
-                writer.print(","+fd.name);
-                for (VarDecl vd : fd.params) {
-                    writer.print(",");
-                    newline();
-                    visit(vd);
-                }
-            }
-
-            case VarDecl vd -> {
-                visit(vd.type);
-                writer.print(","+vd.name);
-            }
-
-            case VarExpr v -> {
-                writer.print(v.name);
-            }
-
-            // to complete ...
-
-            case IntLiteral i -> writer.print(i.value );
-
-            case StrLiteral s -> writer.print(s.value);
-
-            case ChrLiteral c -> writer.print( c.value);
-
-            case BinOp b -> {
-
-                visit(b.left);
-                writer.print(", " + b.op + ", ");
-                visit(b.right);
-
-            }
-
-            case Assign a -> {
-
-                visit(a.left);
-                writer.print(", ");
-                visit(a.right);
-
-            }
-
-            case Block blk -> {
-
-                indentLevel++;  // Increase indentation
-                for (int i = 0; i < blk.vds.size(); i++) {
-                    if (i > 0) writer.print(", ");
-                    visit(blk.vds.get(i));
-                }
-                for (int i = 0; i < blk.stmts.size(); i++) {
-                    if (i > 0 || !blk.vds.isEmpty()) writer.print(", ");
-                    visit(blk.stmts.get(i));
-                }
-                indentLevel--;  // Decrease indentation
-            }
-            
-
-            case IfStmt ifs -> {
-
-                visit(ifs.condition);
-                writer.print(", ");
-                visit(ifs.thenBranch);
-                if (ifs.elseBranch != null) {
-                    writer.print(", ");
-                    visit(ifs.elseBranch);
-                }
-
-            }
-
-            case WhileStmt ws -> {
-
-                visit(ws.condition);
-                writer.print(", ");
-                visit(ws.body);
-
-            }
-
-            case ReturnStmt rs -> {
-
-                if (rs.expr != null) {
-                    visit(rs.expr);
-                }
-
-            }
-
-            case ContinueStmt ignored -> writer.print("Continue()");
-
-            case BreakStmt ignored -> writer.print("Break()");
-
-            case ExprStmt es -> {
-
-                visit(es.expr);
-
-            }
-
-            case StructTypeDecl std -> {
-                visit(std.structType);
-                for (VarDecl vd : std.fields) {
-                    writer.print(",");
-                    visit(vd);
-                }
-            }
-            case PointerType pt -> {
-
-                visit(pt.baseType);
-
-            }
-
-            case StructType st -> writer.print(st.name);
-
-            case ArrayType at -> {
-
-                visit(at.elementType);
-                writer.print(", " + at.size);
-
-            }
-            case BaseType bt -> writer.print(bt.name());
-
-            case FunCallExpr fc -> {
-                writer.print(fc.name); 
-                for (Expr arg : fc.args) {
-                    writer.print(", ");
-                    visit(arg);
-                }
-
-            }
-
-            case TypecastExpr tc -> {
-
-                visit(tc.type);
-                writer.print(", ");
-                if (tc.expr == null) {
-                    writer.print("null");  // Add null-safe printing
-                } else {
-                    visit(tc.expr);
-                }
-
-            }
-            
-
-            case SizeOfExpr sz -> {
-
-                visit(sz.type);
-
-            }
-
-            case ValueAtExpr va -> {
-
-                visit(va.expr);
-
-            }
-
-            case AddressOfExpr ao -> {
-
-                visit(ao.expr);
-
-            }
-
-            case ArrayAccessExpr aa -> {
-
-                visit(aa.array);
-                writer.print(", ");
-                visit(aa.index);
-
-            }
-
-            case FieldAccessExpr fa -> {
-
-                visit(fa.structure);
-                writer.print(", " + fa.field );
-            }
             default -> {
-                String delimiter = "";
-                for (ASTNode child : node.children()) {
-                    writer.print(delimiter);
-                    delimiter = ",";
-                    visit(child);
+            indentLevel++; 
+            writer.print(node.getClass().getSimpleName()+"(");
+            switch(node) {
+                case FunDef fd -> {
+                    visit(fd.type);
+                    writer.print(","+fd.name);
+                    for (VarDecl vd : fd.params) {
+                        writer.print(",");
+                        newline();
+                        visit(vd);
+                    }
+                    writer.print(",");
+                    newline();
+                    visit(fd.block);
                 }
-            }
+
+                case FunDecl fd -> {
+                    visit(fd.type);
+                    writer.print(","+fd.name);
+                    newline();
+                    for (VarDecl vd : fd.params) {
+                        writer.print(",");
+                        newline();
+                        visit(vd);
+                    }
+                }
+
+                case VarDecl vd -> {
+                    visit(vd.type);
+                    writer.print(","+vd.name);
+                }
+
+                case VarExpr v -> {
+                    writer.print(v.name);
+                }
+
+                // to complete ...
+
+                case IntLiteral i -> writer.print(i.value );
+
+                case StrLiteral s -> writer.print(s.value);
+
+                case ChrLiteral c -> writer.print(c.value);
+
+                case BinOp b -> {
+
+                    visit(b.left);
+                    writer.print(", " + b.op + ", ");
+                    visit(b.right);
+
+                }
+
+                case Assign a -> {
+
+                    visit(a.left);
+                    writer.print(",");
+                    visit(a.right);
+
+                }
+
+                case Block blk -> {
+                    indentLevel++; 
+                    for (int i = 0; i < blk.vds.size(); i++) {
+                        if (i > 0) writer.print(",");
+                        visit(blk.vds.get(i));
+                        newline();
+                    }
+                    for (int i = 0; i < blk.stmts.size(); i++) {
+                        if (i > 0 || !blk.vds.isEmpty()) writer.print(",");
+                        visit(blk.stmts.get(i));
+                        newline();
+                    }
+                    indentLevel--;  
+                }
+                
+
+                case If ifs -> {
+
+                    visit(ifs.condition);
+                    writer.print(",");
+                    visit(ifs.thenBranch);
+                    if (ifs.elseBranch != null) {
+                        writer.print(",");
+                        visit(ifs.elseBranch);
+                    }
+
+                }
+
+                case While ws -> {
+
+                    visit(ws.condition);
+                    writer.print(",");
+                    //indentLevel++; 
+                    newline();
+                    //indent();
+                    visit(ws.body);
+                    newline();
+
+                }
+
+                case Return rs -> {
+
+                    if (rs.expr != null) {
+                        visit(rs.expr);
+                    }
+
+                }
+
+                case Continue ignored -> writer.print("Continue()");
+
+                case Break ignored -> writer.print("Break()");
+
+                case ExprStmt es -> {
+                    visit(es.expr);
+                
+                }
+
+                case StructTypeDecl std -> {
+                    visit(std.structType);
+                    for (VarDecl vd : std.fields) {
+                        writer.print(",");
+                        visit(vd);
+                    }
+                }
+                case PointerType pt -> {
+
+                    visit(pt.baseType);
+
+                }
+
+                case StructType st -> writer.print(st.name);
+
+                case ArrayType at -> {
+
+                    visit(at.elementType);
+                    writer.print(", " + at.size);
+
+                }
+                //case BaseType bt -> writer.print(bt);
+
+            
+                case FunCallExpr fc -> {
+                    writer.print(fc.name); 
+                    for (Expr arg : fc.args) {
+                        writer.print(",");
+                        visit(arg);
+                    }
+
+                }
+
+                case TypecastExpr tc -> {
+
+                    visit(tc.type);
+                    writer.print(",");
+                    if (tc.expr == null) {
+                        writer.print("null"); 
+                    } else {
+                        visit(tc.expr);
+                    }
+
+                }
+                
+
+                case SizeOfExpr sz -> {
+
+                    visit(sz.type);
+
+                }
+
+                case ValueAtExpr va -> {
+
+                    visit(va.expr);
+
+                }
+
+                case AddressOfExpr ao -> {
+
+                    visit(ao.expr);
+
+                }
+
+                case ArrayAccessExpr aa -> {
+
+                    visit(aa.array);
+                    writer.print(",");
+                    visit(aa.index);
+
+                }
+
+                case FieldAccessExpr fa -> {
+
+                    visit(fa.structure);
+                    writer.print(", " + fa.field );
+                }
+                default -> {
+                    String delimiter = "";
+                    for (ASTNode child : node.children()) {
+                        writer.print(delimiter);
+                        delimiter = ",";
+                        visit(child);
+                    }
+                }
         }
 
+            }
+        }
         indentLevel--;
-        newline();
+        //newline();
         writer.print(")");
 
         switch(node) {

@@ -51,7 +51,7 @@ public class Tokeniser extends CompilerPass {
    * SpecialCharWithoutDoubleQuote = One of the following 30 characters: ` ~ @ ! $ # ^ * % & ( ) [ ] { } < > + = _ - | / ; : , . ? '
    */
   private boolean isSpecialCharWithoutDoubleQuote(char c) {
-    return "`~@!$#^*%&()[]{}<>+=_-|/;:,.?'".indexOf(c) >= 0;
+    return "`~@!$#^*%&()[]{}<>+=_-|/;:,.?\'".indexOf(c) >= 0;
   }
   /*
    * isEscapedChar char c returns true if c is an escaped character and false otherwise
@@ -341,10 +341,6 @@ public class Tokeniser extends CompilerPass {
         while (scanner.hasNext()) {
           char charValue = scanner.next();
           if (charValue == '"') {
-            // if (sb.length() == 0) {
-            // error('"', line, column);
-            // return new Token(Token.Category.INVALID, line, column);
-            // }
             return new Token(Token.Category.STRING_LITERAL, sb.toString(), line, column);
           }
           // if the character is a backslash then it's an escaped character
