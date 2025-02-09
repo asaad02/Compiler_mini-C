@@ -51,6 +51,11 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 			}
 
 			// to complete ...
+            // to be complete for part 2 , avoid the compiler error for part 1
+            default -> {
+                
+                yield BaseType.UNKNOWN;
+            }
 		};
 
 	}

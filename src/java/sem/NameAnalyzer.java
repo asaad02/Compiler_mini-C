@@ -43,6 +43,11 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 			case Type t -> {}
 
 			// to complete ...
+            // just to avoid compiler error for part 1
+            default -> {
+                // return the first node
+                visit(node.children().get(0));
+            }
 
         };
 
