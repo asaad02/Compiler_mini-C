@@ -10,7 +10,9 @@ import lexer.Token.Category;
 import lexer.Tokeniser;
 import util.CompilerPass;
 
-/** @author cdubach */
+/**
+ * @author cdubach
+ */
 public class Parser extends CompilerPass {
 
   private Token token;
@@ -107,6 +109,7 @@ public class Parser extends CompilerPass {
     }
     return false;
   }
+
   /*
    *  ===================== PROGRAM PARSING =====================
    * program    ::= (include)* (structdecl | vardecl | fundecl | fundef)* EOF
@@ -161,17 +164,16 @@ public class Parser extends CompilerPass {
       return parseStructDecl(structType);
     }
     // if the token is an integer or char or void {fundec | fundef | vardecl}
-    else if (accept(Category.INT, Category.CHAR, Category.VOID) ) {
+    else if (accept(Category.INT, Category.CHAR, Category.VOID)) {
       // type  ::= ("int" | "char" | "void" | structtype) ("*")*
-      //Type type = parseType();
-      //Token id = expect(Category.IDENTIFIER);
-      //if (accept(Category.LPAR)) {
-        if (lookAhead(1).category == Category.IDENTIFIER
-        && lookAhead(2).category == Category.LPAR ) {
-            Type type = parseType();
-            Token id = expect(Category.IDENTIFIER);
-          // if the next token is an identifier and the one after that is a left parenthesis ['(']
-          // then it's a function declaration or definition
+      // Type type = parseType();
+      // Token id = expect(Category.IDENTIFIER);
+      // if (accept(Category.LPAR)) {
+      if (lookAhead(1).category == Category.IDENTIFIER && lookAhead(2).category == Category.LPAR) {
+        Type type = parseType();
+        Token id = expect(Category.IDENTIFIER);
+        // if the next token is an identifier and the one after that is a left parenthesis ['(']
+        // then it's a function declaration or definition
         /*
          *  ===================== FUNCTION PARSING =====================
          * function declaration | function definition
@@ -198,11 +200,12 @@ public class Parser extends CompilerPass {
         return parseVarDecl();
       }
     }
-    //expect(Category.SC);
+    // expect(Category.SC);
 
-    //error(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID);
+    // error(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID);
     throw new RuntimeException("Unexpected token in declaration: " + token);
   }
+
   /*
    * ===================== STRUCT TYPE PARSING =====================
    * structtype ::= "struct" IDENT
@@ -214,6 +217,7 @@ public class Parser extends CompilerPass {
     // expect the token to be an identifier and return the struct type AST node
     return new StructType(expect(Category.IDENTIFIER).data);
   }
+
   /*
    * ===================== TYPE PARSING =====================
    * type ::= ("int" | "char" | "void" | structtype) ("*")*
@@ -259,8 +263,8 @@ public class Parser extends CompilerPass {
        */
       while (accept(Category.ASTERISK)) {
         nextToken();
-        baseType = new PointerType(baseType); 
-        }
+        baseType = new PointerType(baseType);
+      }
       return baseType;
     }
     /*
@@ -303,6 +307,7 @@ public class Parser extends CompilerPass {
       return BaseType.UNKNOWN;
     }
   }
+
   /*
    *  ===================== STRUCT DECLARATION PARSING =====================
    * structdecl ::= structtype "{" (vardecl)+ "}" ";"
@@ -326,6 +331,7 @@ public class Parser extends CompilerPass {
     // return the struct type declaration AST node
     return new StructTypeDecl((StructType) structType, varDecls);
   }
+
   /*
    * ===================== VARIABLE DECLARATION PARSING =====================
    * vardecl    ::= type IDENT ("[" INT_LITERAL "]")* ";"
@@ -345,6 +351,7 @@ public class Parser extends CompilerPass {
     expect(Category.SC);
     return new VarDecl(type, varName);
   }
+
   /*
    * ===================== FUNCTION PARSING =====================
    * function declaration | function definition
@@ -395,20 +402,20 @@ public class Parser extends CompilerPass {
     expect(Category.RPAR);
     // FunDecl(type, id.data, params);
     if (accept(Category.LBRA)) {
-        // funDef     ::= Type String VarDecl* Block
+      // funDef     ::= Type String VarDecl* Block
       return new FunDef(type, id.data, params, parseBlock());
-    } 
-    else if (accept(Category.SC)) {
-         // consume the semicolon [';']
+    } else if (accept(Category.SC)) {
+      // consume the semicolon [';']
       expect(Category.SC);
       // FunDecl    ::= Type String VarDecl*
       return new FunDecl(type, id.data, params);
-    } 
-    
+    }
+
     // Handle unexpected cases explicitly
     error(Category.LBRA, Category.SC);
     throw new RuntimeException("Unexpected token after function declaration: " + token);
   }
+
   /*
    * ===================== BLOCK PARSING =====================
    * block      ::= "{" (vardecl)* (stmt)* "}"
@@ -436,6 +443,7 @@ public class Parser extends CompilerPass {
     expect(Category.RBRA);
     return new Block(varDecls, stmts);
   }
+
   /**
    * stmt ::= block | "while" "(" exp ")" stmt # while loop | "if" "(" exp ")" stmt ["else" stmt] #
    * if then else | "return" [exp] ";" # return | exp ";" # expression statement, e.g. a function
@@ -444,16 +452,25 @@ public class Parser extends CompilerPass {
    */
   private Stmt parseStmt() {
     return switch (token.category) {
-        case RETURN -> parseReturnStmt();
-        case WHILE -> parseWhileStmt();
-        case IF -> parseIfStmt();
-        case CONTINUE -> { nextToken(); expect(Category.SC); yield new Continue(); }
-        case BREAK -> { nextToken(); expect(Category.SC); yield new Break(); }
-        case LBRA -> parseBlock();
-        case ELSE -> throw new RuntimeException("Unexpected 'else' without matching 'if'"); 
-        default -> parseExprStmt(); 
+      case RETURN -> parseReturnStmt();
+      case WHILE -> parseWhileStmt();
+      case IF -> parseIfStmt();
+      case CONTINUE -> {
+        nextToken();
+        expect(Category.SC);
+        yield new Continue();
+      }
+      case BREAK -> {
+        nextToken();
+        expect(Category.SC);
+        yield new Break();
+      }
+      case LBRA -> parseBlock();
+      case ELSE -> throw new RuntimeException("Unexpected 'else' without matching 'if'");
+      default -> parseExprStmt();
     };
-}
+  }
+
   /*
    * Helper methods for Stmt
    */
@@ -471,6 +488,7 @@ public class Parser extends CompilerPass {
     // Parse body
     return new While(condition, parseStmt());
   }
+
   // parser [If] statement - "if" "(" exp ")" stmt ["else" stmt]
   private Stmt parseIfStmt() {
     // Consume 'if'
@@ -511,228 +529,211 @@ public class Parser extends CompilerPass {
   }
 
   // parser for for continue and break statement
-  //private Stmt parseContinueStmt() {
-    // Consume 'continue' or 'break'
-    //nextToken();
-    // Expect ';'
-    //expect(Category.SC);
-    //return new Continue();
-  //}
+  // private Stmt parseContinueStmt() {
+  // Consume 'continue' or 'break'
+  // nextToken();
+  // Expect ';'
+  // expect(Category.SC);
+  // return new Continue();
+  // }
 
-  //private Stmt parseBreakStmt() {
-    // Consume 'continue' or 'break'
-    //nextToken();
-    // Expect ';'
-    //expect(Category.SC);
-    //return new Break();
-  //}
+  // private Stmt parseBreakStmt() {
+  // Consume 'continue' or 'break'
+  // nextToken();
+  // Expect ';'
+  // expect(Category.SC);
+  // return new Break();
+  // }
   private Stmt parseExprStmt() {
     Expr expr = parseExpr();
     expect(Category.SC);
     return new ExprStmt(expr);
+  }
+
+  private Expr parseExpr() {
+    Expr lhs = parseLogicalOrExpr();
+    if (accept(Category.ASSIGN)) {
+      nextToken();
+      return new Assign(lhs, parseExpr());
     }
+    return lhs;
+  }
 
-
-
-    private Expr parseExpr() {
-        Expr lhs = parseLogicalOrExpr(); 
-        if (accept(Category.ASSIGN)) { 
-            nextToken();
-            return new Assign(lhs, parseExpr()); 
-        }
-        return lhs;
+  private Expr parseLogicalOrExpr() {
+    Expr expr = parseLogicalAndExpr();
+    while (accept(Category.LOGOR)) {
+      nextToken();
+      expr = new BinOp(expr, Op.OR, parseLogicalAndExpr());
     }
+    return expr;
+  }
 
-
-    private Expr parseLogicalOrExpr() {
-        Expr expr = parseLogicalAndExpr();
-        while (accept(Category.LOGOR)) {
-            nextToken();
-            expr = new BinOp(expr, Op.OR, parseLogicalAndExpr());
-        }
-        return expr;
+  private Expr parseLogicalAndExpr() {
+    Expr expr = parseEqualityExpr();
+    while (accept(Category.LOGAND)) {
+      nextToken();
+      expr = new BinOp(expr, Op.AND, parseEqualityExpr());
     }
+    return expr;
+  }
 
-
-    private Expr parseLogicalAndExpr() {
-        Expr expr = parseEqualityExpr();
-        while (accept(Category.LOGAND)) {
-            nextToken();
-            expr = new BinOp(expr, Op.AND, parseEqualityExpr());
-        }
-        return expr;
+  private Expr parseEqualityExpr() {
+    Expr expr = parseRelationalExpr();
+    while (accept(Category.EQ, Category.NE)) {
+      Op op = (token.category == Category.EQ) ? Op.EQ : Op.NE;
+      nextToken();
+      expr = new BinOp(expr, op, parseRelationalExpr());
     }
+    return expr;
+  }
 
-
-    private Expr parseEqualityExpr() {
-        Expr expr = parseRelationalExpr();
-        while (accept(Category.EQ, Category.NE)) {
-            Op op = (token.category == Category.EQ) ? Op.EQ : Op.NE;
-            nextToken();
-            expr = new BinOp(expr, op, parseRelationalExpr());
-        }
-        return expr;
+  private Expr parseRelationalExpr() {
+    Expr expr = parseAdditiveExpr();
+    while (accept(Category.LT, Category.GT, Category.LE, Category.GE)) {
+      Op op =
+          switch (token.category) {
+            case LT -> Op.LT;
+            case GT -> Op.GT;
+            case LE -> Op.LE;
+            case GE -> Op.GE;
+            default -> throw new IllegalArgumentException("Invalid relational operator");
+          };
+      nextToken();
+      expr = new BinOp(expr, op, parseAdditiveExpr());
     }
+    return expr;
+  }
 
-
-    private Expr parseRelationalExpr() {
-        Expr expr = parseAdditiveExpr();
-        while (accept(Category.LT, Category.GT, Category.LE, Category.GE)) {
-            Op op = switch (token.category) {
-                case LT -> Op.LT;
-                case GT -> Op.GT;
-                case LE -> Op.LE;
-                case GE -> Op.GE;
-                default -> throw new IllegalArgumentException("Invalid relational operator");
-            };
-            nextToken();
-            expr = new BinOp(expr, op, parseAdditiveExpr());
-        }
-        return expr;
+  private Expr parseAdditiveExpr() {
+    Expr expr = parseMultiplicativeExpr();
+    while (accept(Category.PLUS, Category.MINUS)) {
+      Op op = (token.category == Category.PLUS) ? Op.ADD : Op.SUB;
+      nextToken();
+      expr = new BinOp(expr, op, parseMultiplicativeExpr());
     }
+    return expr;
+  }
 
-
-    private Expr parseAdditiveExpr() {
-        Expr expr = parseMultiplicativeExpr();
-        while (accept(Category.PLUS, Category.MINUS)) {
-            Op op = (token.category == Category.PLUS) ? Op.ADD : Op.SUB;
-            nextToken();
-            expr = new BinOp(expr, op, parseMultiplicativeExpr());
-        }
-        return expr;
+  private Expr parseMultiplicativeExpr() {
+    Expr expr = parseUnaryExpr();
+    while (accept(Category.ASTERISK, Category.DIV, Category.REM)) {
+      Op op =
+          switch (token.category) {
+            case ASTERISK -> Op.MUL;
+            case DIV -> Op.DIV;
+            case REM -> Op.MOD;
+            default -> throw new IllegalArgumentException("Unsupported operator");
+          };
+      nextToken();
+      expr = new BinOp(expr, op, parseUnaryExpr());
     }
+    return expr;
+  }
 
+  private Expr parseUnaryExpr() {
+    if (accept(Category.PLUS, Category.MINUS, Category.ASTERISK, Category.AND, Category.SIZEOF)) {
+      Category op = token.category;
+      nextToken();
 
-    private Expr parseMultiplicativeExpr() {
-        Expr expr = parseUnaryExpr(); 
-        while (accept(Category.ASTERISK, Category.DIV, Category.REM)) {
-            Op op = switch (token.category) {
-                case ASTERISK -> Op.MUL;
-                case DIV -> Op.DIV;
-                case REM -> Op.MOD;
-                default -> throw new IllegalArgumentException("Unsupported operator");
-            };
-            nextToken();
-            expr = new BinOp(expr, op, parseUnaryExpr());
-        }
-        return expr;
+      Expr operand = parseUnaryExpr();
+      return switch (op) {
+        case PLUS -> operand;
+        case MINUS -> new BinOp(new IntLiteral(0), Op.SUB, operand);
+        case ASTERISK -> new ValueAtExpr(operand);
+        case AND -> new AddressOfExpr(operand);
+        case SIZEOF -> new SizeOfExpr(parseType());
+        default -> throw new IllegalArgumentException("Invalid unary operator");
+      };
     }
+    return parsePostfixExpr();
+  }
 
-    private Expr parseUnaryExpr() {
-        if (accept(Category.PLUS, Category.MINUS, Category.ASTERISK, Category.AND, Category.SIZEOF)) {
-            Category op = token.category;
-            nextToken();
-            Expr operand = parseUnaryExpr(); 
-            return switch (op) {
-                case PLUS -> operand; 
-                case MINUS -> new BinOp(new IntLiteral(0), Op.SUB, operand); 
-                case ASTERISK -> new ValueAtExpr(operand); 
-                case AND -> new AddressOfExpr(operand); 
-                case SIZEOF -> new SizeOfExpr(parseType());
-                default -> throw new IllegalArgumentException("Invalid unary operator");
-            };
-        }
-        return parsePostfixExpr();
-    }
+  private Expr parsePostfixExpr() {
+    Expr expr = parsePrimaryExpr();
 
-
-    private Expr parsePostfixExpr() {
-        Expr expr = parsePrimaryExpr(); 
-
-        while (accept(Category.LSBR, Category.LPAR)) { 
-            if (accept(Category.LSBR)) { 
-                nextToken();
-                Expr index = parseExpr(); 
-                expect(Category.RSBR); 
-                expr = new ArrayAccessExpr(expr, index);
-            } else { 
-                nextToken();
-                List<Expr> args = new ArrayList<>();
-                if (!accept(Category.RPAR)) {
-                    args.add(parseExpr());
-                    while (accept(Category.COMMA)) {
-                        nextToken();
-                        args.add(parseExpr());
-                    }
-                }
-                expect(Category.RPAR);
-                expr = new FunCallExpr(((VarExpr) expr).name, args);
-            }
-        }
-        return expr;
-    }
-
-    private Expr parseFuncCallExpr(Token id) {
-        expect(Category.LPAR);
+    while (accept(Category.LSBR, Category.LPAR)) {
+      if (accept(Category.LSBR)) {
+        nextToken();
+        Expr index = parseExpr();
+        expect(Category.RSBR);
+        expr = new ArrayAccessExpr(expr, index);
+      } else {
+        nextToken();
         List<Expr> args = new ArrayList<>();
         if (!accept(Category.RPAR)) {
+          args.add(parseExpr());
+          while (accept(Category.COMMA)) {
+            nextToken();
             args.add(parseExpr());
-            while (accept(Category.COMMA)) {
-                nextToken();
-                args.add(parseExpr());
-            }
+          }
         }
         expect(Category.RPAR);
-        return new FunCallExpr(id.data, args);
+        expr = new FunCallExpr(((VarExpr) expr).name, args);
+      }
+    }
+    return expr;
+  }
+
+  private Expr parseFuncCallExpr(Token id) {
+    expect(Category.LPAR);
+    List<Expr> args = new ArrayList<>();
+    if (!accept(Category.RPAR)) {
+      args.add(parseExpr());
+      while (accept(Category.COMMA)) {
+        nextToken();
+        args.add(parseExpr());
+      }
+    }
+    expect(Category.RPAR);
+    return new FunCallExpr(id.data, args);
+  }
+
+  private Expr parsePrimaryExpr() {
+    if (accept(Category.INT_LITERAL)) {
+      return new IntLiteral(Integer.parseInt(expect(Category.INT_LITERAL).data));
+    } else if (accept(Category.CHAR_LITERAL)) {
+      return new ChrLiteral(expect(Category.CHAR_LITERAL).data.charAt(0));
+    } else if (accept(Category.STRING_LITERAL)) {
+      return new StrLiteral(expect(Category.STRING_LITERAL).data);
+    } else if (accept(Category.IDENTIFIER)) {
+      Token id = expect(Category.IDENTIFIER);
+      if (accept(Category.LPAR)) {
+        return parseFuncCallExpr(id);
+      }
+      return new VarExpr(id.data);
+    }
+    if (accept(Category.LPAR)) {
+      nextToken();
+      if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
+        Type castType = parseType();
+        while (accept(Category.ASTERISK)) {
+          nextToken();
+          castType = new PointerType(castType);
+        }
+        expect(Category.RPAR);
+        Expr castExpr = parsePrimaryExpr();
+        return new TypecastExpr(castType, castExpr);
+      }
+      Expr expr = parseExpr();
+      expect(Category.RPAR);
+      return expr;
+    } else if (accept(Category.ASTERISK)) {
+      nextToken();
+      return new ValueAtExpr(parsePrimaryExpr());
+    } else if (accept(Category.AND)) {
+      nextToken();
+      return new AddressOfExpr(parsePrimaryExpr());
+    } else if (accept(Category.SIZEOF)) {
+      nextToken();
+      expect(Category.LPAR);
+      Type sizeOfType = parseType();
+      expect(Category.RPAR);
+      return new SizeOfExpr(sizeOfType);
+    }
+    if (accept(Category.ELSE)) {
+      throw new RuntimeException("Unexpected 'else' in expression.");
     }
 
-    private Expr parsePrimaryExpr() {
-        if (accept(Category.INT_LITERAL)) {
-            return new IntLiteral(Integer.parseInt(expect(Category.INT_LITERAL).data));
-        } 
-        else if (accept(Category.CHAR_LITERAL)) {
-            return new ChrLiteral(expect(Category.CHAR_LITERAL).data.charAt(0));
-        } 
-        else if (accept(Category.STRING_LITERAL)) {
-            return new StrLiteral(expect(Category.STRING_LITERAL).data);
-        } 
-        else if (accept(Category.IDENTIFIER)) {
-            Token id = expect(Category.IDENTIFIER);
-            if (accept(Category.LPAR)) {
-                return parseFuncCallExpr(id);
-            }
-            return new VarExpr(id.data);
-        } 
-        if (accept(Category.LPAR)) {
-            nextToken();
-            if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
-                Type castType = parseType();
-                while (accept(Category.ASTERISK)) { 
-                    nextToken();
-                    castType = new PointerType(castType);
-                }
-                expect(Category.RPAR);               
-                Expr castExpr = parsePrimaryExpr();  
-                return new TypecastExpr(castType, castExpr);  
-            }
-            Expr expr = parseExpr();
-            expect(Category.RPAR);
-            return expr;
-        }
-        
-        
-        else if (accept(Category.ASTERISK)) {  
-            nextToken();
-            return new ValueAtExpr(parsePrimaryExpr());
-        } 
-        else if (accept(Category.AND)) {  
-            nextToken();
-            return new AddressOfExpr(parsePrimaryExpr());
-        } 
-        else if (accept(Category.SIZEOF)) {  
-            nextToken();
-            expect(Category.LPAR);
-            Type sizeOfType = parseType();
-            expect(Category.RPAR);
-            return new SizeOfExpr(sizeOfType);
-        }
-        if (accept(Category.ELSE)) {  
-            throw new RuntimeException("Unexpected 'else' in expression.");
-        }
-
-        throw new RuntimeException("Unexpected token in expression: " + token);
-    }
-
-
-
+    throw new RuntimeException("Unexpected token in expression: " + token);
+  }
 }
