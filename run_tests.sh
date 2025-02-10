@@ -9,8 +9,8 @@ NC="\033[0m" # No Color
 
 # Set paths
 BUILD_DIR="bin"
-SRC_DIR="src/test"
-TEST_PARSER_DIR="$SRC_DIR/test_parser"
+SRC_DIR="./"
+TEST_PARSER_DIR="$SRC_DIR/tests/test/test_Parser"
 TEST_LEXER_DIR="$SRC_DIR/test_Lexing"
 
 # Function to display a header
@@ -50,13 +50,11 @@ run_tests() {
   for file in "$dir"/*.c; do
     if [ -f "$file" ]; then
       echo -e "${CYAN}Running test: $file${NC}"
-      #if [[ "$mode" == "parser" ]]; then
-        #java -cp "$BUILD_DIR" Main1 -parser "$file"
-      #elif [[ "$mode" == "lexer" ]]; then
-        #java -cp "$BUILD_DIR" Main1 -lexer "$file"
-      if [[ "$mode" == "ast" ]]; then
-        java -cp "$BUILD_DIR" Main2 -ast "$file"
-      fi
+      if [[ "$mode" == "parser" ]]; then
+        java -cp "$BUILD_DIR" Main1 -parser "$file"
+      elif [[ "$mode" == "lexer" ]]; then
+        java -cp "$BUILD_DIR" Main1 -lexer "$file"
+    fi
 
       # Check if the test passed or failed
       if [ $? -ne 0 ]; then
@@ -80,13 +78,13 @@ main() {
   run_ant_build
 
   # Run parser tests
-  #run_tests "$TEST_PARSER_DIR" "parser"
+  run_tests "$TEST_PARSER_DIR" "parser"
 
   # Run lexer tests
   #run_tests "$TEST_LEXER_DIR" "lexer"
 
    # Run AST tests
-   run_tests "$TEST_PARSER_DIR" "ast"
+   #run_tests "$TEST_PARSER_DIR" "ast"
 
   display_completion_message
 }

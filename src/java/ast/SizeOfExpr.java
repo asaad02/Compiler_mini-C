@@ -5,10 +5,15 @@ import java.util.List;
 // sizeof expression to get the size of a type.
 public final class SizeOfExpr extends Expr {
   // The type whose size is being queried
-  public final Type type;
+  public Type type;
+  public Expr expr;
 
   public SizeOfExpr(Type type) {
     this.type = type;
+  }
+
+  public SizeOfExpr(Expr expr) {
+    this.expr = expr;
   }
 
   @Override
