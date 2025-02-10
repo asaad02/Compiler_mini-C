@@ -123,7 +123,10 @@ public class Parser extends CompilerPass {
     List<Decl> decls = new ArrayList<>();
     // loop through the tokens until we reach the end of file
     while (!accept(Category.EOF)) {
-      decls.add(parseDecl());
+      Decl decl = parseDecl();
+      if (decl != null) {
+        decls.add(decl);
+      }
     }
     // expect the end of file
     expect(Category.EOF);
@@ -197,7 +200,8 @@ public class Parser extends CompilerPass {
       return parseVarDecl();
     }
     error(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID);
-    throw new RuntimeException("Unexpected token in declaration function parseDecl: " + token);
+    recovery();
+    return null;
   }
 
   /*
@@ -362,7 +366,8 @@ public class Parser extends CompilerPass {
     }
 
     error(Category.LBRA, Category.SC);
-    throw new RuntimeException("Unexpected token after function declaration: " + token);
+    recovery();
+    return null;
   }
 
   /*
@@ -463,9 +468,7 @@ public class Parser extends CompilerPass {
       case CONTINUE -> {
         nextToken();
         expect(Category.SC);
-        Stmt stmt = new Continue();
-        stmt.type = BaseType.NONE;
-        yield stmt;
+        yield new Continue();
       }
       // if the token is a break then parse the break statement
       // Break      ::= ;
@@ -473,25 +476,23 @@ public class Parser extends CompilerPass {
       case BREAK -> {
         nextToken();
         expect(Category.SC);
-        Stmt stmt = new Break();
-        stmt.type = BaseType.NONE;
-        yield stmt;
+        yield new Break();
       }
       // if the token is a left brace then parse
       // Block      ::= VarDecl* Stmt*
       // Block statement (starts with { and end with } in the source code)
       case LBRA -> parseBlock();
       // if the token is  else then parse the expression statement
-      case ELSE -> throw new RuntimeException("Unexpected 'else' without matching 'if'");
+      case ELSE -> {
+        error(Category.IF);
+        recovery();
+        yield new ExprStmt(new IntLiteral(0));
+      }
       // default case parse the expression statement
       // ExprStmt ::= Expr
       default -> parseExprStmt();
     };
   }
-
-  /*
-   * Helper methods for Stmt
-   */
 
   // parser [While] statement - "while" "(" exp ")" stmt
   // While      ::= Expr Stmt
@@ -560,26 +561,46 @@ public class Parser extends CompilerPass {
    *          | exp (">" | "<" | ">=" | "<=" | "!=" | "==" | "+" | "-" | "/" | "*" | "%" | "||" | "&&") exp  # binary operators
    *          | arrayaccess | fieldaccess | valueat | addressof | funcall | sizeof | typecast
    */
+  /*
+   * Expression Grammar with Precedence and Associativity:
+   *
+   * Precedence Highest to Lowest:
+   * 1. Postfix Operators: () (function call) and  [] array access and . (field access) all will be [Left-to-Right]
+   * 2. Unary Operators: +, -, *, &, sizeof [Right-to-Left]
+   * 3. Multiplicative: *, /, % [Left-to-Right]
+   * 4. Additive: +, - [Left-to-Right]
+   * 5. Relational: <, <=, >, >= [Left-to-Right]
+   * 6. Equality: ==, != [Left-to-Right]
+   * 7. Logical AND: && [Left-to-Right]
+   * 8. Logical OR: || [Left-to-Right]
+   * 9. Assignment: = [Right-to-Left]
+   */
 
-  // parser [ExprStmt] statement - exp ";"
-  // ExprStmt ::= Expr
   // parser for the expression statement - exp ";"
+  // ExprStmt ::= Expr
   private Stmt parseExprStmt() {
+    // Parse the expression
     Expr expr = parseExpr();
+    // Expect the semicolon
     expect(Category.SC);
+    // Return the expression statement AST node
     return new ExprStmt(expr);
   }
 
-  // parser for the assignment expression - exp "=" exp
-  // expr       ::= assign
-  // Assign     ::= Expr "=" Expr
+  // Assignment should be right to left associative
+  // Assignment ::= Expr "=" Expr
   private Expr parseExpr() {
+    // Parse the left-hand side of the operator
     Expr lhs = parseLogicalOrExpr();
-    // exp "=" exp
+    // Assignment ::= Expr "=" Expr
     if (accept(Category.ASSIGN)) {
       nextToken();
-      return new Assign(lhs, parseExpr());
+      // Recursive right hand side of the operator
+      Expr rhs = parseExpr();
+      // Return the assignment AST node
+      return new Assign(lhs, rhs);
     }
+    // Return the left-hand side of the operator
     return lhs;
   }
 
@@ -593,13 +614,15 @@ public class Parser extends CompilerPass {
     // loop through the logical OR expression
     while (accept(Category.LOGOR)) {
       nextToken();
-      // Parse the right-hand side of the operator
+      // parse the right hand side of the operator
       expr = new BinOp(expr, Op.OR, parseLogicalAndExpr());
     }
     return expr;
   }
 
-  /// Parses a logical AND expression. [exp ::= exp "&&" exp]
+  // Parses a logical AND expression. [exp ::= exp "&&" exp]
+  // LogicalAnd ::= Equality ("&&" Equality)*
+  // left-to-right associativity
   private Expr parseLogicalAndExpr() {
     // Parse the left-hand side of the operator
     Expr expr = parseEqualityExpr();
@@ -613,6 +636,7 @@ public class Parser extends CompilerPass {
   }
 
   // Parses an equality expression. [ exp ::= exp ("==" | "!=") exp]
+  // left-to-right associativity
   private Expr parseEqualityExpr() {
     // Parse the left-hand side of the operator
     Expr expr = parseRelationalExpr();
@@ -637,7 +661,11 @@ public class Parser extends CompilerPass {
             case GT -> Op.GT;
             case LE -> Op.LE;
             case GE -> Op.GE;
-            default -> throw new IllegalArgumentException("Invalid relational operator");
+            // will be the default case as a fallback and error handling
+            default -> {
+              error(Category.LT, Category.GT, Category.LE, Category.GE);
+              yield Op.LT;
+            }
           };
       nextToken();
       // Parse the right-hand side of the operator
@@ -647,6 +675,7 @@ public class Parser extends CompilerPass {
   }
 
   // Parses an additive expression. [exp ::= exp ("+" | "-") exp]
+  // left-to-right associativity
   private Expr parseAdditiveExpr() {
     Expr expr = parseMultiplicativeExpr();
     // Parse the right-hand side of the operator
@@ -663,6 +692,7 @@ public class Parser extends CompilerPass {
   }
 
   // Parses a multiplicative expression. [exp ::= exp ("*" | "/" | "%") exp]
+  // left-to-right associativity
   private Expr parseMultiplicativeExpr() {
     // Parse the left-hand side of the operator
     Expr expr = parseUnaryExpr();
@@ -672,7 +702,10 @@ public class Parser extends CompilerPass {
             case ASTERISK -> Op.MUL;
             case DIV -> Op.DIV;
             case REM -> Op.MOD;
-            default -> throw new IllegalArgumentException("Unsupported operator");
+            default -> {
+              error(Category.ASTERISK, Category.DIV, Category.REM);
+              yield Op.MUL;
+            }
           };
       nextToken();
       expr = new BinOp(expr, op, parseUnaryExpr());
@@ -681,6 +714,8 @@ public class Parser extends CompilerPass {
   }
 
   // Unary operators (*, &, +, -, sizeof, type cast)
+  // Parse a unary expression
+  // Unary operators is right to left associativity
   private Expr parseUnaryExpr() {
     if (accept(Category.PLUS, Category.MINUS, Category.ASTERISK, Category.AND, Category.SIZEOF)) {
       Category op = token.category;
@@ -692,7 +727,8 @@ public class Parser extends CompilerPass {
         // check if it's a type (sizeof(int)) or an expression sizeof(a + b)
         Expr expr;
         if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
-          Type sizeOfType = parseType(); // Parse the type
+          // Parse the type of the sizeof operator
+          Type sizeOfType = parseType();
           expect(Category.RPAR);
           expr = new SizeOfExpr(sizeOfType);
         } else {
@@ -702,54 +738,50 @@ public class Parser extends CompilerPass {
         }
         return expr;
       }
-
-      // handle other unary operators
+      // recursively parse the unary expression
       Expr operand = parseUnaryExpr();
-      return switch (op) {
-        case PLUS -> operand;
-        case MINUS -> new BinOp(new IntLiteral(0), Op.SUB, operand);
-        case ASTERISK -> new ValueAtExpr(operand);
-        case AND -> new AddressOfExpr(operand);
-        default -> throw new IllegalArgumentException("Invalid unary operator");
-      };
+      switch (op) {
+        case PLUS:
+          return operand;
+        case MINUS:
+          return new BinOp(new IntLiteral(0), Op.SUB, operand);
+        case ASTERISK:
+          return new ValueAtExpr(operand);
+        case AND:
+          return new AddressOfExpr(operand);
+        default:
+          error(Category.PLUS, Category.MINUS, Category.ASTERISK, Category.AND);
+          return new IntLiteral(0);
+      }
     }
     return parsePostfixExpr();
   }
 
+  // psofix operators: () (function call) and  [] array access and . (field access)
   private Expr parsePostfixExpr() {
+    // we will parse the primary expression
     Expr expr = parsePrimaryExpr();
-    while (accept(Category.LSBR, Category.LPAR, Category.DOT)) {
-      // Array Access
+
+    // Handles nested field access and array access such as . and []
+    while (accept(Category.LSBR, Category.DOT)) {
+      if (accept(Category.DOT)) {
+        nextToken();
+        // Parse the field identifier
+        String field = expect(Category.IDENTIFIER).data;
+        expr = new FieldAccessExpr(expr, field);
+      }
       if (accept(Category.LSBR)) {
         nextToken();
+        // parse the index of the array
         Expr index = parseExpr();
         expect(Category.RSBR);
         expr = new ArrayAccessExpr(expr, index);
-      }
-      // Function Call
-      else if (accept(Category.LPAR)) {
-        nextToken();
-        List<Expr> args = new ArrayList<>();
-        if (!accept(Category.RPAR)) {
-          args.add(parseExpr());
-          while (accept(Category.COMMA)) {
-            nextToken();
-            args.add(parseExpr());
-          }
-        }
-        expect(Category.RPAR);
-        expr = new FunCallExpr(((VarExpr) expr).name, args);
-      }
-      // Field Access
-      else if (accept(Category.DOT)) {
-        nextToken();
-        Token field = expect(Category.IDENTIFIER);
-        expr = new FieldAccessExpr(expr, field.data);
       }
     }
     return expr;
   }
 
+  // parse the function call expression
   private Expr parseFuncCallExpr(Token id) {
     expect(Category.LPAR);
     List<Expr> args = new ArrayList<>();
@@ -844,6 +876,21 @@ public class Parser extends CompilerPass {
       expect(Category.RPAR);
       return new SizeOfExpr(sizeOfType);
     }
-    throw new RuntimeException("Unexpected token in expression: " + token);
+    error(
+        Category.INT_LITERAL, Category.CHAR_LITERAL, Category.STRING_LITERAL, Category.IDENTIFIER);
+    recovery();
+    return null;
+  }
+
+  private void recovery() {
+    // Skip tokens until a recovery point is found after finish the statement
+    while (!accept(Category.SC, Category.LBRA, Category.RBRA, Category.EOF)) {
+      nextToken();
+      // System.out.println("Skipping token: " + token);
+    }
+    // Consume the token if it's not EOF
+    if (!accept(Category.EOF)) {
+      nextToken();
+    }
   }
 }
