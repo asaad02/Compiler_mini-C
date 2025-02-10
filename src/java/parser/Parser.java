@@ -427,8 +427,10 @@ public class Parser extends CompilerPass {
     }
     // Ensure the block ends with a right brace '}'
     // consume the right brace ['}']
-    expect(Category.RBRA); // Ensure the block ends with a '}'
-    return new Block(varDecls, stmts);
+    expect(Category.RBRA);
+    Block block = new Block(varDecls, stmts);
+    block.type = BaseType.NONE;
+    return block;
   }
 
   /*
@@ -461,7 +463,9 @@ public class Parser extends CompilerPass {
       case CONTINUE -> {
         nextToken();
         expect(Category.SC);
-        yield new Continue();
+        Stmt stmt = new Continue();
+        stmt.type = BaseType.NONE;
+        yield stmt;
       }
       // if the token is a break then parse the break statement
       // Break      ::= ;
@@ -469,7 +473,9 @@ public class Parser extends CompilerPass {
       case BREAK -> {
         nextToken();
         expect(Category.SC);
-        yield new Break();
+        Stmt stmt = new Break();
+        stmt.type = BaseType.NONE;
+        yield stmt;
       }
       // if the token is a left brace then parse
       // Block      ::= VarDecl* Stmt*
@@ -530,15 +536,16 @@ public class Parser extends CompilerPass {
   // parser [return] statement - "return" [exp] ";"
   // Return     ::= [Expr]
   private Stmt parseReturnStmt() {
-    // Consume 'return'
     expect(Category.RETURN);
-    // if not [';'] then we need to parse the expression
-    // optional expression after 'return'
     Expr expr = null;
     if (!accept(Category.SC)) {
       expr = parseExpr();
+    } else {
+      // Use NONE type for return without expression
+      // Placeholder to satisfy AST optional
+      expr = new IntLiteral(0);
+      expr.type = BaseType.NONE;
     }
-    // Expect ';'
     expect(Category.SC);
     return new Return(expr);
   }
