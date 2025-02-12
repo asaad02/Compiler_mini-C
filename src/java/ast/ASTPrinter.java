@@ -119,13 +119,7 @@ public class ASTPrinter {
             // indentLevel++;
             newline();
             // indent();
-            // if body is empty then we print basetype None
-            if (ws.body == null) {
-              writer.print(ws.body);
-            } else {
-              visit(ws.body);
-            }
-            // visit(ws.body);
+            visit(ws.body);
             newline();
           }
 
