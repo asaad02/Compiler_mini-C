@@ -9,10 +9,18 @@ public final class Block extends Stmt {
   public List<VarDecl> vds;
   // Statements within the block
   public List<Stmt> stmts;
+  // type of the block
+  public Type type;
 
   public Block(List<VarDecl> vds, List<Stmt> stmts) {
     this.vds = vds;
     this.stmts = stmts;
+  }
+
+  public Block(List<VarDecl> vds, List<Stmt> stmts, Type type) {
+    this.vds = vds;
+    this.stmts = stmts;
+    this.type = type;
   }
 
   @Override
@@ -20,6 +28,7 @@ public final class Block extends Stmt {
     List<ASTNode> children = new ArrayList<>();
     children.addAll(vds);
     children.addAll(stmts);
+
     return children;
   }
 }
