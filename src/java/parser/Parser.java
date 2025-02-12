@@ -443,12 +443,6 @@ public class Parser extends CompilerPass {
     // Ensure the block ends with a right brace '}'
     // consume the right brace ['}']
     expect(Category.RBRA);
-    // if block is empty block.type = BaseType.NONE;
-    if (varDecls.isEmpty() && stmts.isEmpty()) {
-      // block.type = BaseType.NONE;
-      Type baseType = BaseType.NONE;
-      return new Block(varDecls, stmts, baseType);
-    }
     Block block = new Block(varDecls, stmts);
     return block;
   }
@@ -559,8 +553,8 @@ public class Parser extends CompilerPass {
     } else {
       // Use NONE type for return without expression
       // Placeholder to satisfy AST optional
-      expr = new IntLiteral(0);
-      expr.type = BaseType.NONE;
+      // return type for the return statement
+      expr = null;
     }
     expect(Category.SC);
     return new Return(expr);
