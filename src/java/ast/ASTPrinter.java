@@ -90,6 +90,10 @@ public class ASTPrinter {
 
           case Block blk -> {
             indentLevel++;
+            // if blkvds is empty then we print basetype None
+            if (blk.vds.isEmpty() && blk.stmts.isEmpty()) {
+              writer.print(blk.type);
+            }
             for (int i = 0; i < blk.vds.size(); i++) {
               if (i > 0) writer.print(",");
               visit(blk.vds.get(i));
@@ -119,7 +123,13 @@ public class ASTPrinter {
             // indentLevel++;
             newline();
             // indent();
-            visit(ws.body);
+            // if body is empty then we print basetype None
+            if (ws.body == null) {
+              writer.print(ws.body);
+            } else {
+              visit(ws.body);
+            }
+            // visit(ws.body);
             newline();
           }
 
