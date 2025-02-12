@@ -317,7 +317,7 @@ public class Parser extends CompilerPass {
         varDecls.add(parseVarDecl());
       } else {
         error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
-        // recovery();
+        recovery();
       }
     } while (!accept(Category.RBRA));
     // expect the right brace ["}"]
