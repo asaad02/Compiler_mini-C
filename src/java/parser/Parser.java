@@ -291,12 +291,6 @@ public class Parser extends CompilerPass {
       nextToken();
       baseType = new PointerType(baseType);
     }
-
-    // NONE when it's null
-    if (baseType == null) {
-      baseType = BaseType.NONE;
-    }
-
     return baseType;
   }
 
