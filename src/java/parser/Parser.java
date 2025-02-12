@@ -171,6 +171,7 @@ public class Parser extends CompilerPass {
           && lookAhead(1).category == Category.IDENTIFIER
           && lookAhead(2).category == Category.LBRA) {
         Type structType = structtype();
+        // System.out.println("Parsing struct declaration");
         return parseStructDecl(structType);
       }
       // we look a head to check if it's function or variable declaration
@@ -192,11 +193,13 @@ public class Parser extends CompilerPass {
         // type  ::= ("int" | "char" | "void" | structtype) ("*")*
         Type type = parseType();
         Token id = expect(Category.IDENTIFIER);
+        // System.out.println("Parsing function declaration or definition");
         return parseFuncDefOrDecl(type, id);
       }
       // if it's not LPAR ['('], then it's a variable declaration
       // vardecl    ::= type IDENT ("[" INT_LITERAL "]")* ";"
       // parse once the variable declaration
+      // System.out.println("Parsing variable declaration");
       return parseVarDecl();
     }
     error(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID);
@@ -289,6 +292,11 @@ public class Parser extends CompilerPass {
       baseType = new PointerType(baseType);
     }
 
+    // NONE when it's null
+    if (baseType == null) {
+      baseType = BaseType.NONE;
+    }
+
     return baseType;
   }
 
@@ -304,14 +312,14 @@ public class Parser extends CompilerPass {
     // varDecls is the list of variable declarations in the struct
     List<VarDecl> varDecls = new ArrayList<>();
     // while we have not reached the right brace ["}"]
-    while (!accept(Category.RBRA)) {
+    do {
       if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
         varDecls.add(parseVarDecl());
       } else {
         error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
-        recovery();
+        // recovery();
       }
-    }
+    } while (!accept(Category.RBRA));
     // expect the right brace ["}"]
     expect(Category.RBRA);
     // expect the semicolon [";"]
@@ -435,8 +443,13 @@ public class Parser extends CompilerPass {
     // Ensure the block ends with a right brace '}'
     // consume the right brace ['}']
     expect(Category.RBRA);
+    // if block is empty block.type = BaseType.NONE;
+    if (varDecls.isEmpty() && stmts.isEmpty()) {
+      // block.type = BaseType.NONE;
+      Type baseType = BaseType.NONE;
+      return new Block(varDecls, stmts, baseType);
+    }
     Block block = new Block(varDecls, stmts);
-    block.type = BaseType.NONE;
     return block;
   }
 
@@ -746,7 +759,7 @@ public class Parser extends CompilerPass {
       Expr operand = parseUnaryExpr();
       switch (op) {
         case PLUS:
-          return operand;
+          return new BinOp(new IntLiteral(0), Op.ADD, operand);
         case MINUS:
           return new BinOp(new IntLiteral(0), Op.SUB, operand);
         case ASTERISK:
@@ -884,7 +897,8 @@ public class Parser extends CompilerPass {
     error(
         Category.INT_LITERAL, Category.CHAR_LITERAL, Category.STRING_LITERAL, Category.IDENTIFIER);
     recovery();
-    return null;
+    // return NONE Type for expression
+    return new IntLiteral(0);
   }
 
   private void recovery() {
