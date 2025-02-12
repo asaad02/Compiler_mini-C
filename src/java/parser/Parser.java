@@ -276,6 +276,7 @@ public class Parser extends CompilerPass {
       return baseType;
     } else {
       error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
+      recovery();
       return BaseType.UNKNOWN;
     }
 
@@ -308,6 +309,7 @@ public class Parser extends CompilerPass {
         varDecls.add(parseVarDecl());
       } else {
         error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
+        recovery();
       }
     }
     // expect the right brace ["}"]
@@ -664,6 +666,7 @@ public class Parser extends CompilerPass {
             // will be the default case as a fallback and error handling
             default -> {
               error(Category.LT, Category.GT, Category.LE, Category.GE);
+              recovery();
               yield Op.LT;
             }
           };
@@ -704,6 +707,7 @@ public class Parser extends CompilerPass {
             case REM -> Op.MOD;
             default -> {
               error(Category.ASTERISK, Category.DIV, Category.REM);
+              recovery();
               yield Op.MUL;
             }
           };
@@ -751,6 +755,7 @@ public class Parser extends CompilerPass {
           return new AddressOfExpr(operand);
         default:
           error(Category.PLUS, Category.MINUS, Category.ASTERISK, Category.AND);
+          recovery();
           return new IntLiteral(0);
       }
     }
@@ -810,7 +815,7 @@ public class Parser extends CompilerPass {
     // check if the token is an integer literal ["INT_LITERAL"] or a character literal
     // ["CHAR_LITERAL"] or a string literal ["STRING_LITERAL"]
     else if (accept(Category.CHAR_LITERAL)) {
-      return new ChrLiteral(expect(Category.CHAR_LITERAL).data.charAt(0));
+      return new ChrLiteral(expect(Category.CHAR_LITERAL).data);
     }
     // STRING_LITERAL
     else if (accept(Category.STRING_LITERAL)) {
