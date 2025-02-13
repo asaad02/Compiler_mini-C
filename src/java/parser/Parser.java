@@ -289,7 +289,7 @@ public class Parser extends CompilerPass {
      */
     while (accept(Category.ASTERISK)) {
       nextToken();
-      baseType = new PointerType(baseType);
+      baseType = new PoInterType(baseType);
     }
     return baseType;
   }
