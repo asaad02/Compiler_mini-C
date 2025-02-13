@@ -146,7 +146,7 @@ public class ASTPrinter {
               visit(vd);
             }
           }
-          case PointerType pt -> {
+          case PoInterType pt -> {
             visit(pt.baseType);
           }
 

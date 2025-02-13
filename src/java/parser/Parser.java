@@ -289,7 +289,7 @@ public class Parser extends CompilerPass {
      */
     while (accept(Category.ASTERISK)) {
       nextToken();
-      baseType = new PointerType(baseType);
+      baseType = new PoInterType(baseType);
     }
     return baseType;
   }
@@ -646,10 +646,15 @@ public class Parser extends CompilerPass {
     Expr expr = parseRelationalExpr();
     // Parse the right-hand side of the operator
     while (accept(Category.EQ, Category.NE)) {
-      Op op = (token.category == Category.EQ) ? Op.EQ : Op.NE;
-      nextToken();
+      if (token.category == Category.EQ) {
+        nextToken();
+        expr = new BinOp(expr, Op.EQ, parseRelationalExpr());
+      } else {
+        nextToken();
+        expr = new BinOp(expr, Op.NE, parseRelationalExpr());
+      }
       // Parse the right-hand side of the operator
-      expr = new BinOp(expr, op, parseRelationalExpr());
+      // expr = new BinOp(expr, op, parseRelationalExpr());
     }
     return expr;
   }
@@ -659,22 +664,19 @@ public class Parser extends CompilerPass {
     Expr expr = parseAdditiveExpr();
     // Parse the right-hand side of the operator
     while (accept(Category.LT, Category.GT, Category.LE, Category.GE)) {
-      Op op =
-          switch (token.category) {
-            case LT -> Op.LT;
-            case GT -> Op.GT;
-            case LE -> Op.LE;
-            case GE -> Op.GE;
-            // will be the default case as a fallback and error handling
-            default -> {
-              error(Category.LT, Category.GT, Category.LE, Category.GE);
-              recovery();
-              yield Op.LT;
-            }
-          };
-      nextToken();
-      // Parse the right-hand side of the operator
-      expr = new BinOp(expr, op, parseAdditiveExpr());
+      if (token.category == Category.LT) {
+        nextToken();
+        expr = new BinOp(expr, Op.LT, parseAdditiveExpr());
+      } else if (token.category == Category.GT) {
+        nextToken();
+        expr = new BinOp(expr, Op.GT, parseAdditiveExpr());
+      } else if (token.category == Category.LE) {
+        nextToken();
+        expr = new BinOp(expr, Op.LE, parseAdditiveExpr());
+      } else {
+        nextToken();
+        expr = new BinOp(expr, Op.GE, parseAdditiveExpr());
+      }
     }
     return expr;
   }
@@ -702,19 +704,16 @@ public class Parser extends CompilerPass {
     // Parse the left-hand side of the operator
     Expr expr = parseUnaryExpr();
     while (accept(Category.ASTERISK, Category.DIV, Category.REM)) {
-      Op op =
-          switch (token.category) {
-            case ASTERISK -> Op.MUL;
-            case DIV -> Op.DIV;
-            case REM -> Op.MOD;
-            default -> {
-              error(Category.ASTERISK, Category.DIV, Category.REM);
-              recovery();
-              yield Op.MUL;
-            }
-          };
-      nextToken();
-      expr = new BinOp(expr, op, parseUnaryExpr());
+      if (token.category == Category.ASTERISK) {
+        nextToken();
+        expr = new BinOp(expr, Op.MUL, parseUnaryExpr());
+      } else if (token.category == Category.DIV) {
+        nextToken();
+        expr = new BinOp(expr, Op.DIV, parseUnaryExpr());
+      } else {
+        nextToken();
+        expr = new BinOp(expr, Op.MOD, parseUnaryExpr());
+      }
     }
     return expr;
   }
@@ -886,8 +885,8 @@ public class Parser extends CompilerPass {
     error(
         Category.INT_LITERAL, Category.CHAR_LITERAL, Category.STRING_LITERAL, Category.IDENTIFIER);
     recovery();
-    // return NONE Type for expression
-    return new IntLiteral(0);
+    // return
+    return null;
   }
 
   private void recovery() {
