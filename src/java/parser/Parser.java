@@ -312,6 +312,7 @@ public class Parser extends CompilerPass {
       } else {
         error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
         recovery();
+        return new StructTypeDecl((StructType) structType, varDecls);
       }
     } while (!accept(Category.RBRA));
     // expect the right brace ["}"]
