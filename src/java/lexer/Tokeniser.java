@@ -2,7 +2,9 @@ package lexer;
 
 import util.CompilerPass;
 
-/** @author cdubach */
+/**
+ * @author cdubach
+ */
 public class Tokeniser extends CompilerPass {
 
   private final Scanner scanner;
@@ -16,6 +18,7 @@ public class Tokeniser extends CompilerPass {
     System.out.println(msg);
     incError();
   }
+
   /*
    * isLetter(char c) true if c is a letter  upper or lower case
    * The ASCII code of a letter is between 65 and 90 for upper case letters and  97 to 122 for lower case letters.
@@ -24,6 +27,7 @@ public class Tokeniser extends CompilerPass {
     int ascii = (int) c;
     return (ascii >= 65 && ascii <= 90) || (ascii >= 97 && ascii <= 122);
   }
+
   /*
    * isDigit(char c)  true if c is a digit
    * The ASCII code of a digit is between 48 and 57.
@@ -32,12 +36,14 @@ public class Tokeniser extends CompilerPass {
     int ascii = (int) c;
     return (ascii >= 48 && ascii <= 57);
   }
+
   /*
    * isLetterOrDigit char c  true if c is a letter or a digit
    */
   private boolean isLetterOrDigit(char c) {
     return isLetter(c) || isDigit(c);
   }
+
   /*
    * isSpecialCharWithoutSingleQuote char c
    * SpecialCharWithoutSingleQuote = One of the following 30 characters: ` ~ @ ! $ # ^ * % & ( ) [ ] { } < > + = _ - | / ; : , . ? "
@@ -53,6 +59,7 @@ public class Tokeniser extends CompilerPass {
   private boolean isSpecialCharWithoutDoubleQuote(char c) {
     return "`~@!$#^*%&()[]{}<>+=_-|/;:,.?\'".indexOf(c) >= 0;
   }
+
   /*
    * isEscapedChar char c returns true if c is an escaped character and false otherwise
    * EscapedChar    = '\a' | '\b' | '\n' | '\r' | '\t' | '\\' | '\'' | '\"' | '\0'
@@ -61,6 +68,7 @@ public class Tokeniser extends CompilerPass {
     return c == 'a' || c == 'b' || c == 'n' || c == 'r' || c == 't' || c == '\\' || c == '\''
         || c == '"' || c == '0';
   }
+
   /*
    * isValidIdentifierPart char c  true if c is a valid identifier part and false
    *  lower case letters, upper case letters, digits and underscore
@@ -68,6 +76,7 @@ public class Tokeniser extends CompilerPass {
   private boolean isValidIdentifierPart(char c) {
     return isLetterOrDigit(c) || c == '_';
   }
+
   /*
    * isValidIdentifierStart char c
    * not start with a digit and can only contain lower case letters upper case letters and underscore
@@ -282,13 +291,13 @@ public class Tokeniser extends CompilerPass {
                 escapeString = "\\t";
                 break;
               case '\\':
-                escapeString = "\\";
+                escapeString = "\\\\";
                 break;
               case '\'':
-                escapeString = "\'";
+                escapeString = "\\'";
                 break;
               case '"':
-                escapeString = "\"";
+                escapeString = "\\\"";
                 break;
               case '0':
                 escapeString = "\\0";
