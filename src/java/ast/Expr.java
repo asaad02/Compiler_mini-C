@@ -14,8 +14,7 @@ public abstract sealed class Expr implements ASTNode
         AddressOfExpr,
         SizeOfExpr,
         TypecastExpr,
-        Assign,
-        UnaryOp {
+        Assign {
   // Expr       ::= IntLiteral | StrLiteral | ChrLiteral | VarExpr | FunCallExpr | BinOp |
   // ArrayAccessExpr | FieldAccessExpr | ValueAtExpr | AddressOfExpr | SizeOfExpr | TypecastExpr |
   // Assign
