@@ -90,14 +90,12 @@ public class ASTPrinter {
 
           case Block blk -> {
             indentLevel++;
-            for (int i = 0; i < blk.vds.size(); i++) {
-              if (i > 0) writer.print(",");
-              visit(blk.vds.get(i));
-              newline();
-            }
-            for (int i = 0; i < blk.stmts.size(); i++) {
-              if (i > 0 || !blk.vds.isEmpty()) writer.print(",");
-              visit(blk.stmts.get(i));
+            for (ASTNode child : blk.children()) {
+              // if the node is the first child of the block, we don't want to print a comma
+              if (child != blk.children().get(0)) {
+                writer.print(",");
+              }
+              visit(child);
               newline();
             }
             indentLevel--;
@@ -146,7 +144,7 @@ public class ASTPrinter {
               visit(vd);
             }
           }
-          case PoInterType pt -> {
+          case PointerType pt -> {
             visit(pt.baseType);
           }
 

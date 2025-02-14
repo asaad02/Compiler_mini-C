@@ -4,16 +4,16 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class VarExpr extends Expr {
-    public final String name;
-    public VarDecl vd; // to be filled in by the name analyser
-    
-    public VarExpr(String name){
-	this.name = name;
-    }
+  public final String name;
+  public VarDecl vd; // to be filled in by the name analyser
 
-    public List<ASTNode> children() {
-        List<ASTNode> children = new ArrayList<>();
-        return children;
-    }
+  public VarExpr(String name) {
+    this.name = name;
+    this.vd = null; // to be filled in by the name analyser and point to the declaration.
+  }
 
+  public List<ASTNode> children() {
+    List<ASTNode> children = new ArrayList<>();
+    return children;
+  }
 }

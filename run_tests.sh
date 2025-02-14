@@ -13,6 +13,7 @@ SRC_DIR="."
 TEST_PARSER_DIR="$SRC_DIR/tests/test/test_parser"
 TEST_LEXER_DIR="$SRC_DIR/tests/test/test_lexing"
 TEST_AST_DIR="$SRC_DIR/tests/test/test_ast"
+TEST_SEMANTIC_DIR="$SRC_DIR/tests/test/test_sem"
 
 # Function to display a header
 display_header() {
@@ -57,6 +58,8 @@ run_tests() {
         #java -cp "$BUILD_DIR" Main1 -lexer "$file"
       #if [[ "$mode" == "ast" ]]; then
         #java -cp "$BUILD_DIR" Main2 -ast "$file"
+      elif [[ "$mode" == "sem" ]]; then
+        java -cp "$BUILD_DIR" Main2 -sem "$file"
       fi
 
       # Check if the test passed or failed
@@ -81,7 +84,7 @@ main() {
   run_ant_build
 
   # Run parser tests
-  run_tests "$TEST_PARSER_DIR" "parser"
+  #run_tests "$TEST_PARSER_DIR" "parser"
   #run_tests "$TEST_LEXER_DIR" "parser"
   #run_tests "$TEST_AST_DIR" "parser"
 
@@ -90,6 +93,9 @@ main() {
 
    # Run AST tests
    #run_tests "$TEST_PARSER_DIR" "ast"
+
+   # Run semantic tests
+    run_tests "$TEST_SEMANTIC_DIR" "sem"
 
   display_completion_message
 }
