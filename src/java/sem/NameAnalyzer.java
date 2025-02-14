@@ -65,6 +65,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         if (BUILT_IN_FUNCTIONS.stream().anyMatch(f -> f.name.equals(fd.name))) {
           return;
         }
+
         // if the function is not a built-in function
         if (currentScope.lookupCurrent(fd.name) != null) {
           error("Function " + fd.name + " already declared.");
@@ -123,13 +124,21 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         if (fs == null) {
           // System.out.println("Function " + fc.name + " is not declared before use.");
           error("Function " + fc.name + " must be declared before use.");
+          return;
         }
         // if the function is declared before use
-        else if (!currentScope.isDeclaredBeforeUse(fc.name)) {
+        if (!currentScope.isDeclaredBeforeUse(fc.name)) {
           // System.out.println("Function " + fc.name + " is used before declaration.");
           error("Function " + fc.name + " is used before declaration.");
-        } else {
-          // System.out.println("Function " + fc.name + " is valid for use.");
+          return;
+        }
+        if (fs.def != null && fs.def.params.size() != fc.args.size()) {
+          error("Function " + fc.name + " called with incorrect number of arguments.");
+          return;
+        }
+        if (fs.decl != null && fs.decl.params.size() != fc.args.size()) {
+          error("Function " + fc.name + " called with incorrect number of arguments.");
+          return;
         }
         // if the function is declared , assign the function definition
         if (fs.def != null) {
