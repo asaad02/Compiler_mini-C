@@ -54,7 +54,19 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
       case Program p -> {
         // Visit each declaration in the program
         for (ASTNode decl : p.decls) {
-          visit(decl);
+          if (decl instanceof FunDecl) {
+            visit(decl);
+          }
+        }
+        for (ASTNode decl : p.decls) {
+          if (decl instanceof FunDef) {
+            visit(decl);
+          }
+        }
+        for (ASTNode decl : p.decls) {
+          if (!(decl instanceof FunDecl || decl instanceof FunDef)) {
+            visit(decl);
+          }
         }
       }
 
