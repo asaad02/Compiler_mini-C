@@ -81,6 +81,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         // if the function is not a built-in function
         if (currentScope.lookupCurrent(fd.name) != null) {
           error("Function " + fd.name + " already declared.");
+          return;
         }
         // System.out.println("declaring function: " + fd.name);
         // add the function to the current scope
