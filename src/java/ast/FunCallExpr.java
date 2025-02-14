@@ -9,10 +9,16 @@ public final class FunCallExpr extends Expr {
   public final String name;
   // List of arguments passed to the function
   public final List<Expr> args;
+  // Link to the function declaration or definition
+  public FunDecl decl;
+  // Link to the function definition
+  public FunDef def;
 
   public FunCallExpr(String name, List<Expr> args) {
     this.name = name;
     this.args = args;
+    this.decl = null;
+    this.def = null;
   }
 
   @Override
