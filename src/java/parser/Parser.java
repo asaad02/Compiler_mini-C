@@ -289,7 +289,7 @@ public class Parser extends CompilerPass {
      */
     while (accept(Category.ASTERISK)) {
       nextToken();
-      baseType = new PoInterType(baseType);
+      baseType = new PointerType(baseType);
     }
     return baseType;
   }
@@ -418,28 +418,21 @@ public class Parser extends CompilerPass {
    * Block      ::= VarDecl* Stmt*
    */
   private Block parseBlock() {
-    // consume the left brace ['{']
-    expect(Category.LBRA);
-    List<Stmt> stmts = new ArrayList<>();
-    List<VarDecl> varDecls = new ArrayList<>();
+    expect(Category.LBRA); // Consume '{'
 
-    // Parse statements within the block , the block will have the [while, if, return, continue,
-    // break, exp]
+    List<ASTNode> elements = new ArrayList<>(); // Store both VarDecl and Stmt in order
+
     while (!accept(Category.RBRA) && !accept(Category.EOF)) {
-      // if its a integer or char or void or struct then we will parse the type and the identifier
-      // other than that we will parse the statement
       if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
-        varDecls.add(parseVarDecl());
+        elements.add(parseVarDecl()); // Store VarDecl where it appears
       } else {
-        // parse all the statements within the block
-        stmts.add(parseStmt());
+        elements.add(parseStmt()); // Store Stmt where it appears
       }
     }
-    // Ensure the block ends with a right brace '}'
-    // consume the right brace ['}']
-    expect(Category.RBRA);
-    Block block = new Block(varDecls, stmts);
-    return block;
+
+    expect(Category.RBRA); // Consume '}'
+
+    return new Block(elements);
   }
 
   /*

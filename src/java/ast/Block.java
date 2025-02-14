@@ -3,23 +3,18 @@ package ast;
 import java.util.ArrayList;
 import java.util.List;
 
-// block represents a code block containing variable declarations and statements.
+// Represents a code block containing variable declarations and statements.
 public final class Block extends Stmt {
-  // Variable declarations
-  public List<VarDecl> vds;
-  // Statements within the block
-  public List<Stmt> stmts;
+  private final List<ASTNode> elements; // Store both VarDecl and Stmt together
 
-  public Block(List<VarDecl> vds, List<Stmt> stmts) {
-    this.vds = vds;
-    this.stmts = stmts;
+  public Block(List<ASTNode> elements) {
+    this.elements = elements;
   }
 
   @Override
   public List<ASTNode> children() {
     List<ASTNode> children = new ArrayList<>();
-    children.addAll(vds);
-    children.addAll(stmts);
+    children.addAll(elements);
     return children;
   }
 }
