@@ -19,7 +19,7 @@ TEST_SEMANTIC_DIR="$SRC_DIR/tests/test/test_sem"
 display_header() {
   echo -e "${CYAN}"
   echo "======================================"
-  echo "       JAVA TEST RUNNER SCRIPT        "
+  echo "       JAVA TEST       please run lol" 
   echo "======================================"
   echo -e "${NC}"
 }
@@ -84,8 +84,8 @@ main() {
   run_ant_build
 
   # Run parser tests
-  #run_tests "$TEST_PARSER_DIR" "parser"
-  #run_tests "$TEST_LEXER_DIR" "parser"
+  run_tests "$TEST_PARSER_DIR" "parser"
+
   #run_tests "$TEST_AST_DIR" "parser"
 
   # Run lexer tests
