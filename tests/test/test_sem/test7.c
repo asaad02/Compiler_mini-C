@@ -2,9 +2,9 @@ int add(int a, int b) {
     return a + b;
 }
 
-int add(int a, int b) { // Error: function 'add' is redefined
-    return a - b;
-}
+//int add(int a, int b) { 
+    //return a - b;
+//}
 
 int main() {
     int x;

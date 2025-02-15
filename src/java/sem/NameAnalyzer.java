@@ -4,17 +4,19 @@ import ast.*;
 import java.util.*;
 
 /**
- * Function and variable declarations before use. proper function definitions matching prior
- * declarations. no duplicate declarations in the same scope. shadowing detection. valid function
- * calls.
+ * NameAnalyzer ensures correct scoping and visibility rules: variables and functions must be
+ * declared before use. No duplicate variable or function declarations in the same scope. Functions
+ * must have at most one declaration and one definition. Structs must be declared before use and
+ * cannot have duplicate fields. and Shadowing.
  */
 public class NameAnalyzer extends BaseSemanticAnalyzer {
 
-  // Current scope being analyzed
+  // Tracks the current scope during analysis
   private Scope currentScope;
 
   // List of built-in functions that will be valid
   /*
+  * This will be always valid
   * void print_s(char* s);
   * void print_i(int i);
   * void print_c(char c);
@@ -37,7 +39,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
               List.of(new VarDecl(BaseType.INT, "size"))));
 
   public NameAnalyzer() {
-    // Initialize the global scope and register built-in functions
+    // Initialize the global scope and register built in functions in the symbol table
     this.currentScope = new Scope(null);
     for (FunDecl f : BUILT_IN_FUNCTIONS) {
       currentScope.put(new FunSymbol(f));
@@ -50,29 +52,15 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
       // if the node is null, throw an exception
       case null -> throw new IllegalStateException("Unexpected null value");
 
-      // if the node is a program, visit the declarations in order
+      // visit the declarations in order
       case Program p -> {
-        // Visit each declaration in the program
         for (ASTNode decl : p.decls) {
-          if (decl instanceof FunDecl) {
-            visit(decl);
-          }
-        }
-        for (ASTNode decl : p.decls) {
-          if (decl instanceof FunDef) {
-            visit(decl);
-          }
-        }
-        for (ASTNode decl : p.decls) {
-          if (!(decl instanceof FunDecl || decl instanceof FunDef)) {
-            visit(decl);
-          }
+          visit(decl);
         }
       }
-
       // Function declaration
       case FunDecl fd -> {
-        // Check if the function is a built-in function and return
+        // Check if the function is a built-in function
         // check if built-in functions contain the function declaration
         if (BUILT_IN_FUNCTIONS.stream().anyMatch(f -> f.name.equals(fd.name))) {
           return;
@@ -92,75 +80,99 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
       // Function definition
       case FunDef fd -> {
-        // System.out.println("defining function: " + fd.name);
+        System.out.println("[LOG] Defining function: " + fd.name);
 
-        // check if it's a main function
-        if (fd.name.equals("main")) {
-          FunSymbol mainSymbol = new FunSymbol(fd);
-          // add the main function to the current scope
-          currentScope.put(mainSymbol);
-          // track the declaration of the main function
+        // look for a prior function declaration
+        FunSymbol existingSymbol = currentScope.lookupFunction(fd.name);
+
+        // if there is no existing declaration and treat this definition as both a declaration &
+        // definition
+        if (existingSymbol == null) {
+          FunSymbol newSymbol = new FunSymbol(fd);
+          currentScope.put(newSymbol);
           currentScope.trackDeclaration(fd.name);
         } else {
-          // check if the function in current scope
-          FunSymbol existingSymbol = currentScope.lookupFunction(fd.name);
-
-          // ensure a function declaration exists before definition
-          if (existingSymbol == null) {
-            // System.out.println("function " + fd.name + " is defined without prior declaration.");
-            error("Function " + fd.name + " must be declared before definition.");
+          // ensure no duplicate function definition
+          if (existingSymbol.def != null) {
+            error("Function " + fd.name + " is already defined.");
             return;
           }
-          // assign the function definition
+
+          // ensure the function declaration and definition match in return type and the parameters
+          if (existingSymbol.decl != null) {
+            if (!fd.type.equals(existingSymbol.decl.type)) {
+              error(
+                  "Function "
+                      + fd.name
+                      + " definition does not match declaration: Return types do not match.");
+              return;
+            }
+            // check if the number of parameters match
+            if (fd.params.size() != existingSymbol.decl.params.size()) {
+              error(
+                  "Function "
+                      + fd.name
+                      + " definition does not match declaration: Parameter count does not match.");
+              return;
+            }
+          }
+
+          // associate the function definition with its existing declaration
           existingSymbol.setDefinition(fd);
         }
 
-        // create a new scope for function parameters
+        // process function parameters in a new scope
         Scope oldScope = currentScope;
         currentScope = new Scope(oldScope);
-        // visit the function parameters
+        // visit all the parameters of the function
         for (VarDecl param : fd.params) {
           visit(param);
         }
-        // visit the function block
+        // visit the block of the function
         visit(fd.block);
-        // current scope is now the old scope
+        // return to the old scope
         currentScope = oldScope;
       }
 
       // Function calls check declaration before call
       case FunCallExpr fc -> {
-        // System.out.println("checking function call: " + fc.name);
-        // check if the function is in the current scope
+        System.out.println("[LOG] Checking function call: " + fc.name);
+
+        // Look up function in the current scope
         FunSymbol fs = currentScope.lookupFunction(fc.name);
-        // if the function is not in the current scope
+
+        // function must be declared or defined before use
         if (fs == null) {
-          // System.out.println("Function " + fc.name + " is not declared before use.");
           error("Function " + fc.name + " must be declared before use.");
           return;
         }
-        // if the function is declared before use
-        if (!currentScope.isDeclaredBeforeUse(fc.name)) {
-          // System.out.println("Function " + fc.name + " is used before declaration.");
-          error("Function " + fc.name + " is used before declaration.");
-          return;
-        }
-        if (fs.def != null && fs.def.params.size() != fc.args.size()) {
-          error("Function " + fc.name + " called with incorrect number of arguments.");
-          return;
-        }
-        if (fs.decl != null && fs.decl.params.size() != fc.args.size()) {
-          error("Function " + fc.name + " called with incorrect number of arguments.");
-          return;
-        }
-        // if the function is declared , assign the function definition
+
+        // ensure function call matches declaration or definition
+        int expectedParams = -1;
+        int providedArgs = fc.args.size();
+
         if (fs.def != null) {
-          // assign the function definition to the function call
-          fc.def = fs.def;
+          expectedParams = fs.def.params.size();
+        } else if (fs.decl != null) {
+          expectedParams = fs.decl.params.size();
         }
-        // if the function is declared , assign the function declaration
-        else if (fs.decl != null) {
-          // assign the function declaration to the function call
+
+        // argument count mismatch
+        if (expectedParams != -1 && expectedParams != providedArgs) {
+          error(
+              "Function "
+                  + fc.name
+                  + " called with incorrect number of arguments. Expected: "
+                  + expectedParams
+                  + ", Provided: "
+                  + providedArgs);
+          return;
+        }
+
+        // link function call to definition or declaration
+        if (fs.def != null) {
+          fc.def = fs.def;
+        } else if (fs.decl != null) {
           fc.decl = fs.decl;
         }
       }
@@ -183,13 +195,30 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
       // Variable declaration
       case VarDecl vd -> {
+        // dont use instanceof here
+        switch (vd.type) {
+          case StructType st -> {
+            if (!currentScope.isDeclaredBeforeUse(st.name)) {
+              error("Struct " + st.name + " must be declared before use.");
+              return;
+            }
+          }
+          default -> {}
+        }
+
         // if the variable is already declared in the current scope
         if (currentScope.lookupCurrent(vd.name) != null) {
           error("Variable " + vd.name + " already declared in this scope.");
+          return;
         }
         // if the variable is shadowed in the current scope
         if (currentScope.isShadowed(vd.name)) {
           System.out.println("shadowing detected: " + vd.name);
+        }
+        // Ensure the variable does not shadow a function name
+        if (currentScope.lookupFunction(vd.name) != null) {
+          error("Variable " + vd.name + " cannot shadow a function name.");
+          return;
         }
         // put the variable in the current scope
         currentScope.put(new VarSymbol(vd));
@@ -210,6 +239,29 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         }
       }
 
+      case StructTypeDecl std -> {
+        System.out.println("[LOG] Defining struct: " + std.structType.name);
+
+        // ensure the struct itself is not already declared
+        if (currentScope.lookupCurrent(std.structType.name) != null) {
+          error("Struct " + std.structType.name + " is already declared.");
+          return;
+        }
+
+        // validate field names within the struct
+        Set<String> fieldNames = new HashSet<>();
+        for (VarDecl field : std.fields) {
+          if (fieldNames.contains(field.name)) {
+            error("Duplicate field '" + field.name + "' in struct " + std.structType.name);
+            return;
+          }
+          fieldNames.add(field.name);
+        }
+
+        // register the struct before function processing
+        currentScope.put(new StructSymbol(std));
+      }
+
       // expression statements
       case ExprStmt es -> visit(es.expr);
 
@@ -218,6 +270,12 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         if (rs.expr != null) {
           visit(rs.expr);
         }
+      }
+
+      // Visit the left and right expressions of an assignment
+      case Assign a -> {
+        visit(a.left);
+        visit(a.right);
       }
 
       // binary operations

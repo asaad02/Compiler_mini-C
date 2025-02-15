@@ -4,7 +4,7 @@ import java.util.*;
 
 /** Scope class handles symbol table management and supports nested scopes. */
 public class Scope {
-  // Reference to the outer scope (null for global scope)
+  // Reference to the outer scope null for global scope
   private Scope outer;
   // Stores declared symbols in the current scope
   private Map<String, Symbol> symbolTable;
@@ -77,12 +77,18 @@ public class Scope {
    * outer scopes.
    */
   public boolean isShadowed(String name) {
-    // System.out.println("Checking shadowing for: " + name);
-    if (lookupCurrent(name) != null && outer != null && outer.lookup(name) != null) {
-      return true;
-    } else {
-      return false;
+    Scope outerScope = this.outer;
+
+    while (outerScope != null) {
+      if (outerScope.lookupCurrent(name) != null) {
+        // found in an outer scope → Shadowing occurs
+        return true;
+      }
+      // move up the scope chain
+      outerScope = outerScope.outer;
     }
+    // no shadowing detected
+    return false;
   }
 
   /** returns a function symbol if the name exists in scope. */

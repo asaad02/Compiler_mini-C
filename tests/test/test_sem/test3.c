@@ -3,7 +3,8 @@ int sum(int a, int b);
 int main() {
     int x;
     x = 5;
-    x = sum(4, 3); // Valid function usage
+    //x = hi(x, 3);
+    x = sum(4,3); 
     return x;
 }
 
