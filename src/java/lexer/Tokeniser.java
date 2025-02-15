@@ -272,7 +272,8 @@ public class Tokeniser extends CompilerPass {
           if (isEscapedChar(escapedChar) && scanner.next() == '\'') {
             // return the char literal token
             // if it's scape character then it will be returned as it is
-            // EscapedChar    = '\a' | '\b' | '\n' | '\r' | '\t' | '\\' | '\'' | '\"' | '\0'
+            // EscapedChar                   = '\a' | '\b' | '\n' | '\r' | '\t' | '\\' | '\'' | '\"'
+            // | '\0'
             String escapeString;
             switch (escapedChar) {
               case 'a':
@@ -291,13 +292,13 @@ public class Tokeniser extends CompilerPass {
                 escapeString = "\\t";
                 break;
               case '\\':
-                escapeString = "\\\\";
+                escapeString = "\\";
                 break;
               case '\'':
-                escapeString = "\\'";
+                escapeString = "'";
                 break;
               case '"':
-                escapeString = "\\\"";
+                escapeString = "\"";
                 break;
               case '0':
                 escapeString = "\\0";
