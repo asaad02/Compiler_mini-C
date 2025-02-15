@@ -68,8 +68,6 @@ public class ASTPrinter {
             writer.print(v.name);
           }
 
-          // to complete ...
-
           case IntLiteral i -> writer.print(i.value);
 
           case StrLiteral s -> writer.print(s.value);
@@ -78,7 +76,7 @@ public class ASTPrinter {
 
           case BinOp b -> {
             visit(b.left);
-            writer.print(", " + b.op + ", ");
+            writer.print("," + b.op + ",");
             visit(b.right);
           }
 
@@ -89,16 +87,13 @@ public class ASTPrinter {
           }
 
           case Block blk -> {
-            indentLevel++;
             for (ASTNode child : blk.children()) {
-              // if the node is the first child of the block, we don't want to print a comma
               if (child != blk.children().get(0)) {
                 writer.print(",");
               }
-              visit(child);
               newline();
+              visit(child);
             }
-            indentLevel--;
           }
 
           case If ifs -> {
@@ -114,9 +109,7 @@ public class ASTPrinter {
           case While ws -> {
             visit(ws.condition);
             writer.print(",");
-            // indentLevel++;
             newline();
-            // indent();
             visit(ws.body);
             newline();
           }
@@ -141,9 +134,11 @@ public class ASTPrinter {
             visit(std.structType);
             for (VarDecl vd : std.fields) {
               writer.print(",");
+              newline();
               visit(vd);
             }
           }
+
           case PointerType pt -> {
             visit(pt.baseType);
           }
@@ -152,14 +147,14 @@ public class ASTPrinter {
 
           case ArrayType at -> {
             visit(at.elementType);
-            writer.print(", " + at.size);
+            writer.print("," + at.size);
           }
-          // case BaseType bt -> writer.print(bt);
 
           case FunCallExpr fc -> {
             writer.print(fc.name);
             for (Expr arg : fc.args) {
               writer.print(",");
+              newline();
               visit(arg);
             }
           }
@@ -167,8 +162,9 @@ public class ASTPrinter {
           case TypecastExpr tc -> {
             visit(tc.type);
             writer.print(",");
+            newline();
             if (tc.expr == null) {
-              writer.print("null");
+              writer.print("");
             } else {
               visit(tc.expr);
             }
@@ -194,8 +190,9 @@ public class ASTPrinter {
 
           case FieldAccessExpr fa -> {
             visit(fa.structure);
-            writer.print(", " + fa.field);
+            writer.print("," + fa.field);
           }
+
           default -> {
             String delimiter = "";
             for (ASTNode child : node.children()) {
@@ -205,11 +202,10 @@ public class ASTPrinter {
             }
           }
         }
+        indentLevel--;
+        writer.print(")");
       }
     }
-    indentLevel--;
-    // newline();
-    writer.print(")");
 
     switch (node) {
       case Program ignored -> {

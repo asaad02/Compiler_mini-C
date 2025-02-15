@@ -256,22 +256,25 @@ public class Parser extends CompilerPass {
     else if (accept(Category.STRUCT)) {
       baseType = structtype();
 
+    } else {
+      error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
+      recovery();
+      return BaseType.UNKNOWN;
     }
     /*
      * ArrayType   ::= Type Int
      * if the token is a left square bracket ["["]
      * Type        ::= BaseType | PointerType | StructType | ArrayType
      */
+
+    /*
     else if (accept(Category.LSBR)) {
       Type elementType = parseType();
       int size = Integer.parseInt(expect(Category.INT_LITERAL).data);
       expect(Category.RSBR);
       return new ArrayType(elementType, size);
     }
-    /*
-     * if its LPAR ['('] then it's a type
-     * PoInterType ::= Type
-     */
+
     else if (accept(Category.LPAR)) {
       nextToken();
       baseType = parseType();
@@ -282,6 +285,7 @@ public class Parser extends CompilerPass {
       recovery();
       return BaseType.UNKNOWN;
     }
+    */
 
     /*
      * if the token is an asterisk ["*"]
@@ -290,6 +294,14 @@ public class Parser extends CompilerPass {
     while (accept(Category.ASTERISK)) {
       nextToken();
       baseType = new PointerType(baseType);
+    }
+
+    // Handle array types after type is established
+    while (accept(Category.LSBR)) {
+      nextToken();
+      int size = Integer.parseInt(expect(Category.INT_LITERAL).data);
+      expect(Category.RSBR);
+      baseType = new ArrayType(baseType, size);
     }
     return baseType;
   }
