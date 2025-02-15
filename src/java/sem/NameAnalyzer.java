@@ -80,7 +80,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
       // Function definition
       case FunDef fd -> {
-        System.out.println("[LOG] Defining function: " + fd.name);
+        // System.out.println("Defining function: " + fd.name);
 
         // look for a prior function declaration
         FunSymbol existingSymbol = currentScope.lookupFunction(fd.name);
@@ -136,7 +136,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
       // Function calls check declaration before call
       case FunCallExpr fc -> {
-        System.out.println("[LOG] Checking function call: " + fc.name);
+        // System.out.println("Checking function call: " + fc.name);
 
         // Look up function in the current scope
         FunSymbol fs = currentScope.lookupFunction(fc.name);
