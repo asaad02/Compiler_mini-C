@@ -81,13 +81,10 @@ public class Scope {
 
     while (outerScope != null) {
       if (outerScope.lookupCurrent(name) != null) {
-        // found in an outer scope → Shadowing occurs
         return true;
       }
-      // move up the scope chain
       outerScope = outerScope.outer;
     }
-    // no shadowing detected
     return false;
   }
 
