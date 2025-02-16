@@ -82,12 +82,11 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
       case FunDef fd -> {
         // System.out.println("Defining function: " + fd.name);
 
-        // look for a prior function declaration
+        // ;ook for a prior function declaration
         FunSymbol existingSymbol = currentScope.lookupFunction(fd.name);
 
-        // if there is no existing declaration and treat this definition as both a declaration &
-        // definition
         if (existingSymbol == null) {
+          // No previous declaration so treat as a new function definition
           FunSymbol newSymbol = new FunSymbol(fd);
           currentScope.put(newSymbol);
           currentScope.trackDeclaration(fd.name);
@@ -98,7 +97,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
             return;
           }
 
-          // ensure the function declaration and definition match in return type and the parameters
+          // ensure function declaration matches definition
           if (existingSymbol.decl != null) {
             if (!fd.type.equals(existingSymbol.decl.type)) {
               error(
@@ -107,7 +106,6 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
                       + " definition does not match declaration: Return types do not match.");
               return;
             }
-            // check if the number of parameters match
             if (fd.params.size() != existingSymbol.decl.params.size()) {
               error(
                   "Function "
@@ -117,20 +115,41 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
             }
           }
 
-          // associate the function definition with its existing declaration
+          // Link the definition to the previously declared function
           existingSymbol.setDefinition(fd);
         }
 
-        // process function parameters in a new scope
+        // Process function parameters in a new local scope
         Scope oldScope = currentScope;
         currentScope = new Scope(oldScope);
-        // visit all the parameters of the function
+
+        // Track already declared parameters to detect duplicates
+        Set<String> declaredParams = new HashSet<>();
+
         for (VarDecl param : fd.params) {
-          visit(param);
+          // Ensure parameter does not shadow a global variable
+          if (oldScope.lookupVariable(param.name) != null) {
+            System.out.println(
+                "[LOG] Shadowing detected: Function parameter '"
+                    + param.name
+                    + "' shadows a global variable.");
+          }
+
+          // Ensure parameter is not already declared in the function local scope
+          if (declaredParams.contains(param.name)) {
+            error("Function parameter '" + param.name + "' is already declared in this function.");
+            return;
+          }
+          declaredParams.add(param.name);
+
+          // Insert parameter into local scope
+          currentScope.put(new VarSymbol(param));
         }
-        // visit the block of the function
+
+        // visit function body to check for undeclared parameter usage
         visit(fd.block);
-        // return to the old scope
+
+        // return to outer scope
         currentScope = oldScope;
       }
 
@@ -240,7 +259,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
       }
 
       case StructTypeDecl std -> {
-        System.out.println("[LOG] Defining struct: " + std.structType.name);
+        // System.out.println("Defining struct: " + std.structType.name);
 
         // ensure the struct itself is not already declared
         if (currentScope.lookupCurrent(std.structType.name) != null) {
