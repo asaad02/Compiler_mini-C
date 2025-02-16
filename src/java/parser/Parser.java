@@ -528,6 +528,11 @@ public class Parser extends CompilerPass {
     // Parse condition
     Expr condition = parseExpr();
     // Expect ')'
+    if (condition instanceof BinOp binOp && binOp.left instanceof ValueAtExpr valueExpr) {
+      if (binOp.right instanceof VarExpr varExpr && varExpr.name.equals("NULL")) {
+        condition = new BinOp(valueExpr.expr, binOp.op, binOp.right);
+      }
+    }
     expect(Category.RPAR);
     // Parse 'if' body
     Stmt thenBranch = parseStmt();
@@ -748,6 +753,12 @@ public class Parser extends CompilerPass {
         }
         return expr;
       }
+
+      if (accept(Category.ASTERISK)) {
+        nextToken();
+        Expr operand = parseUnaryExpr();
+        return new ValueAtExpr(operand);
+      }
       // recursively parse the unary expression
       Expr operand = parseUnaryExpr();
       switch (op) {
@@ -770,20 +781,22 @@ public class Parser extends CompilerPass {
 
   // psofix operators: () (function call) and  [] array access and . (field access)
   private Expr parsePostfixExpr() {
-    // we will parse the primary expression
+    // Parse the primary expression first
     Expr expr = parsePrimaryExpr();
 
     // Handles nested field access and array access such as . and []
     while (accept(Category.LSBR, Category.DOT)) {
       if (accept(Category.DOT)) {
         nextToken();
-        // Parse the field identifier
         String field = expect(Category.IDENTIFIER).data;
-        expr = new FieldAccessExpr(expr, field);
+        if (expr instanceof ValueAtExpr valueExpr && valueExpr.expr instanceof ValueAtExpr) {
+          expr = new FieldAccessExpr(valueExpr.expr, field);
+        } else {
+          expr = new FieldAccessExpr(expr, field);
+        }
       }
       if (accept(Category.LSBR)) {
         nextToken();
-        // parse the index of the array
         Expr index = parseExpr();
         expect(Category.RSBR);
         expr = new ArrayAccessExpr(expr, index);
@@ -830,25 +843,15 @@ public class Parser extends CompilerPass {
     // IDENTIFIER
     else if (accept(Category.IDENTIFIER)) {
       Token id = expect(Category.IDENTIFIER);
-      // Check for function call, array access, or field access
-      // function call
       if (accept(Category.LPAR)) {
         return parseFuncCallExpr(id);
-      }
-      // array access or field access
-      else if (accept(Category.LSBR)) {
-        nextToken();
-        Expr index = parseExpr();
-        expect(Category.RSBR);
-        return new ArrayAccessExpr(new VarExpr(id.data), index);
-      }
-      // field access
-      else if (accept(Category.DOT)) {
+      } else if (accept(Category.DOT)) {
         nextToken();
         Token field = expect(Category.IDENTIFIER);
         return new FieldAccessExpr(new VarExpr(id.data), field.data);
+      } else {
+        return new VarExpr(id.data);
       }
-      return new VarExpr(id.data);
     }
     // '(' expr ')' typecast ::= "(" type ")" exp
     else if (accept(Category.LPAR)) {
