@@ -256,25 +256,22 @@ public class Parser extends CompilerPass {
     else if (accept(Category.STRUCT)) {
       baseType = structtype();
 
-    } else {
-      error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
-      recovery();
-      return BaseType.UNKNOWN;
     }
     /*
      * ArrayType   ::= Type Int
      * if the token is a left square bracket ["["]
      * Type        ::= BaseType | PointerType | StructType | ArrayType
      */
-
-    /*
     else if (accept(Category.LSBR)) {
       Type elementType = parseType();
       int size = Integer.parseInt(expect(Category.INT_LITERAL).data);
       expect(Category.RSBR);
       return new ArrayType(elementType, size);
     }
-
+    /*
+     * if its LPAR ['('] then it's a type
+     * PoInterType ::= Type
+     */
     else if (accept(Category.LPAR)) {
       nextToken();
       baseType = parseType();
@@ -285,7 +282,6 @@ public class Parser extends CompilerPass {
       recovery();
       return BaseType.UNKNOWN;
     }
-    */
 
     /*
      * if the token is an asterisk ["*"]
@@ -294,14 +290,6 @@ public class Parser extends CompilerPass {
     while (accept(Category.ASTERISK)) {
       nextToken();
       baseType = new PointerType(baseType);
-    }
-
-    // Handle array types after type is established
-    while (accept(Category.LSBR)) {
-      nextToken();
-      int size = Integer.parseInt(expect(Category.INT_LITERAL).data);
-      expect(Category.RSBR);
-      baseType = new ArrayType(baseType, size);
     }
     return baseType;
   }
@@ -436,14 +424,13 @@ public class Parser extends CompilerPass {
 
     while (!accept(Category.RBRA) && !accept(Category.EOF)) {
       if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
-        elements.add(parseVarDecl()); // Store VarDecl where it appears
+        elements.add(parseVarDecl());
       } else {
-        elements.add(parseStmt()); // Store Stmt where it appears
+        elements.add(parseStmt());
       }
     }
 
-    expect(Category.RBRA); // Consume '}'
-
+    expect(Category.RBRA);
     return new Block(elements);
   }
 
@@ -528,11 +515,6 @@ public class Parser extends CompilerPass {
     // Parse condition
     Expr condition = parseExpr();
     // Expect ')'
-    if (condition instanceof BinOp binOp && binOp.left instanceof ValueAtExpr valueExpr) {
-      if (binOp.right instanceof VarExpr varExpr && varExpr.name.equals("NULL")) {
-        condition = new BinOp(valueExpr.expr, binOp.op, binOp.right);
-      }
-    }
     expect(Category.RPAR);
     // Parse 'if' body
     Stmt thenBranch = parseStmt();
@@ -781,22 +763,20 @@ public class Parser extends CompilerPass {
 
   // psofix operators: () (function call) and  [] array access and . (field access)
   private Expr parsePostfixExpr() {
-    // Parse the primary expression first
+    // we will parse the primary expression
     Expr expr = parsePrimaryExpr();
 
     // Handles nested field access and array access such as . and []
     while (accept(Category.LSBR, Category.DOT)) {
       if (accept(Category.DOT)) {
         nextToken();
+        // Parse the field identifier
         String field = expect(Category.IDENTIFIER).data;
-        if (expr instanceof ValueAtExpr valueExpr && valueExpr.expr instanceof ValueAtExpr) {
-          expr = new FieldAccessExpr(valueExpr.expr, field);
-        } else {
-          expr = new FieldAccessExpr(expr, field);
-        }
+        expr = new FieldAccessExpr(expr, field);
       }
       if (accept(Category.LSBR)) {
         nextToken();
+        // parse the index of the array
         Expr index = parseExpr();
         expect(Category.RSBR);
         expr = new ArrayAccessExpr(expr, index);
@@ -843,15 +823,25 @@ public class Parser extends CompilerPass {
     // IDENTIFIER
     else if (accept(Category.IDENTIFIER)) {
       Token id = expect(Category.IDENTIFIER);
+      // Check for function call, array access, or field access
+      // function call
       if (accept(Category.LPAR)) {
         return parseFuncCallExpr(id);
-      } else if (accept(Category.DOT)) {
+      }
+      // array access or field access
+      else if (accept(Category.LSBR)) {
+        nextToken();
+        Expr index = parseExpr();
+        expect(Category.RSBR);
+        return new ArrayAccessExpr(new VarExpr(id.data), index);
+      }
+      // field access
+      else if (accept(Category.DOT)) {
         nextToken();
         Token field = expect(Category.IDENTIFIER);
         return new FieldAccessExpr(new VarExpr(id.data), field.data);
-      } else {
-        return new VarExpr(id.data);
       }
+      return new VarExpr(id.data);
     }
     // '(' expr ')' typecast ::= "(" type ")" exp
     else if (accept(Category.LPAR)) {
