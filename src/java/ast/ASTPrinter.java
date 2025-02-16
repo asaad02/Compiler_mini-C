@@ -72,7 +72,7 @@ public class ASTPrinter {
 
           case StrLiteral s -> writer.print(s.value);
 
-          case ChrLiteral c -> writer.print(c.value);
+          case ChrLiteral c -> writer.print("'" + c.value + "'");
 
           case BinOp b -> {
             visit(b.left);
