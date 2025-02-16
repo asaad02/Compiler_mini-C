@@ -68,11 +68,13 @@ public class ASTPrinter {
             writer.print(v.name);
           }
 
+          // to complete ...
+
           case IntLiteral i -> writer.print(i.value);
 
           case StrLiteral s -> writer.print(s.value);
 
-          case ChrLiteral c -> writer.print("'" + c.value + "'");
+          case ChrLiteral c -> writer.print(c.value);
 
           case BinOp b -> {
             visit(b.left);
@@ -88,10 +90,11 @@ public class ASTPrinter {
 
           case Block blk -> {
             for (ASTNode child : blk.children()) {
+              newline();
               if (child != blk.children().get(0)) {
                 writer.print(",");
               }
-              newline();
+              // newline();
               visit(child);
             }
           }
@@ -109,7 +112,9 @@ public class ASTPrinter {
           case While ws -> {
             visit(ws.condition);
             writer.print(",");
+            // indentLevel++;
             newline();
+            // indent();
             visit(ws.body);
             newline();
           }
@@ -134,11 +139,9 @@ public class ASTPrinter {
             visit(std.structType);
             for (VarDecl vd : std.fields) {
               writer.print(",");
-              newline();
               visit(vd);
             }
           }
-
           case PointerType pt -> {
             visit(pt.baseType);
           }
@@ -149,12 +152,12 @@ public class ASTPrinter {
             visit(at.elementType);
             writer.print("," + at.size);
           }
+          // case BaseType bt -> writer.print(bt);
 
           case FunCallExpr fc -> {
             writer.print(fc.name);
             for (Expr arg : fc.args) {
               writer.print(",");
-              newline();
               visit(arg);
             }
           }
@@ -162,7 +165,6 @@ public class ASTPrinter {
           case TypecastExpr tc -> {
             visit(tc.type);
             writer.print(",");
-            newline();
             if (tc.expr == null) {
               writer.print("");
             } else {
@@ -192,7 +194,6 @@ public class ASTPrinter {
             visit(fa.structure);
             writer.print("," + fa.field);
           }
-
           default -> {
             String delimiter = "";
             for (ASTNode child : node.children()) {
