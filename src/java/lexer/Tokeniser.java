@@ -274,41 +274,42 @@ public class Tokeniser extends CompilerPass {
             // if it's scape character then it will be returned as it is
             // EscapedChar                   = '\a' | '\b' | '\n' | '\r' | '\t' | '\\' | '\'' | '\"'
             // | '\0'
-            String escapeString;
+            int escapeString;
             switch (escapedChar) {
               case 'a':
-                escapeString = "\\a";
+                escapeString = 7;
                 break;
               case 'b':
-                escapeString = "\\b";
+                escapeString = 8;
                 break;
               case 'n':
-                escapeString = "\\n";
+                escapeString = 10;
                 break;
               case 'r':
-                escapeString = "\\r";
+                escapeString = 13;
                 break;
               case 't':
-                escapeString = "\\t";
+                escapeString = 9;
                 break;
               case '\\':
-                escapeString = "\\";
+                escapeString = 92;
                 break;
               case '\'':
-                escapeString = "'";
+                escapeString = 39;
                 break;
               case '"':
-                escapeString = "\\\"";
+                escapeString = 34;
                 break;
               case '0':
-                escapeString = "\\0";
+                escapeString = 0;
                 break;
               default:
                 // If the escape sequence is invalid
                 error(escapedChar, line, column);
                 return new Token(Token.Category.INVALID, line, column);
             }
-            return new Token(Token.Category.CHAR_LITERAL, escapeString, line, column);
+            return new Token(
+                Token.Category.CHAR_LITERAL, Character.toString((char) escapeString), line, column);
           } else {
             error(escapedChar, line, column);
             return new Token(Token.Category.INVALID, line, column);
@@ -357,36 +358,38 @@ public class Tokeniser extends CompilerPass {
           // EscapedChar    = '\a' | '\b' | '\n' | '\r' | '\t' | '\\' | '\'' | '\"' | '\0'
           if (charValue == '\\') {
             char escapedChar = scanner.next();
+            int escapeAscii = 0;
             if (isEscapedChar(escapedChar)) {
               switch (escapedChar) {
-                case 'a':
-                  sb.append("\\a");
+                case 97: // 'a'
+                  escapeAscii = 7;
                   break;
-                case 'b':
-                  sb.append("\\b");
+                case 98: // 'b'
+                  escapeAscii = 8;
                   break;
-                case 'n':
-                  sb.append("\\n");
+                case 110: // 'n'
+                  escapeAscii = 10;
                   break;
-                case 'r':
-                  sb.append("\\r");
+                case 114: // 'r'
+                  escapeAscii = 13;
                   break;
-                case 't':
-                  sb.append("\\t");
+                case 116: // 't'
+                  escapeAscii = 9;
                   break;
-                case '\\':
-                  sb.append("\\");
+                case 92: // '\'
+                  escapeAscii = 92;
                   break;
-                case '\'':
-                  sb.append("'");
+                case 39: // '''
+                  escapeAscii = 39;
                   break;
-                case '"':
-                  sb.append("\"");
+                case 34: // '"'
+                  escapeAscii = 34;
                   break;
-                case '0':
-                  sb.append("\\0");
+                case 48: // '0'
+                  escapeAscii = 0;
                   break;
               }
+              sb.append((char) escapeAscii);
             } else {
               error(escapedChar, line, column);
               return new Token(Token.Category.INVALID, line, column);

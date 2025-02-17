@@ -368,11 +368,11 @@ public class Parser extends CompilerPass {
        */
       expect(Category.SC);
       return new FunDecl(type, id.data, params);
+    } else {
+      error(Category.LBRA, Category.SC);
+      recovery();
+      return null;
     }
-
-    error(Category.LBRA, Category.SC);
-    recovery();
-    return null;
   }
 
   /*
@@ -772,7 +772,7 @@ public class Parser extends CompilerPass {
         nextToken();
         // Parse the field identifier
         String field = expect(Category.IDENTIFIER).data;
-        // to test for sort link list 
+        // to test for sort link list
         if (expr instanceof VarExpr || expr instanceof ValueAtExpr) {
           expr = new FieldAccessExpr(new ValueAtExpr(expr), field);
         } else {

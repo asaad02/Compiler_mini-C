@@ -26,27 +26,11 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       }
 
       case FunDecl fd -> {
-        if (currentScope.lookupCurrent(fd.name) != null) {
-          error("Function '" + fd.name + "' is already declared.");
-          yield BaseType.UNKNOWN;
-        }
         currentScope.put(new FunSymbol(fd));
         yield fd.type;
       }
 
       case FunDef fd -> {
-        FunSymbol existingSymbol = currentScope.lookupFunction(fd.name);
-        if (existingSymbol == null) {
-          currentScope.put(new FunSymbol(fd));
-        } else {
-          if (existingSymbol.def != null) {
-            error("Function '" + fd.name + "' is already defined.");
-            yield BaseType.UNKNOWN;
-          }
-          validateFunctionSignature(fd, existingSymbol.decl);
-          existingSymbol.setDefinition(fd);
-        }
-
         Scope oldScope = currentScope;
         currentScope = new Scope(oldScope);
         Set<String> declaredParams = new HashSet<>();
