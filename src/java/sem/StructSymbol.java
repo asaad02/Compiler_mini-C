@@ -1,27 +1,26 @@
 package sem;
 
 import ast.*;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
 
-// StructSymbol stores struct declarations
 public class StructSymbol extends Symbol {
   public StructTypeDecl std;
-  private final Set<String> fieldNames;
+  private final Map<String, Type> fieldTypes;
 
   public StructSymbol(StructTypeDecl std) {
     super(std.structType.name);
     this.std = std;
-    this.fieldNames = new HashSet<>();
+    this.fieldTypes = new HashMap<>();
 
-    // store field names
+    // Store field names & types
     for (VarDecl field : std.fields) {
-      fieldNames.add(field.name);
+      fieldTypes.put(field.name, field.type);
     }
   }
 
-  // check if a field exists in the struct
-  public boolean hasField(String name) {
-    return fieldNames.contains(name);
+  // Get type of a field
+  public Type getFieldType(String name) {
+    return fieldTypes.get(name);
   }
 }

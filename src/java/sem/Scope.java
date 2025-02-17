@@ -125,4 +125,10 @@ public class Scope {
     // check if the name is declared before the reference
     return orderedDeclarations.indexOf(name) < orderedDeclarations.indexOf(reference);
   }
+
+  /** lookup struct declarations in the current and parent scopes */
+  public StructSymbol lookupStruct(String name) {
+    Symbol sym = lookup(name);
+    return (sym instanceof StructSymbol) ? (StructSymbol) sym : null;
+  }
 }
