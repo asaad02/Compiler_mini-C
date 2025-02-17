@@ -589,12 +589,12 @@ public class Parser extends CompilerPass {
     // Parse the left-hand side of the operator
     Expr lhs = parseLogicalOrExpr();
     // Assignment ::= Expr "=" Expr
-    if (accept(Category.ASSIGN)) {
+    while (accept(Category.ASSIGN)) {
       nextToken();
       // Recursive right hand side of the operator
       Expr rhs = parseExpr();
       // Return the assignment AST node
-      return new Assign(lhs, rhs);
+      lhs = new Assign(lhs, rhs);
     }
     // Return the left-hand side of the operator
     return lhs;
@@ -772,7 +772,12 @@ public class Parser extends CompilerPass {
         nextToken();
         // Parse the field identifier
         String field = expect(Category.IDENTIFIER).data;
-        expr = new FieldAccessExpr(expr, field);
+        // to test for sort link list 
+        if (expr instanceof VarExpr || expr instanceof ValueAtExpr) {
+          expr = new FieldAccessExpr(new ValueAtExpr(expr), field);
+        } else {
+          expr = new FieldAccessExpr(expr, field);
+        }
       }
       if (accept(Category.LSBR)) {
         nextToken();
