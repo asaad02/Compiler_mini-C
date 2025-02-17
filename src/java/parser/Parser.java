@@ -594,7 +594,7 @@ public class Parser extends CompilerPass {
       // Recursive right hand side of the operator
       Expr rhs = parseExpr();
       // Return the assignment AST node
-      lhs = new Assign(lhs, rhs);
+      return new Assign(lhs, rhs);
     }
     // Return the left-hand side of the operator
     return lhs;
