@@ -292,10 +292,10 @@ public class Tokeniser extends CompilerPass {
                 escapeString = "\\t";
                 break;
               case '\\':
-                escapeString = "\\\\";
+                escapeString = "\\";
                 break;
               case '\'':
-                escapeString = "\\\'";
+                escapeString = "'";
                 break;
               case '"':
                 escapeString = "\\\"";
@@ -363,7 +363,7 @@ public class Tokeniser extends CompilerPass {
                   sb.append("\\a");
                   break;
                 case 'b':
-                  sb.append("\b");
+                  sb.append("\\b");
                   break;
                 case 'n':
                   sb.append("\\n");
@@ -375,13 +375,13 @@ public class Tokeniser extends CompilerPass {
                   sb.append("\\t");
                   break;
                 case '\\':
-                  sb.append("\\\\");
+                  sb.append("\\");
                   break;
                 case '\'':
-                  sb.append("\\'");
+                  sb.append("'");
                   break;
                 case '"':
-                  sb.append("\\\"");
+                  sb.append("\"");
                   break;
                 case '0':
                   sb.append("\\0");
