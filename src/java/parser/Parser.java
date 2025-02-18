@@ -842,6 +842,14 @@ public class Parser extends CompilerPass {
       // Token field = expect(Category.IDENTIFIER);
       // return new FieldAccessExpr(new VarExpr(id.data), field.data);
       // }
+      // here the error for sort list
+      else if (accept(Category.DOT)) {
+        nextToken();
+        // Parse the field identifier
+        String field = expect(Category.IDENTIFIER).data;
+        // to test for sort link list
+        return new FieldAccessExpr(new VarExpr(id.data), field);
+      }
       return new VarExpr(id.data);
     }
     // '(' expr ')' typecast ::= "(" type ")" exp

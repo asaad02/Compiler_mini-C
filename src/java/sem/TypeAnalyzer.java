@@ -9,9 +9,24 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
   private Type currentFunctionReturnType;
   private int loopDepth = 0;
   private Set<String> declaredStructs = new HashSet<>();
+  private static final List<FunDecl> BUILT_IN_FUNCTIONS =
+      List.of(
+          new FunDecl(
+              BaseType.VOID, "print_s", List.of(new VarDecl(new PointerType(BaseType.CHAR), "s"))),
+          new FunDecl(BaseType.VOID, "print_i", List.of(new VarDecl(BaseType.INT, "i"))),
+          new FunDecl(BaseType.VOID, "print_c", List.of(new VarDecl(BaseType.CHAR, "c"))),
+          new FunDecl(BaseType.CHAR, "read_c", List.of()),
+          new FunDecl(BaseType.INT, "read_i", List.of()),
+          new FunDecl(
+              new PointerType(BaseType.VOID),
+              "mcmalloc",
+              List.of(new VarDecl(BaseType.INT, "size"))));
 
   public TypeAnalyzer() {
     this.currentScope = new Scope();
+    for (FunDecl f : BUILT_IN_FUNCTIONS) {
+      currentScope.put(new FunSymbol(f));
+    }
   }
 
   public Type visit(ASTNode node) {
@@ -26,6 +41,11 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       }
 
       case FunDecl fd -> {
+        // return the built-in function type if it exists
+        FunSymbol builtInFunction = currentScope.lookupFunction(fd.name);
+        if (builtInFunction != null) {
+          yield builtInFunction.decl.type;
+        }
         currentScope.put(new FunSymbol(fd));
         yield fd.type;
       }
@@ -121,10 +141,12 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Implicit conversion from 'char' to 'int' is not allowed.");
           yield BaseType.UNKNOWN;
         }
+
         if (!left.equals(right)) {
           error("Assignment type mismatch: Expected " + left + " but got " + right);
           yield BaseType.UNKNOWN;
         }
+
         yield left;
       }
 
@@ -394,12 +416,5 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
     return std.fields.stream()
         .anyMatch(
             field -> field.type instanceof StructType st && st.name.equals(std.structType.name));
-  }
-
-  private void validateFunctionSignature(FunDef fd, FunDecl declaredFunction) {
-    if (declaredFunction == null) return;
-    if (!fd.type.equals(declaredFunction.type)) {
-      error("Function '" + fd.name + "' return type mismatch.");
-    }
   }
 }
