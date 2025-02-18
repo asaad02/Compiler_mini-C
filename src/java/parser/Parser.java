@@ -773,11 +773,7 @@ public class Parser extends CompilerPass {
         // Parse the field identifier
         String field = expect(Category.IDENTIFIER).data;
         // to test for sort link list
-        if (expr instanceof VarExpr || expr instanceof ValueAtExpr) {
-          expr = new FieldAccessExpr(new ValueAtExpr(expr), field);
-        } else {
-          expr = new FieldAccessExpr(expr, field);
-        }
+        return new FieldAccessExpr(expr, field);
       }
       if (accept(Category.LSBR)) {
         nextToken();
@@ -841,11 +837,11 @@ public class Parser extends CompilerPass {
         return new ArrayAccessExpr(new VarExpr(id.data), index);
       }
       // field access
-      else if (accept(Category.DOT)) {
-        nextToken();
-        Token field = expect(Category.IDENTIFIER);
-        return new FieldAccessExpr(new VarExpr(id.data), field.data);
-      }
+      // else if (accept(Category.DOT)) {
+      // nextToken();
+      // Token field = expect(Category.IDENTIFIER);
+      // return new FieldAccessExpr(new VarExpr(id.data), field.data);
+      // }
       return new VarExpr(id.data);
     }
     // '(' expr ')' typecast ::= "(" type ")" exp
