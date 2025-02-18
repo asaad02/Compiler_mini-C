@@ -82,7 +82,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
       case FunDef fd -> {
         // System.out.println("Defining function: " + fd.name);
 
-        // ;ook for a prior function declaration
+        // look for a prior function declaration
         FunSymbol existingSymbol = currentScope.lookupFunction(fd.name);
 
         if (existingSymbol == null) {
@@ -214,7 +214,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
       // Variable declaration
       case VarDecl vd -> {
-        // dont use instanceof here
+        /*
         switch (vd.type) {
           case StructType st -> {
             if (!currentScope.isDeclaredBeforeUse(st.name)) {
@@ -224,6 +224,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
           }
           default -> {}
         }
+          */
 
         // if the variable is already declared in the current scope
         if (currentScope.lookupCurrent(vd.name) != null) {

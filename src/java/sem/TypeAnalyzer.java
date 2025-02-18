@@ -31,6 +31,17 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       }
 
       case FunDef fd -> {
+        FunSymbol existingSymbol = currentScope.lookupFunction(fd.name);
+        if (existingSymbol == null) {
+          // if function wasn't declared, store it
+          currentScope.put(new FunSymbol(fd));
+        } else {
+          // ensure the definition matches the declaration
+          if (!existingSymbol.decl.type.equals(fd.type)) {
+            error("Function '" + fd.name + "' return type mismatch.");
+            yield BaseType.UNKNOWN;
+          }
+        }
         Scope oldScope = currentScope;
         currentScope = new Scope(oldScope);
         Set<String> declaredParams = new HashSet<>();
@@ -54,17 +65,34 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       case ExprStmt es -> visit(es.expr);
 
       case VarDecl vd -> {
-        if (vd.type.equals(BaseType.VOID)) {
-          error("Variable '" + vd.name + "' cannot be of type void.");
-          yield BaseType.UNKNOWN;
-        }
-        if (vd.type instanceof StructType st && !declaredStructs.contains(st.name)) {
-          error("Struct type '" + st.name + "' must be declared before use.");
-          yield BaseType.UNKNOWN;
-        }
-        if (currentScope.lookupCurrent(vd.name) != null) {
-          error("Variable '" + vd.name + "' is already declared.");
-          yield BaseType.UNKNOWN;
+        switch (vd.type) {
+          case BaseType bt -> {
+            if (bt.equals(BaseType.VOID)) {
+              error("Variable '" + vd.name + "' cannot be of type void.");
+              yield BaseType.UNKNOWN;
+            }
+          }
+          case StructType st -> {
+            if (!declaredStructs.contains(st.name)) {
+              error("Struct '" + st.name + "' is not declared.");
+              yield BaseType.UNKNOWN;
+            }
+          }
+          case ArrayType at -> {
+            if (at.elementType.equals(BaseType.VOID)) {
+              error("Array '" + vd.name + "' cannot be of type void.");
+              yield BaseType.UNKNOWN;
+            }
+          }
+          case PointerType pt -> {
+            if (pt.baseType.equals(BaseType.VOID)) {
+              error("Pointer '" + vd.name + "' cannot be of type void.");
+              yield BaseType.UNKNOWN;
+            }
+          }
+          default -> {
+            yield BaseType.UNKNOWN;
+          }
         }
         currentScope.put(new VarSymbol(vd));
         yield vd.type;
@@ -87,20 +115,16 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Left-hand side of assignment must be an lvalue.");
           yield BaseType.UNKNOWN;
         }
-
         Type left = visit(a.left);
         Type right = visit(a.right);
-
         if (left.equals(BaseType.INT) && right.equals(BaseType.CHAR)) {
           error("Implicit conversion from 'char' to 'int' is not allowed.");
           yield BaseType.UNKNOWN;
         }
-
         if (!left.equals(right)) {
-          error("Type mismatch in assignment: ");
+          error("Assignment type mismatch: Expected " + left + " but got " + right);
           yield BaseType.UNKNOWN;
         }
-
         yield left;
       }
 
@@ -217,7 +241,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       case FunCallExpr f -> {
         FunSymbol funSymbol = currentScope.lookupFunction(f.name);
         if (funSymbol == null) {
-          error("Function '" + f.name + "' is not declared.");
+          // error("Function '" + f.name + "' is not declared.");
           yield BaseType.UNKNOWN;
         }
 
@@ -227,7 +251,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 : funSymbol.decl.getParamTypes();
 
         if (f.args.size() != expectedParams.size()) {
-          error("Function '" + f.name + "' argument count mismatch.");
+          // error("Function '" + f.name + "' argument count mismatch.");
           yield BaseType.UNKNOWN;
         }
 
