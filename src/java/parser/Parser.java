@@ -258,17 +258,6 @@ public class Parser extends CompilerPass {
 
     }
     /*
-     * ArrayType   ::= Type Int
-     * if the token is a left square bracket ["["]
-     * Type        ::= BaseType | PointerType | StructType | ArrayType
-     */
-    else if (accept(Category.LSBR)) {
-      Type elementType = parseType();
-      int size = Integer.parseInt(expect(Category.INT_LITERAL).data);
-      expect(Category.RSBR);
-      return new ArrayType(elementType, size);
-    }
-    /*
      * if its LPAR ['('] then it's a type
      * PoInterType ::= Type
      */
@@ -836,12 +825,7 @@ public class Parser extends CompilerPass {
         expect(Category.RSBR);
         return new ArrayAccessExpr(new VarExpr(id.data), index);
       }
-      // field access
-      // else if (accept(Category.DOT)) {
-      // nextToken();
-      // Token field = expect(Category.IDENTIFIER);
-      // return new FieldAccessExpr(new VarExpr(id.data), field.data);
-      // }
+
       // here the error for sort list
       else if (accept(Category.DOT)) {
         nextToken();
