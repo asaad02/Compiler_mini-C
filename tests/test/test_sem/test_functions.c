@@ -14,6 +14,6 @@ void nestedExample(int x) {
 
         }
     } else {
-        return;
+        //return;
     }
 }

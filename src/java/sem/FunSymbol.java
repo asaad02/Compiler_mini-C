@@ -38,10 +38,10 @@ public class FunSymbol extends Symbol {
   }
 
   public List<Type> getParamTypes() {
-    return (def != null)
-        ? def.params.stream().map(param -> param.type).collect(Collectors.toList())
-        : (decl != null)
-            ? decl.params.stream().map(param -> param.type).collect(Collectors.toList())
-            : List.of();
+    if (decl != null) {
+      return decl.params.stream().map(p -> p.type).collect(Collectors.toList());
+    } else {
+      return def.params.stream().map(p -> p.type).collect(Collectors.toList());
+    }
   }
 }
