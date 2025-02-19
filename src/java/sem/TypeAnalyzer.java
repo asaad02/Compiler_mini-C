@@ -46,6 +46,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         if (builtInFunction != null) {
           yield builtInFunction.decl.type;
         }
+
         currentScope.put(new FunSymbol(fd));
         yield fd.type;
       }
@@ -56,10 +57,11 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           // if function wasn't declared, store it
           currentScope.put(new FunSymbol(fd));
         } else {
-          // ensure the definition matches the declaration
-          if (!existingSymbol.decl.type.equals(fd.type)) {
-            error("Function '" + fd.name + "' return type mismatch.");
-            yield BaseType.UNKNOWN;
+          if (existingSymbol.def != null) {
+            if (!existingSymbol.decl.type.equals(fd.type)) {
+              error("Function '" + fd.name + "' return type mismatch.");
+              yield BaseType.UNKNOWN;
+            }
           }
         }
         Scope oldScope = currentScope;
@@ -128,16 +130,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             error("Struct field '" + field.name + "' cannot be void.");
             yield BaseType.UNKNOWN;
           }
-          if (field.type instanceof StructType) {
-            StructType structFieldType = (StructType) field.type;
-            if (structFieldType.name.equals(std.name) && !(field.type instanceof PointerType)) {
-              error(
-                  "Struct '"
-                      + std.name
-                      + "' cannot contain itself as a field unless it's a pointer.");
-              yield BaseType.UNKNOWN;
-            }
-          }
         }
         if (isRecursiveWithoutPointer(std)) {
           error("Struct '" + std.structType.name + "' is recursive without pointer.");
@@ -204,26 +196,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               }
             }
             yield leftArray;
-          }
-          case PointerType ptLeft -> {
-            // check the right side of the pointer to which type is point to
-            switch (right) {
-              case PointerType ptRight -> {
-                if (!ptLeft.baseType.equals(ptRight.baseType)) {
-                  error(
-                      "Pointer assignment mismatch: '"
-                          + ptLeft.baseType
-                          + "' != '"
-                          + ptRight.baseType
-                          + "'");
-                  yield BaseType.UNKNOWN;
-                }
-              }
-              default -> {
-                error("Pointer assignment mismatch: '" + ptLeft + "' != '" + right + "'");
-                yield BaseType.UNKNOWN;
-              }
-            }
           }
 
           default -> {
@@ -308,7 +280,8 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           yield BaseType.VOID;
         } else {
           Type returnType = visit(r.expr);
-          if (!currentFunctionReturnType.equals(returnType)) {
+          if (!currentFunctionReturnType.equals(returnType)
+              && !(currentFunctionReturnType instanceof PointerType)) {
             error(
                 "Return statement type mismatch: expected "
                     + currentFunctionReturnType
@@ -352,6 +325,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 
       case FunCallExpr f -> {
         FunSymbol funSymbol = currentScope.lookupFunction(f.name);
+        // if function is built-in, return the type
+        if (funSymbol != null && funSymbol.def == null) {
+          yield funSymbol.decl.type;
+        }
         if (funSymbol == null) {
           error("Function '" + f.name + "' is not declared.");
           yield BaseType.UNKNOWN;
@@ -371,7 +348,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           Type expected = expectedParams.get(i);
           Type actual = visit(f.args.get(i));
 
-          if (!expected.equals(actual)) {
+          if (!expected.equals(actual) && !(expected instanceof PointerType)) {
             error(
                 "Function '"
                     + f.name
