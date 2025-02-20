@@ -99,7 +99,6 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
           // ensure function declaration matches definition
           if (existingSymbol.decl != null) {
-            /*
             if (!fd.type.equals(existingSymbol.decl.type)) {
               error(
                   "Function "
@@ -107,7 +106,6 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
                       + " definition does not match declaration: Return types do not match.");
               return;
             }
-              */
             if (fd.params.size() != existingSymbol.decl.params.size()) {
               error(
                   "Function "

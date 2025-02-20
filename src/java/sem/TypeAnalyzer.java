@@ -371,18 +371,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 error("Struct '" + st.name + "' is not declared.");
                 yield BaseType.UNKNOWN;
               }
-
-              if (!st.name.equals(((StructType) actual).name)) {
-                error(
-                    "Function argument mismatch: '"
-                        + st.name
-                        + "' != '"
-                        + ((StructType) actual).name
-                        + "'");
-                yield BaseType.UNKNOWN;
-              }
             }
-
             case ArrayType leftArray -> {
               switch (actual) {
                 case ArrayType rightArray -> {
