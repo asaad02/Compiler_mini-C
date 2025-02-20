@@ -104,7 +104,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         Type left = visit(a.left);
         Type right = visit(a.right);
 
-        //  Check if assigning string literal to an array element and the size is equal
+        //  assigning string literal to an array element and the size is equal
         if (a.left instanceof ArrayAccessExpr arrayAccessExpr
             && arrayAccessExpr.array instanceof VarExpr varExpr
             && varExpr.vd.type instanceof ArrayType arrayType
@@ -115,8 +115,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             error("Array element type mismatch.");
             yield BaseType.UNKNOWN;
           }
-          System.out.println(
-              "Array size: " + arrayType.size + " String length: " + strLiteral.value.length());
           // if both array not the same size
           if (arrayType.size != strLiteral.value.length() + 1) {
             error("Array size mismatch.");
