@@ -131,4 +131,9 @@ public class Scope {
     Symbol sym = lookup(name);
     return (sym instanceof StructSymbol) ? (StructSymbol) sym : null;
   }
+
+  public ArraySymbol lookupArray(String name) {
+    Symbol sym = lookup(name);
+    return sym instanceof ArraySymbol as ? as : null;
+  }
 }

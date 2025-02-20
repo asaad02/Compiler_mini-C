@@ -12,4 +12,8 @@ public class VarSymbol extends Symbol {
     // Store the variable declaration
     this.vd = vd;
   }
+
+  public Type getType() {
+    return vd.type;
+  }
 }

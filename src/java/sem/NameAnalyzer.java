@@ -99,6 +99,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
           // ensure function declaration matches definition
           if (existingSymbol.decl != null) {
+            /*
             if (!fd.type.equals(existingSymbol.decl.type)) {
               error(
                   "Function "
@@ -106,6 +107,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
                       + " definition does not match declaration: Return types do not match.");
               return;
             }
+              */
             if (fd.params.size() != existingSymbol.decl.params.size()) {
               error(
                   "Function "
@@ -214,17 +216,6 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
       // Variable declaration
       case VarDecl vd -> {
-        /*
-        switch (vd.type) {
-          case StructType st -> {
-            if (!currentScope.isDeclaredBeforeUse(st.name)) {
-              error("Struct " + st.name + " must be declared before use.");
-              return;
-            }
-          }
-          default -> {}
-        }
-          */
 
         // if the variable is already declared in the current scope
         if (currentScope.lookupCurrent(vd.name) != null) {
@@ -249,9 +240,13 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         // System.out.println("checking usage of variable: " + v.name);
         // check if the variable is declared in the current scope
         VarSymbol vs = currentScope.lookupVariable(v.name);
-        // if the variable is not declared in the current scope
+        if (v.name.equals("NULL")) {
+          v.vd = new VarDecl(new PointerType(BaseType.VOID), "NULL");
+          return;
+        }
         if (vs == null) {
-          error("Variable " + v.name + " is not declared.");
+          error("Variable " + v.name + " must be declared before use.");
+          return;
         }
         // else store the variable declaration
         else {

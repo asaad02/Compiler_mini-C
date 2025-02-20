@@ -53,17 +53,14 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 
       case FunDef fd -> {
         FunSymbol existingSymbol = currentScope.lookupFunction(fd.name);
+
         if (existingSymbol == null) {
-          // if function wasn't declared, store it
           currentScope.put(new FunSymbol(fd));
-        } else {
-          if (existingSymbol.def != null) {
-            if (!existingSymbol.decl.type.equals(fd.type)) {
-              error("Function '" + fd.name + "' return type mismatch.");
-              yield BaseType.UNKNOWN;
-            }
-          }
+        } else if (existingSymbol.def != null && !existingSymbol.decl.type.equals(fd.type)) {
+          error("Function '" + fd.name + "' return type mismatch.");
+          yield BaseType.UNKNOWN;
         }
+
         Scope oldScope = currentScope;
         currentScope = new Scope(oldScope);
         Set<String> declaredParams = new HashSet<>();
@@ -73,51 +70,16 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             error("Duplicate parameter '" + param.name + "'");
             yield BaseType.UNKNOWN;
           }
-          currentScope.put(new VarSymbol(param));
+
+          Type paramType = param.type;
+          currentScope.put(new VarSymbol(new VarDecl(paramType, param.name)));
         }
 
         currentFunctionReturnType = fd.type;
         visit(fd.block);
         currentFunctionReturnType = null;
-        // restore outer scope after function body processing
         currentScope = oldScope;
         yield fd.type;
-      }
-      // expression statements
-      case ExprStmt es -> visit(es.expr);
-
-      case VarDecl vd -> {
-        switch (vd.type) {
-          case BaseType bt -> {
-            if (bt.equals(BaseType.VOID)) {
-              error("Variable '" + vd.name + "' cannot be of type void.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          case StructType st -> {
-            if (!declaredStructs.contains(st.name)) {
-              error("Struct '" + st.name + "' is not declared.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          case ArrayType at -> {
-            if (at.elementType.equals(BaseType.VOID)) {
-              error("Array '" + vd.name + "' cannot be of type void.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          case PointerType pt -> {
-            if (pt.baseType.equals(BaseType.VOID)) {
-              error("Pointer '" + vd.name + "' cannot be of type void.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          default -> {
-            yield BaseType.UNKNOWN;
-          }
-        }
-        currentScope.put(new VarSymbol(vd));
-        yield vd.type;
       }
 
       case StructTypeDecl std -> {
@@ -205,7 +167,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 
         yield left;
       }
-
       case Block b -> {
 
         // save the old scope
@@ -293,13 +254,53 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           yield returnType;
         }
       }
+      // expression statements
+      case ExprStmt es -> visit(es.expr);
+
+      case VarDecl vd -> {
+        switch (vd.type) {
+          case BaseType bt -> {
+            if (bt.equals(BaseType.VOID)) {
+              error("Variable '" + vd.name + "' cannot be of type void.");
+              yield BaseType.UNKNOWN;
+            }
+          }
+          case ArrayType at -> {
+            if (at.elementType.equals(BaseType.VOID)) {
+              error("Array '" + vd.name + "' cannot have void elements.");
+              yield BaseType.UNKNOWN;
+            }
+          }
+          case StructType st -> {
+            if (!declaredStructs.contains(st.name)) {
+              error("Struct '" + st.name + "' is not declared.");
+              yield BaseType.UNKNOWN;
+            }
+          }
+          case PointerType pt -> {
+            if (pt.baseType.equals(BaseType.VOID)) {
+              error("Pointer '" + vd.name + "' cannot be of type void.");
+              yield BaseType.UNKNOWN;
+            }
+          }
+          default -> {
+            yield BaseType.UNKNOWN;
+          }
+        }
+        currentScope.put(new VarSymbol(vd));
+        yield vd.type;
+      }
+
       case VarExpr v -> {
         VarSymbol varSymbol = currentScope.lookupVariable(v.name);
+        if (v.name.equals("NULL")) {
+          v.vd = new VarDecl(new PointerType(BaseType.VOID), "NULL");
+          yield new PointerType(BaseType.VOID);
+        }
         if (varSymbol == null) {
           error("Variable '" + v.name + "' is not declared.");
           yield BaseType.UNKNOWN;
         }
-
         yield varSymbol.vd.type;
       }
 
@@ -333,73 +334,114 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Function '" + f.name + "' is not declared.");
           yield BaseType.UNKNOWN;
         }
-        List<Type> expectedParams;
-        if (funSymbol.def != null) {
-          expectedParams = funSymbol.def.getParamTypes();
-        } else {
-          expectedParams = funSymbol.decl.getParamTypes();
-        }
+        List<Type> expectedParams =
+            funSymbol.def != null ? funSymbol.def.getParamTypes() : funSymbol.decl.getParamTypes();
+
         if (f.args.size() != expectedParams.size()) {
           error("Function '" + f.name + "' argument count mismatch.");
           yield BaseType.UNKNOWN;
         }
-
         for (int i = 0; i < f.args.size(); i++) {
           Type expected = expectedParams.get(i);
           Type actual = visit(f.args.get(i));
-
-          if (!expected.equals(actual) && !(expected instanceof PointerType)) {
-            error(
-                "Function '"
-                    + f.name
-                    + "' argument "
-                    + (i + 1)
-                    + " type mismatch: expected "
-                    + expected
-                    + " but got "
-                    + actual);
-            yield BaseType.UNKNOWN;
-          }
-          // ensure array sizes match
+          // print type of the expected and actual arguments
+          System.out.println("Expected: " + expected + " Actual: " + actual);
           switch (expected) {
-            case ArrayType expectedArray -> {
-              if (actual instanceof ArrayType actualArray) {
-                if (expectedArray.size != actualArray.size) {
-                  error(
-                      "Function '"
-                          + f.name
-                          + "' argument "
-                          + (i + 1)
-                          + " array size mismatch: expected size "
-                          + expectedArray.size
-                          + " but got size "
-                          + actualArray.size);
-                  yield BaseType.UNKNOWN;
-                }
-              } else {
-                error("Expected an array argument but got " + actual);
+            case BaseType bt -> {
+              System.out.println(bt);
+              if (bt.equals(BaseType.VOID)) {
+                error("Function argument cannot be of type void.");
+                yield BaseType.UNKNOWN;
+              }
+              if (expected.equals(BaseType.INT) && actual.equals(BaseType.CHAR)) {
+                error("Implicit conversion from 'char' to 'int' is not allowed.");
+                yield BaseType.UNKNOWN;
+              }
+
+              if (!expected.equals(actual)) {
+                error(
+                    "Function '"
+                        + f.name
+                        + "' argument "
+                        + (i + 1)
+                        + " type mismatch: expected "
+                        + expected
+                        + " but got "
+                        + actual);
                 yield BaseType.UNKNOWN;
               }
             }
-            default -> {}
+            case StructType st -> {
+              if (!declaredStructs.contains(st.name)) {
+                error("Struct '" + st.name + "' is not declared.");
+                yield BaseType.UNKNOWN;
+              }
+
+              if (!st.name.equals(((StructType) actual).name)) {
+                error(
+                    "Function argument mismatch: '"
+                        + st.name
+                        + "' != '"
+                        + ((StructType) actual).name
+                        + "'");
+                yield BaseType.UNKNOWN;
+              }
+            }
+
+            case ArrayType leftArray -> {
+              switch (actual) {
+                case ArrayType rightArray -> {
+                  if (!leftArray.elementType.equals(rightArray.elementType)) {
+                    error(
+                        "Array element type mismatch: '"
+                            + leftArray.elementType
+                            + "' != '"
+                            + rightArray.elementType
+                            + "'");
+                    yield BaseType.UNKNOWN;
+                  }
+                  if (leftArray.size != rightArray.size) {
+                    error(
+                        "Array size mismatch: '"
+                            + leftArray.size
+                            + "' != '"
+                            + rightArray.size
+                            + "'");
+                    yield BaseType.UNKNOWN;
+                  }
+                }
+                default -> {
+                  error("Array argument mismatch: '" + leftArray + "' != '" + actual + "'");
+                  yield BaseType.UNKNOWN;
+                }
+              }
+            }
+
+            default -> {
+              yield BaseType.UNKNOWN;
+            }
           }
         }
-
         yield funSymbol.def != null ? funSymbol.def.type : funSymbol.decl.type;
       }
 
       case ArrayAccessExpr a -> {
         Type array = visit(a.array);
-        if (!(array instanceof ArrayType)) {
-          error("Array access on non-array type.");
-          yield BaseType.UNKNOWN;
-        }
         Type index = visit(a.index);
+
         if (!index.equals(BaseType.INT)) {
           error("Array index must be of type int.");
           yield BaseType.UNKNOWN;
         }
-        yield ((ArrayType) array).elementType;
+
+        yield switch (array) {
+          case ArrayType at -> at.elementType;
+          case PointerType pt -> pt.baseType;
+          default -> {
+            error("Array access on non-array type.");
+            yield BaseType.UNKNOWN;
+          }
+        };
       }
 
       case FieldAccessExpr fa -> {
