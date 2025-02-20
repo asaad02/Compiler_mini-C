@@ -56,9 +56,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 
         if (existingSymbol == null) {
           currentScope.put(new FunSymbol(fd));
-        } else if (existingSymbol.def != null && !existingSymbol.decl.type.equals(fd.type)) {
-          error("Function '" + fd.name + "' return type mismatch.");
-          yield BaseType.UNKNOWN;
         }
 
         Scope oldScope = currentScope;
@@ -106,6 +103,28 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
         Type left = visit(a.left);
         Type right = visit(a.right);
+
+        //  Check if assigning string literal to an array element and the size is equal
+        if (a.left instanceof ArrayAccessExpr arrayAccessExpr
+            && arrayAccessExpr.array instanceof VarExpr varExpr
+            && varExpr.vd.type instanceof ArrayType arrayType
+            && a.right instanceof StrLiteral strLiteral
+            && arrayType.size < strLiteral.value.length() + 1) {
+
+          if (!arrayType.elementType.equals(BaseType.CHAR)) {
+            error("Array element type mismatch.");
+            yield BaseType.UNKNOWN;
+          }
+          System.out.println(
+              "Array size: " + arrayType.size + " String length: " + strLiteral.value.length());
+          // if both array not the same size
+          if (arrayType.size != strLiteral.value.length() + 1) {
+            error("Array size mismatch.");
+            yield BaseType.UNKNOWN;
+          }
+          yield BaseType.NONE;
+        }
+
         switch (left) {
           case BaseType bt -> {
             if (bt.equals(BaseType.VOID)) {
@@ -117,56 +136,33 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               yield BaseType.UNKNOWN;
             }
           }
-          case StructType st -> {
-            if (!declaredStructs.contains(st.name)) {
-              error("Struct '" + st.name + "' is not declared.");
-              yield BaseType.UNKNOWN;
-            }
-
-            if (!st.name.equals(((StructType) right).name)) {
-              error(
-                  "Struct assignment mismatch: '"
-                      + st.name
-                      + "' != '"
-                      + ((StructType) right).name
-                      + "'");
-              yield BaseType.UNKNOWN;
-            }
-          }
 
           case ArrayType leftArray -> {
             switch (right) {
               case ArrayType rightArray -> {
                 if (!leftArray.elementType.equals(rightArray.elementType)) {
-                  error(
-                      "Array element type mismatch: '"
-                          + leftArray.elementType
-                          + "' != '"
-                          + rightArray.elementType
-                          + "'");
+                  error("Array element type mismatch.");
                   yield BaseType.UNKNOWN;
                 }
                 if (leftArray.size != rightArray.size) {
-                  error(
-                      "Array size mismatch: '" + leftArray.size + "' != '" + rightArray.size + "'");
+                  error("Array size mismatch.");
                   yield BaseType.UNKNOWN;
                 }
               }
               default -> {
-                error("Array assignment mismatch: '" + leftArray + "' != '" + right + "'");
+                error("Array assignment mismatch.");
                 yield BaseType.UNKNOWN;
               }
             }
             yield leftArray;
           }
-
           default -> {
             yield BaseType.UNKNOWN;
           }
         }
-
         yield left;
       }
+
       case Block b -> {
 
         // save the old scope
@@ -345,7 +341,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           Type expected = expectedParams.get(i);
           Type actual = visit(f.args.get(i));
           // print type of the expected and actual arguments
-          System.out.println("Expected: " + expected + " Actual: " + actual);
           switch (expected) {
             case BaseType bt -> {
               System.out.println(bt);
