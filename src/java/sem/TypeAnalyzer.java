@@ -181,6 +181,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       case VarExpr v -> {
         // lookup the variable in the current scope
         VarSymbol varSymbol = currentScope.lookupVariable(v.name);
+        if (v.name.equals("NULL")) {
+          v.vd = new VarDecl(new PointerType(BaseType.VOID), "NULL");
+          yield new PointerType(BaseType.VOID);
+        }
         // if the variable is not declared, return an error
         if (varSymbol == null) {
           error("Variable '" + v.name + "' is not declared.");
@@ -247,22 +251,37 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           // if the left-hand side is an array
           case ArrayType leftArray -> {
             switch (right) {
-              // if the right-hand side is an array
               case ArrayType rightArray -> {
-                // if the array element types are not equal, return an error
-                if (!leftArray.elementType.equals(rightArray.elementType)) {
+                // ensure both are 2D arrays with matching inner types
+                if (leftArray.elementType instanceof ArrayType leftInner
+                    && rightArray.elementType instanceof ArrayType rightInner) {
+
+                  // Check if the inner arrays rows have the same type
+                  if (!leftInner.elementType.equals(rightInner.elementType)) {
+                    error("2D Array element type mismatch.");
+                    yield BaseType.UNKNOWN;
+                  }
+
+                  // check if the row sizes match
+                  if (leftInner.size != rightInner.size) {
+                    error("2D Array row size mismatch.");
+                    yield BaseType.UNKNOWN;
+                  }
+                } else if (!leftArray.elementType.equals(rightArray.elementType)) {
                   error("Array element type mismatch.");
                   yield BaseType.UNKNOWN;
                 }
-                // if the array sizes are not equal, return an error
+                // 3nsure the top-level array sizes match
                 if (leftArray.size != rightArray.size) {
                   error("Array size mismatch.");
                   yield BaseType.UNKNOWN;
                 }
               }
-              default -> {}
+              default -> {
+                error("Array assignment mismatch.");
+                yield BaseType.UNKNOWN;
+              }
             }
-            // return the left-hand side array type
             yield leftArray;
           }
           default -> {
@@ -329,6 +348,12 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               || right instanceof ArrayType) {
             error("Equality operators cannot be applied to structs or arrays.");
             yield BaseType.UNKNOWN;
+          }
+          if (left instanceof PointerType && right.equals(BaseType.INT)) {
+            yield BaseType.INT;
+          }
+          if (left.equals(BaseType.INT) && right instanceof PointerType) {
+            yield BaseType.INT;
           }
           if (!left.equals(right)) {
             error("Type mismatch in equality operation.");
@@ -419,6 +444,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Function '" + f.name + "' argument count mismatch.");
           yield BaseType.UNKNOWN;
         }
+
         // check the type of each argument
         for (int i = 0; i < f.args.size(); i++) {
           Type expected = expectedParams.get(i);
@@ -442,32 +468,61 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 yield BaseType.UNKNOWN;
               }
             }
-            case ArrayType leftArray -> {
-              switch (actual) {
-                case ArrayType rightArray -> {
-                  if (!leftArray.elementType.equals(rightArray.elementType)) {
-                    error(
-                        "Array element type mismatch: '"
-                            + leftArray.elementType
-                            + "' != '"
-                            + rightArray.elementType
-                            + "'");
+            case ArrayType expectedArray -> {
+              if (actual instanceof ArrayType actualArray) {
+                // Handle 2D array case
+                if (expectedArray.elementType instanceof ArrayType expectedInner
+                    && actualArray.elementType instanceof ArrayType actualInner) {
+
+                  // Check inner array types
+                  if (!expectedInner.elementType.equals(actualInner.elementType)) {
+                    error("Function argument 2D array type mismatch.");
                     yield BaseType.UNKNOWN;
                   }
-                  if (leftArray.size < rightArray.size) {
-                    error(
-                        "Array size mismatch: '"
-                            + leftArray.size
-                            + "' != '"
-                            + rightArray.size
-                            + "'");
+                  // Check inner array sizes
+                  if (expectedInner.size != actualInner.size) {
+                    error("Function argument 2D array row size mismatch.");
                     yield BaseType.UNKNOWN;
                   }
-                }
-                default -> {
-                  error("Array argument mismatch: '" + leftArray + "' != '" + actual + "'");
+                } else if (!expectedArray.elementType.equals(actualArray.elementType)) {
+                  error("Function argument array element type mismatch.");
                   yield BaseType.UNKNOWN;
                 }
+                // Check top level sizes
+                if (expectedArray.size != actualArray.size) {
+                  error("Function argument array size mismatch.");
+                  yield BaseType.UNKNOWN;
+                }
+              } else {
+                error("Function argument type mismatch: Expected array but got " + actual);
+                yield BaseType.UNKNOWN;
+              }
+            }
+            case PointerType expectedPtr -> {
+              if (actual instanceof PointerType actualPtr) {
+                if (!expectedPtr.baseType.getClass().equals(actualPtr.baseType.getClass())) {
+                  error(
+                      "Function '"
+                          + f.name
+                          + "' argument "
+                          + (i + 1)
+                          + " type mismatch: expected pointer to "
+                          + expectedPtr.baseType
+                          + " but got pointer to "
+                          + actualPtr.baseType);
+                  yield BaseType.UNKNOWN;
+                }
+              } else {
+                error(
+                    "Function '"
+                        + f.name
+                        + "' argument "
+                        + (i + 1)
+                        + " type mismatch: expected pointer to "
+                        + expectedPtr.baseType
+                        + " but got "
+                        + actual);
+                yield BaseType.UNKNOWN;
               }
             }
 
@@ -482,42 +537,39 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       case ArrayAccessExpr a -> {
         Type array = visit(a.array);
         Type index = visit(a.index);
-        // if the array index is not of type int, return an error
         if (!index.equals(BaseType.INT)) {
           error("Array index must be of type int.");
           yield BaseType.UNKNOWN;
         }
-        // return the array element type
         yield switch (array) {
-          case ArrayType at -> at.elementType;
-          case PointerType pt -> pt.baseType;
-          default -> {
-            error("Array access on non-array type.");
-            yield BaseType.UNKNOWN;
+          case ArrayType at -> {
+            yield at.elementType;
           }
+          default -> BaseType.UNKNOWN;
         };
       }
+
       // field access
       case FieldAccessExpr fa -> {
         Type structType = visit(fa.structure);
-        // if the structure is not of type struct, return an error
+
+        if (structType instanceof PointerType pt) {
+          structType = pt.baseType;
+        }
         if (!(structType instanceof StructType st)) {
           error("Field access on non-struct type.");
           yield BaseType.UNKNOWN;
         }
-        // lookup the struct in the current scope
         StructSymbol structSymbol = currentScope.lookupStruct(st.name);
         if (structSymbol == null) {
           error("Struct '" + st.name + "' is not declared.");
           yield BaseType.UNKNOWN;
         }
-        // lookup the field in the struct
         Type fieldType = structSymbol.getFieldType(fa.field);
         if (fieldType == null) {
           error("Field '" + fa.field + "' does not exist in struct '" + st.name + "'.");
           yield BaseType.UNKNOWN;
         }
-        // return the field type
         yield fieldType;
       }
       // typecast expression
