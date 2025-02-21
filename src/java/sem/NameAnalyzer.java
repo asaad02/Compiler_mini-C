@@ -66,9 +66,8 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
           return;
         }
 
-        // if the function is not a built-in function
-        if (currentScope.lookupCurrent(fd.name) != null) {
-          error("Function " + fd.name + " already declared.");
+        if (currentScope.lookupFunction(fd.name) != null) {
+          error("Function " + fd.name + " is already declared.");
           return;
         }
         // System.out.println("declaring function: " + fd.name);
@@ -97,7 +96,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
             return;
           }
 
-          // ensure function declaration matches definition
+          // function declaration matches definition and there is a definition
           if (existingSymbol.decl != null) {
             if (!fd.type.equals(existingSymbol.decl.type)) {
               error(
@@ -130,7 +129,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
           // Ensure parameter does not shadow a global variable
           if (oldScope.lookupVariable(param.name) != null) {
             System.out.println(
-                "[LOG] Shadowing detected: Function parameter '"
+                "Shadowing detected: Function parameter '"
                     + param.name
                     + "' shadows a global variable.");
           }
@@ -215,19 +214,19 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
       // Variable declaration
       case VarDecl vd -> {
 
-        // if the variable is already declared in the current scope
-        if (currentScope.lookupCurrent(vd.name) != null) {
-          error("Variable " + vd.name + " already declared in this scope.");
-          return;
+        // System.out.println("Declaring variable: " + vd.name);
+        if (currentScope.lookupCurrent(vd.name) != null
+            && currentScope.lookupVariable(vd.name) != null) {
+          VarSymbol vs = currentScope.lookupVariable(vd.name);
+          if (vs.vd.type.equals(vd.type)) {
+            error("Variable " + vd.name + " is already declared with a same type.");
+            return;
+          }
         }
+
         // if the variable is shadowed in the current scope
         if (currentScope.isShadowed(vd.name)) {
           System.out.println("shadowing detected: " + vd.name);
-        }
-        // Ensure the variable does not shadow a function name
-        if (currentScope.lookupFunction(vd.name) != null) {
-          error("Variable " + vd.name + " cannot shadow a function name.");
-          return;
         }
         // put the variable in the current scope
         currentScope.put(new VarSymbol(vd));

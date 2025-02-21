@@ -4,11 +4,15 @@ import ast.*;
 import java.util.*;
 
 public class TypeAnalyzer extends BaseSemanticAnalyzer {
-
+  // current scope
   private Scope currentScope;
+  // current function return type
   private Type currentFunctionReturnType;
+  // loop depth
   private int loopDepth = 0;
+  // declared structs
   private Set<String> declaredStructs = new HashSet<>();
+  // built-in functions
   private static final List<FunDecl> BUILT_IN_FUNCTIONS =
       List.of(
           new FunDecl(
@@ -23,8 +27,11 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               List.of(new VarDecl(BaseType.INT, "size"))));
 
   public TypeAnalyzer() {
+    // create a new scope
     this.currentScope = new Scope();
+    // add built-in functions to the scope
     for (FunDecl f : BUILT_IN_FUNCTIONS) {
+      // put the function in the current scope
       currentScope.put(new FunSymbol(f));
     }
   }
@@ -32,76 +39,172 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
   public Type visit(ASTNode node) {
     return switch (node) {
       case null -> throw new IllegalStateException("Unexpected null value");
-
+      // **AST Grammar:**
+      // Program ::= (Decl)*
+      // Decl ::= StructTypeDecl | VarDecl | FunDecl | FunDef
       case Program p -> {
         for (ASTNode decl : p.decls) {
           visit(decl);
         }
         yield BaseType.NONE;
       }
-
+      // **Function Declaration**
+      // FunDecl ::= Type String VarDecl*`
       case FunDecl fd -> {
         // return the built-in function type if it exists
         FunSymbol builtInFunction = currentScope.lookupFunction(fd.name);
+        // if the function is built-in, return the type
         if (builtInFunction != null) {
           yield builtInFunction.decl.type;
         }
-
+        // if the function is not built-in, add it to the scope
         currentScope.put(new FunSymbol(fd));
         yield fd.type;
       }
-
+      // **Function Definition**
+      // FunDef ::= Type String VarDecl* Block`
+      // Typing Rule:
+      // FunDef(f):
+      // Γ ⊢ (U1, ..., Un) → T
+      // ----------------------
+      // add ⟨ f: (U1, ..., Un) → T ⟩ to Γ
       case FunDef fd -> {
+        // return the built-in function type if it exists
         FunSymbol existingSymbol = currentScope.lookupFunction(fd.name);
-
+        // if the function is built-in, return the type
         if (existingSymbol == null) {
+          // if the function is not built-in, add it to the scope
           currentScope.put(new FunSymbol(fd));
         }
-
+        // save the old scope
         Scope oldScope = currentScope;
+        // create a new scope
         currentScope = new Scope(oldScope);
-        Set<String> declaredParams = new HashSet<>();
-
+        // Set<String> declaredParams = new HashSet<>();
+        // add the function parameters to the scope
         for (VarDecl param : fd.params) {
-          if (!declaredParams.add(param.name)) {
-            error("Duplicate parameter '" + param.name + "'");
-            yield BaseType.UNKNOWN;
-          }
-
           Type paramType = param.type;
+          // put the parameter in the current scope
           currentScope.put(new VarSymbol(new VarDecl(paramType, param.name)));
         }
-
+        // set the current function return type
         currentFunctionReturnType = fd.type;
+        // visit the function block
         visit(fd.block);
+        // reset the current function return type
         currentFunctionReturnType = null;
+        // restore the old scope
         currentScope = oldScope;
+        // return the function type
         yield fd.type;
       }
+      // **Struct Declaration**
+      // StructTypeDecl ::= StructType VarDecl*`
+      // StructDecl(x):
+      // x not in Γ
+      // ----------------
+      // add x to Γ
 
       case StructTypeDecl std -> {
-        if (!declaredStructs.add(std.structType.name)) {
+        // if the struct is already declared, return an error
+        if (declaredStructs.contains(std.structType.name)) {
           error("Struct '" + std.structType.name + "' is already declared.");
           yield BaseType.UNKNOWN;
         }
+        // add the struct to the declared structs
+        declaredStructs.add(std.structType.name);
+        // add the struct to the current scope
+        currentScope.put(new StructSymbol(std));
+        // visit the struct fields
         for (VarDecl field : std.fields) {
-          if (field.type.equals(BaseType.VOID)) {
-            error("Struct field '" + field.name + "' cannot be void.");
+          visit(field);
+        }
+        // if the struct is recursive without a pointer, return an error
+        if (isRecursiveWithoutPointer(std)) {
+          error("Struct '" + std.structType.name + "' is recursive without a pointer.");
+        }
+        // return the struct type
+        yield std.structType;
+      }
+      // **Variable Declaration**
+      // VarDecl ::= Type String`
+      // VarDecl(v: T):
+      // T ≠ void
+      // ----------------------
+      // add ⟨ v: T ⟩ to Γ
+
+      case VarDecl vd -> {
+        // switch on the variable type
+        switch (vd.type) {
+          case BaseType bt -> {
+            // if the variable is of type void, return an error
+            if (bt.equals(BaseType.VOID)) {
+              error("Variable '" + vd.name + "' cannot be of type void.");
+              yield BaseType.UNKNOWN;
+            }
+          }
+          case ArrayType at -> {
+            // if the array element type is void, return an error
+            if (at.elementType.equals(BaseType.VOID)) {
+              error("Array '" + vd.name + "' cannot have void elements.");
+              yield BaseType.UNKNOWN;
+            }
+          }
+          case StructType st -> {
+            // if the struct is not declared, return an error
+            if (!declaredStructs.contains(st.name)) {
+              error("Struct '" + st.name + "' is not declared.");
+              yield BaseType.UNKNOWN;
+            }
+          }
+          case PointerType pt -> {
+            // if the pointer base type is void, return an error
+            if (pt.baseType.equals(BaseType.VOID)) {
+              error("Pointer '" + vd.name + "' cannot be of type void.");
+              yield BaseType.UNKNOWN;
+            }
+          }
+          default -> {
             yield BaseType.UNKNOWN;
           }
         }
-        if (isRecursiveWithoutPointer(std)) {
-          error("Struct '" + std.structType.name + "' is recursive without pointer.");
-        }
-        currentScope.put(new StructSymbol(std));
-        yield BaseType.NONE;
+        // put the variable in the current scope
+        currentScope.put(new VarSymbol(vd));
+        yield vd.type;
       }
+      // **Variable Expression**
+      // VarExpr ::= String`
+      // VarExpr(v):
+      // ⟨ v: T ⟩ ∈ Γ
+      // ----------------------
+      // Γ ⊢
+      case VarExpr v -> {
+        // lookup the variable in the current scope
+        VarSymbol varSymbol = currentScope.lookupVariable(v.name);
+        // if the variable is not declared, return an error
+        if (varSymbol == null) {
+          error("Variable '" + v.name + "' is not declared.");
+          yield BaseType.UNKNOWN;
+        }
+        // return the variable type
+        yield varSymbol.vd.type;
+      }
+      // **Assignment**
+      // Assign ::= Expr Expr`
+      // Assign:
+      // Γ ⊢ e1 : T
+      // Γ ⊢ e2 : T
+      // -----------------
+      // Γ ⊢ e1 = e2 : T
       case Assign a -> {
+        // if the left-hand side of the assignment is not an lvalue, return an error
         if (!isLValue(a.left)) {
           error("Left-hand side of assignment must be an lvalue.");
           yield BaseType.UNKNOWN;
         }
+        // visit the left-hand side of the assignment
         Type left = visit(a.left);
+        // visit the right-hand side of the assignment
         Type right = visit(a.right);
 
         //  assigning string literal to an array element and the size is equal
@@ -110,7 +213,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             && varExpr.vd.type instanceof ArrayType arrayType
             && a.right instanceof StrLiteral strLiteral
             && arrayType.size < strLiteral.value.length() + 1) {
-
+          // if the left-hand side of the assignment is not an lvalue, return an error
           if (!arrayType.elementType.equals(BaseType.CHAR)) {
             error("Array element type mismatch.");
             yield BaseType.UNKNOWN;
@@ -122,36 +225,44 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           }
           yield BaseType.NONE;
         }
-
+        // switch on the left-hand side of the assignment
         switch (left) {
           case BaseType bt -> {
+            // if the left-hand side is of type void, return an error
             if (bt.equals(BaseType.VOID)) {
               error("Variable cannot be of type void.");
               yield BaseType.UNKNOWN;
             }
+            // if the left-hand side is not equal to the right-hand side, return an error
             if (left.equals(BaseType.INT) && right.equals(BaseType.CHAR)) {
               error("Implicit conversion from 'char' to 'int' is not allowed.");
               yield BaseType.UNKNOWN;
             }
+            // if from int to char
+            if (left.equals(BaseType.CHAR) && right.equals(BaseType.INT)) {
+              error("Implicit conversion from 'int' to 'char' is not allowed.");
+              yield BaseType.UNKNOWN;
+            }
           }
-
+          // if the left-hand side is an array
           case ArrayType leftArray -> {
             switch (right) {
+              // if the right-hand side is an array
               case ArrayType rightArray -> {
+                // if the array element types are not equal, return an error
                 if (!leftArray.elementType.equals(rightArray.elementType)) {
                   error("Array element type mismatch.");
                   yield BaseType.UNKNOWN;
                 }
+                // if the array sizes are not equal, return an error
                 if (leftArray.size != rightArray.size) {
                   error("Array size mismatch.");
                   yield BaseType.UNKNOWN;
                 }
               }
-              default -> {
-                error("Array assignment mismatch.");
-                yield BaseType.UNKNOWN;
-              }
+              default -> {}
             }
+            // return the left-hand side array type
             yield leftArray;
           }
           default -> {
@@ -161,48 +272,66 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         yield left;
       }
 
-      case Block b -> {
+      // expression statements
+      case ExprStmt es -> visit(es.expr);
 
+      case Block b -> {
         // save the old scope
         Scope oldScope = currentScope;
+        // visit the block statements
         for (ASTNode stmt : b.children()) {
           visit(stmt);
         }
+        // restore the old scope
         currentScope = oldScope;
-
         yield BaseType.NONE;
       }
 
       case If i -> {
+        // visit the if condition
         if (!visit(i.condition).equals(BaseType.INT)) {
           error("If condition must be of type int.");
         }
+        // visit the if branch
         visit(i.thenBranch);
+        // visit the else branch
         if (i.elseBranch != null) visit(i.elseBranch);
         yield BaseType.NONE;
       }
+      // **Binary Operations**
+      // BinOp ::= Expr Op Expr`
+      // BinOp(e1, e2, Op={+,-,*,/,%,||,&&,>,<,>=,<=}):
+      // Γ ⊢ e1 : int
+      // Γ ⊢ e2 : int
+      // -----------------
+      // Γ ⊢ e1 Op e2 : int
       case BinOp b -> {
+        // visit the left-hand side of the binary operation
         Type left = visit(b.left);
+        // visit the right-hand side of the binary operation
         Type right = visit(b.right);
-
-        if (left.equals(BaseType.UNKNOWN) || right.equals(BaseType.UNKNOWN)) {
-          error("Binary operation contains an unknown type.");
-          yield BaseType.UNKNOWN;
-        }
-
-        if (Set.of(Op.ADD, Op.SUB, Op.MUL, Op.DIV, Op.MOD).contains(b.op)) {
+        // if the binary operation is an arithmetic or comparison operation
+        if (Set.of(
+                Op.ADD, Op.SUB, Op.MUL, Op.DIV, Op.MOD, Op.OR, Op.AND, Op.GT, Op.LT, Op.GE, Op.LE)
+            .contains(b.op)) {
+          // if the left-hand side or right-hand side is not of type int, return an error
           if (!left.equals(BaseType.INT) || !right.equals(BaseType.INT)) {
-            error(
-                "Arithmetic operations must be between integers. Found: " + left + " and " + right);
+            error("Arithmetic and comparison operations must be between integers.");
             yield BaseType.UNKNOWN;
           }
           yield BaseType.INT;
         }
-
-        if (Set.of(Op.GT, Op.LT, Op.GE, Op.LE, Op.EQ, Op.NE).contains(b.op)) {
-          if (!left.equals(BaseType.INT) || !right.equals(BaseType.INT)) {
-            error(
-                "Comparison operations must be between integers. Found: " + left + " and " + right);
+        // if the binary operation is an equality operation
+        if (Set.of(Op.EQ, Op.NE).contains(b.op)) {
+          if (left instanceof StructType
+              || left instanceof ArrayType
+              || right instanceof StructType
+              || right instanceof ArrayType) {
+            error("Equality operators cannot be applied to structs or arrays.");
+            yield BaseType.UNKNOWN;
+          }
+          if (!left.equals(right)) {
+            error("Type mismatch in equality operation.");
             yield BaseType.UNKNOWN;
           }
           yield BaseType.INT;
@@ -211,7 +340,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         error("Invalid binary operation.");
         yield BaseType.UNKNOWN;
       }
-
+      // while loop
       case While w -> {
         loopDepth++;
         if (!visit(w.condition).equals(BaseType.INT)) {
@@ -221,12 +350,14 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         loopDepth--;
         yield BaseType.NONE;
       }
-
+      // return statement
       case Return r -> {
+        // if the return statement is outside of a function, return an error
         if (currentFunctionReturnType == null) {
           error("Return statement outside of function.");
           yield BaseType.UNKNOWN;
         }
+        // if the return statement does not return a value
         if (r.expr == null) {
           if (!currentFunctionReturnType.equals(BaseType.VOID)) {
             error("Return statement must return a value.");
@@ -234,6 +365,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           }
           yield BaseType.VOID;
         } else {
+          // visit the return expression
           Type returnType = visit(r.expr);
           if (!currentFunctionReturnType.equals(returnType)
               && !(currentFunctionReturnType instanceof PointerType)) {
@@ -248,60 +380,11 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           yield returnType;
         }
       }
-      // expression statements
-      case ExprStmt es -> visit(es.expr);
-
-      case VarDecl vd -> {
-        switch (vd.type) {
-          case BaseType bt -> {
-            if (bt.equals(BaseType.VOID)) {
-              error("Variable '" + vd.name + "' cannot be of type void.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          case ArrayType at -> {
-            if (at.elementType.equals(BaseType.VOID)) {
-              error("Array '" + vd.name + "' cannot have void elements.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          case StructType st -> {
-            if (!declaredStructs.contains(st.name)) {
-              error("Struct '" + st.name + "' is not declared.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          case PointerType pt -> {
-            if (pt.baseType.equals(BaseType.VOID)) {
-              error("Pointer '" + vd.name + "' cannot be of type void.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          default -> {
-            yield BaseType.UNKNOWN;
-          }
-        }
-        currentScope.put(new VarSymbol(vd));
-        yield vd.type;
-      }
-
-      case VarExpr v -> {
-        VarSymbol varSymbol = currentScope.lookupVariable(v.name);
-        if (v.name.equals("NULL")) {
-          v.vd = new VarDecl(new PointerType(BaseType.VOID), "NULL");
-          yield new PointerType(BaseType.VOID);
-        }
-        if (varSymbol == null) {
-          error("Variable '" + v.name + "' is not declared.");
-          yield BaseType.UNKNOWN;
-        }
-        yield varSymbol.vd.type;
-      }
 
       case IntLiteral i -> i.type = BaseType.INT;
 
       case ChrLiteral c -> c.type = BaseType.CHAR;
-
+      // string literal
       case StrLiteral s -> s.type = new ArrayType(BaseType.CHAR, s.value.length() + 1);
 
       case Continue c -> {
@@ -325,32 +408,27 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           yield funSymbol.decl.type;
         }
         if (funSymbol == null) {
-          error("Function '" + f.name + "' is not declared.");
+          // error("Function '" + f.name + "' is not declared.");
           yield BaseType.UNKNOWN;
         }
+        // visit the function arguments
         List<Type> expectedParams =
             funSymbol.def != null ? funSymbol.def.getParamTypes() : funSymbol.decl.getParamTypes();
-
+        // if the number of arguments does not match the number of parameters, return an error
         if (f.args.size() != expectedParams.size()) {
           error("Function '" + f.name + "' argument count mismatch.");
           yield BaseType.UNKNOWN;
         }
+        // check the type of each argument
         for (int i = 0; i < f.args.size(); i++) {
           Type expected = expectedParams.get(i);
           Type actual = visit(f.args.get(i));
-          // print type of the expected and actual arguments
           switch (expected) {
             case BaseType bt -> {
-              System.out.println(bt);
               if (bt.equals(BaseType.VOID)) {
                 error("Function argument cannot be of type void.");
                 yield BaseType.UNKNOWN;
               }
-              if (expected.equals(BaseType.INT) && actual.equals(BaseType.CHAR)) {
-                error("Implicit conversion from 'char' to 'int' is not allowed.");
-                yield BaseType.UNKNOWN;
-              }
-
               if (!expected.equals(actual)) {
                 error(
                     "Function '"
@@ -361,12 +439,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                         + expected
                         + " but got "
                         + actual);
-                yield BaseType.UNKNOWN;
-              }
-            }
-            case StructType st -> {
-              if (!declaredStructs.contains(st.name)) {
-                error("Struct '" + st.name + "' is not declared.");
                 yield BaseType.UNKNOWN;
               }
             }
@@ -382,7 +454,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                             + "'");
                     yield BaseType.UNKNOWN;
                   }
-                  if (leftArray.size != rightArray.size) {
+                  if (leftArray.size < rightArray.size) {
                     error(
                         "Array size mismatch: '"
                             + leftArray.size
@@ -406,16 +478,16 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
         yield funSymbol.def != null ? funSymbol.def.type : funSymbol.decl.type;
       }
-
+      // array access
       case ArrayAccessExpr a -> {
         Type array = visit(a.array);
         Type index = visit(a.index);
-
+        // if the array index is not of type int, return an error
         if (!index.equals(BaseType.INT)) {
           error("Array index must be of type int.");
           yield BaseType.UNKNOWN;
         }
-
+        // return the array element type
         yield switch (array) {
           case ArrayType at -> at.elementType;
           case PointerType pt -> pt.baseType;
@@ -425,133 +497,124 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           }
         };
       }
-
+      // field access
       case FieldAccessExpr fa -> {
-        switch (visit(fa.structure)) {
-          case StructType st -> {
-            StructSymbol structSymbol = currentScope.lookupStruct(st.name);
-            if (structSymbol == null) {
-              error("Struct '" + st.name + "' is not declared.");
-              yield BaseType.UNKNOWN;
-            }
-            Type fieldType = structSymbol.getFieldType(fa.field);
-            if (fieldType == null) {
-              error("Field '" + fa.field + "' is not declared in struct '" + st.name + "'.");
-              yield BaseType.UNKNOWN;
-            }
-            yield fieldType;
-          }
-          default -> {
-            error("Field access on non-struct type.");
-            yield BaseType.UNKNOWN;
-          }
+        Type structType = visit(fa.structure);
+        // if the structure is not of type struct, return an error
+        if (!(structType instanceof StructType st)) {
+          error("Field access on non-struct type.");
+          yield BaseType.UNKNOWN;
         }
+        // lookup the struct in the current scope
+        StructSymbol structSymbol = currentScope.lookupStruct(st.name);
+        if (structSymbol == null) {
+          error("Struct '" + st.name + "' is not declared.");
+          yield BaseType.UNKNOWN;
+        }
+        // lookup the field in the struct
+        Type fieldType = structSymbol.getFieldType(fa.field);
+        if (fieldType == null) {
+          error("Field '" + fa.field + "' does not exist in struct '" + st.name + "'.");
+          yield BaseType.UNKNOWN;
+        }
+        // return the field type
+        yield fieldType;
       }
+      // typecast expression
       case TypecastExpr tc -> {
-        Type expr = visit(tc.expr);
-        switch (tc.type) {
-          case BaseType bt -> {
-            if (bt.equals(BaseType.VOID)) {
-              error("Typecast to void is not allowed.");
-              yield BaseType.UNKNOWN;
-            }
-            if (expr.equals(BaseType.VOID)) {
-              error("Typecast from void is not allowed.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          case StructType st -> {
-            if (!declaredStructs.contains(st.name)) {
-              error("Struct '" + st.name + "' is not declared.");
-              yield BaseType.UNKNOWN;
-            }
-            if (expr.equals(BaseType.VOID)) {
-              error("Typecast from void is not allowed.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          case ArrayType at -> {
-            if (at.elementType.equals(BaseType.VOID)) {
-              error("Array cannot be of type void.");
-              yield BaseType.UNKNOWN;
-            }
-            if (expr.equals(BaseType.VOID)) {
-              error("Typecast from void is not allowed.");
-              yield BaseType.UNKNOWN;
-            }
-            yield at;
-          }
-          case PointerType pt -> {
-            if (pt.baseType.equals(BaseType.VOID)) {
-              error("Pointer cannot be of type void.");
-              yield BaseType.UNKNOWN;
-            }
-            if (expr.equals(BaseType.VOID)) {
-              error("Typecast from void is not allowed.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          default -> {
-            yield BaseType.UNKNOWN;
-          }
+        Type exprType = visit(tc.expr);
+        // if the typecast type is void, return an error
+        if (tc.type.equals(BaseType.INT) && exprType.equals(BaseType.CHAR)) {
+          yield BaseType.INT;
         }
-        yield tc.type;
+        // if the typecast type is void, return an error
+        if (tc.type.equals(BaseType.CHAR) && exprType.equals(BaseType.INT)) {
+          yield BaseType.CHAR;
+        }
+        // if the typecast type is void, return an error
+        if (tc.type instanceof PointerType pt1 && exprType instanceof PointerType pt2) {
+          yield pt1;
+        }
+        // if the typecast type is void, return an error
+        if (tc.type instanceof PointerType pt && exprType instanceof ArrayType at) {
+          yield new PointerType(at.elementType);
+        }
+        // if the typecast type is void, return an error
+        error("Invalid typecast from " + exprType + " to " + tc.type);
+        yield BaseType.UNKNOWN;
       }
-
+      // value at expression
       case ValueAtExpr va -> {
         Type expr = visit(va.expr);
         switch (expr) {
+          // if the value at operator is applied to a pointer
           case PointerType pt -> {
             yield pt.baseType;
           }
+          // if the value at operator is applied to a non-pointer type, return an error
           default -> {
             error("Value at operator on non-pointer type.");
             yield BaseType.UNKNOWN;
           }
         }
       }
+      // pointer type
       case PointerType pt -> {
         Type baseType = visit(pt.baseType);
+        // if the pointer base type is void, return an error
         if (baseType == null || baseType.equals(BaseType.VOID)) {
           error("Pointer to void is not allowed.");
           yield BaseType.UNKNOWN;
         }
         yield new PointerType(baseType);
       }
-
-      case SizeOfExpr so -> {
-        switch (so.type) {
-          case BaseType bt -> {
-            yield BaseType.INT;
-          }
-          case StructType st -> {
-            if (!declaredStructs.contains(st.name)) {
-              error("Struct '" + st.name + "' is not declared.");
-              yield BaseType.UNKNOWN;
-            }
-            yield BaseType.INT;
-          }
-          case ArrayType at -> {
-            yield BaseType.INT;
-          }
-          default -> {
-            yield BaseType.UNKNOWN;
-          }
-        }
-      }
+      // address of expression
       case AddressOfExpr ao -> {
         Type expr = visit(ao.expr);
+        // if the address of operator is applied to a non-lvalue, return an error
         if (!isLValue(ao.expr)) {
           error("Address of operator on non-lvalue.");
           yield BaseType.UNKNOWN;
         }
         yield new PointerType(expr);
       }
-
+      // sizeof expression
+      case SizeOfExpr so -> {
+        switch (so.type) {
+          // if the sizeof operator is applied to a base type, return the size of the base type
+          case BaseType bt -> {
+            yield BaseType.INT;
+          }
+          // if the sizeof operator is applied to an array type, return the size of the array type
+          case StructType st -> {
+            // if the struct is not declared, return an error
+            if (!declaredStructs.contains(st.name)) {
+              error("Struct '" + st.name + "' is not declared.");
+              yield BaseType.UNKNOWN;
+            }
+            yield BaseType.INT;
+          }
+          // if the sizeof operator is applied to a pointer type, return the size of the pointer
+          // type
+          case ArrayType at -> {
+            yield BaseType.INT;
+          }
+          // if the sizeof operator is applied to a pointer type, return the size of the pointer
+          // type
+          case PointerType pt -> {
+            yield BaseType.INT;
+          }
+          // if the sizeof operator is applied to an unknown type, return an error
+          default -> {
+            yield BaseType.UNKNOWN;
+          }
+        }
+      }
       default -> BaseType.UNKNOWN;
     };
   }
 
+  // check if the node is an lvalue
   private boolean isLValue(ASTNode node) {
     return switch (node) {
       case VarExpr v -> true;
@@ -562,6 +625,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
     };
   }
 
+  // check if the struct is recursive without a pointer
   private boolean isRecursiveWithoutPointer(StructTypeDecl std) {
     return std.fields.stream()
         .anyMatch(
