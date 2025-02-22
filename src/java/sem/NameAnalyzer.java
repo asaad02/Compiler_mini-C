@@ -114,7 +114,8 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
             }
             // check if the parameters match
             for (int i = 0; i < fd.params.size(); i++) {
-              if (!fd.params.get(i).type.equals(existingSymbol.decl.params.get(i).type)) {
+              if (!fd.params.get(i).type.equals(existingSymbol.decl.params.get(i).type)
+                  && !(existingSymbol.decl.params.get(i).type instanceof PointerType)) {
                 error(
                     "Function "
                         + fd.name

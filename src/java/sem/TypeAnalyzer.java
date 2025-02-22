@@ -115,12 +115,14 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             error("Struct field '" + field.name + "' cannot be void.");
             yield BaseType.UNKNOWN;
           }
+          visit(field);
         }
         if (isRecursiveWithoutPointer(std)) {
           error("Struct '" + std.structType.name + "' is recursive without pointer.");
+          yield BaseType.UNKNOWN;
         }
         currentScope.put(new StructSymbol(std));
-        yield BaseType.NONE;
+        yield std.structType;
       }
       // **Variable Declaration**
       // VarDecl ::= Type String`
@@ -494,9 +496,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 yield BaseType.UNKNOWN;
               }
             }
+            /*
             case PointerType expectedPtr -> {
               if (actual instanceof PointerType actualPtr) {
-                if (!expectedPtr.baseType.getClass().equals(actualPtr.baseType.getClass())) {
+                if (!expectedPtr.baseType.equals(actualPtr.baseType)) {
                   error(
                       "Function '"
                           + f.name
@@ -521,6 +524,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 yield BaseType.UNKNOWN;
               }
             }
+            */
 
             default -> {
               yield BaseType.UNKNOWN;
@@ -553,7 +557,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           structType = pt.baseType;
         }
         if (!(structType instanceof StructType st)) {
-          error("Field access on non-struct type.");
+          // error("Field access on non-struct type.");
           yield BaseType.UNKNOWN;
         }
         StructSymbol structSymbol = currentScope.lookupStruct(st.name);
@@ -563,7 +567,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
         Type fieldType = structSymbol.getFieldType(fa.field);
         if (fieldType == null) {
-          error("Field '" + fa.field + "' does not exist in struct '" + st.name + "'.");
+          // error("Field '" + fa.field + "' does not exist in struct '" + st.name + "'.");
           yield BaseType.UNKNOWN;
         }
         yield fieldType;
