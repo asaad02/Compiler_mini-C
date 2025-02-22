@@ -96,8 +96,8 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
             return;
           }
 
-          // function declaration matches definition and there is a definition
-          if (existingSymbol.decl != null) {
+          // function declaration matches definition
+          if (existingSymbol.decl != null && !(existingSymbol.decl.type instanceof PointerType)) {
             if (!fd.type.equals(existingSymbol.decl.type)) {
               error(
                   "Function "
@@ -111,6 +111,16 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
                       + fd.name
                       + " definition does not match declaration: Parameter count does not match.");
               return;
+            }
+            // check if the parameters match
+            for (int i = 0; i < fd.params.size(); i++) {
+              if (!fd.params.get(i).type.equals(existingSymbol.decl.params.get(i).type)) {
+                error(
+                    "Function "
+                        + fd.name
+                        + " definition does not match declaration: Parameter types do not match.");
+                return;
+              }
             }
           }
 

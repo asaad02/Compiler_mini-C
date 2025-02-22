@@ -106,25 +106,21 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       // add x to Γ
 
       case StructTypeDecl std -> {
-        // if the struct is already declared, return an error
-        if (declaredStructs.contains(std.structType.name)) {
+        if (!declaredStructs.add(std.structType.name)) {
           error("Struct '" + std.structType.name + "' is already declared.");
           yield BaseType.UNKNOWN;
         }
-        // add the struct to the declared structs
-        declaredStructs.add(std.structType.name);
-        // add the struct to the current scope
-        currentScope.put(new StructSymbol(std));
-        // visit the struct fields
         for (VarDecl field : std.fields) {
-          visit(field);
+          if (field.type.equals(BaseType.VOID)) {
+            error("Struct field '" + field.name + "' cannot be void.");
+            yield BaseType.UNKNOWN;
+          }
         }
-        // if the struct is recursive without a pointer, return an error
         if (isRecursiveWithoutPointer(std)) {
-          error("Struct '" + std.structType.name + "' is recursive without a pointer.");
+          error("Struct '" + std.structType.name + "' is recursive without pointer.");
         }
-        // return the struct type
-        yield std.structType;
+        currentScope.put(new StructSymbol(std));
+        yield BaseType.NONE;
       }
       // **Variable Declaration**
       // VarDecl ::= Type String`
@@ -575,24 +571,22 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       // typecast expression
       case TypecastExpr tc -> {
         Type exprType = visit(tc.expr);
-        // if the typecast type is void, return an error
+
         if (tc.type.equals(BaseType.INT) && exprType.equals(BaseType.CHAR)) {
           yield BaseType.INT;
         }
-        // if the typecast type is void, return an error
+
         if (tc.type.equals(BaseType.CHAR) && exprType.equals(BaseType.INT)) {
           yield BaseType.CHAR;
         }
-        // if the typecast type is void, return an error
+
         if (tc.type instanceof PointerType pt1 && exprType instanceof PointerType pt2) {
           yield pt1;
         }
-        // if the typecast type is void, return an error
+
         if (tc.type instanceof PointerType pt && exprType instanceof ArrayType at) {
           yield new PointerType(at.elementType);
         }
-        // if the typecast type is void, return an error
-        error("Invalid typecast from " + exprType + " to " + tc.type);
         yield BaseType.UNKNOWN;
       }
       // value at expression
