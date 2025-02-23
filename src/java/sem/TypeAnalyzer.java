@@ -110,19 +110,12 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Struct '" + std.structType.name + "' is already declared.");
           yield BaseType.UNKNOWN;
         }
-        for (VarDecl field : std.fields) {
-          if (field.type.equals(BaseType.VOID)) {
-            error("Struct field '" + field.name + "' cannot be void.");
-            yield BaseType.UNKNOWN;
-          }
-          visit(field);
-        }
         if (isRecursiveWithoutPointer(std)) {
           error("Struct '" + std.structType.name + "' is recursive without pointer.");
           yield BaseType.UNKNOWN;
         }
         currentScope.put(new StructSymbol(std));
-        yield std.structType;
+        yield BaseType.NONE;
       }
       // **Variable Declaration**
       // VarDecl ::= Type String`
@@ -431,7 +424,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           yield funSymbol.decl.type;
         }
         if (funSymbol == null) {
-          // error("Function '" + f.name + "' is not declared.");
+          error("Function '" + f.name + "' is not declared.");
           yield BaseType.UNKNOWN;
         }
         // visit the function arguments
@@ -525,7 +518,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               }
             }
             */
-
             default -> {
               yield BaseType.UNKNOWN;
             }
@@ -557,7 +549,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           structType = pt.baseType;
         }
         if (!(structType instanceof StructType st)) {
-          // error("Field access on non-struct type.");
+          error("Field access on non-struct type.");
           yield BaseType.UNKNOWN;
         }
         StructSymbol structSymbol = currentScope.lookupStruct(st.name);
@@ -567,7 +559,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
         Type fieldType = structSymbol.getFieldType(fa.field);
         if (fieldType == null) {
-          // error("Field '" + fa.field + "' does not exist in struct '" + st.name + "'.");
+          error("Field '" + fa.field + "' does not exist in struct '" + st.name + "'.");
           yield BaseType.UNKNOWN;
         }
         yield fieldType;
@@ -639,7 +631,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           case StructType st -> {
             // if the struct is not declared, return an error
             if (!declaredStructs.contains(st.name)) {
-              error("Struct '" + st.name + "' is not declared.");
+              // error("Struct '" + st.name + "' is not declared.");
               yield BaseType.UNKNOWN;
             }
             yield BaseType.INT;
