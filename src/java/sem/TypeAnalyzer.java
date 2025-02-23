@@ -115,7 +115,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             error("Struct field '" + field.name + "' cannot be void.");
             yield BaseType.UNKNOWN;
           }
-          visit(field);
         }
 
         if (isRecursiveWithoutPointer(std)) {
