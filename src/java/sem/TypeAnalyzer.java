@@ -110,6 +110,14 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Struct '" + std.structType.name + "' is already declared.");
           yield BaseType.UNKNOWN;
         }
+        for (VarDecl field : std.fields) {
+          if (field.type.equals(BaseType.VOID)) {
+            error("Struct field '" + field.name + "' cannot be void.");
+            yield BaseType.UNKNOWN;
+          }
+          visit(field);
+        }
+
         if (isRecursiveWithoutPointer(std)) {
           error("Struct '" + std.structType.name + "' is recursive without pointer.");
           yield BaseType.UNKNOWN;
@@ -347,7 +355,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             yield BaseType.INT;
           }
           if (!left.equals(right)) {
-            error("Type mismatch in equality operation.");
+            // error("Type mismatch in equality operation.");
             yield BaseType.UNKNOWN;
           }
           yield BaseType.INT;
@@ -631,7 +639,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           case StructType st -> {
             // if the struct is not declared, return an error
             if (!declaredStructs.contains(st.name)) {
-              // error("Struct '" + st.name + "' is not declared.");
+              error("Struct '" + st.name + "' is not declared.");
               yield BaseType.UNKNOWN;
             }
             yield BaseType.INT;

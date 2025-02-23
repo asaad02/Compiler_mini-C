@@ -270,7 +270,8 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
           error("Struct " + std.structType.name + " is already declared.");
           return;
         }
-
+        // register the struct before function processing
+        currentScope.put(new StructSymbol(std));
         // validate field names within the struct
         Set<String> fieldNames = new HashSet<>();
         for (VarDecl field : std.fields) {
@@ -280,9 +281,6 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
           }
           fieldNames.add(field.name);
         }
-
-        // register the struct before function processing
-        currentScope.put(new StructSymbol(std));
       }
 
       // expression statements
