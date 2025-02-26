@@ -354,7 +354,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             yield BaseType.INT;
           }
           if (!left.equals(right)) {
-            // error("Type mismatch in equality operation.");
+            error("Type mismatch in equality operation.");
             yield BaseType.UNKNOWN;
           }
           yield BaseType.INT;
@@ -496,7 +496,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 yield BaseType.UNKNOWN;
               }
             }
-            /*
             case PointerType expectedPtr -> {
               if (actual instanceof PointerType actualPtr) {
                 if (!expectedPtr.baseType.equals(actualPtr.baseType)) {
@@ -524,7 +523,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 yield BaseType.UNKNOWN;
               }
             }
-            */
             default -> {
               yield BaseType.UNKNOWN;
             }
