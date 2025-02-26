@@ -873,6 +873,25 @@ public class Parser extends CompilerPass {
       expect(Category.RPAR);
       return new SizeOfExpr(sizeOfType);
     }
+    // check if the token is a left square brace ["["]
+    else if (accept(Category.LSBR)) {
+      nextToken();
+      Expr index = parseExpr();
+      expect(Category.RSBR);
+      return new ArrayAccessExpr(parsePrimaryExpr(), index);
+    } else if (accept(Category.DOT)) {
+      nextToken();
+      // Parse the field identifier
+      String field = expect(Category.IDENTIFIER).data;
+      // to test for sort link list
+      return new FieldAccessExpr(parsePrimaryExpr(), field);
+    } else if (accept(Category.LPAR)) {
+      nextToken();
+      Expr expr = parseExpr();
+      expect(Category.RPAR);
+      return expr;
+    }
+
     error(
         Category.INT_LITERAL, Category.CHAR_LITERAL, Category.STRING_LITERAL, Category.IDENTIFIER);
     recovery();
