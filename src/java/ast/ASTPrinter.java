@@ -141,11 +141,6 @@ public class ASTPrinter {
               writer.print(",");
               visit(vd);
             }
-            // Print struct fields
-            for (VarDecl vd : std.fields) {
-              newline();
-              visit(vd);
-            }
           }
           case PointerType pt -> {
             visit(pt.baseType);

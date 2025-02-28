@@ -20,19 +20,7 @@ public class StructSymbol extends Symbol {
   }
 
   // Get type of a field
-  public Type getFieldType(String fieldName) {
-    for (VarDecl field : std.fields) {
-      if (field.name.equals(fieldName)) {
-        return field.type;
-      }
-    }
-
-    for (StructTypeDecl nestedStruct : std.nestedStructs) {
-      if (nestedStruct.structType.name.equals(fieldName)) {
-        return new StructType(fieldName);
-      }
-    }
-
-    return null;
+  public Type getFieldType(String name) {
+    return fieldTypes.get(name);
   }
 }
