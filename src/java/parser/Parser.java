@@ -256,16 +256,6 @@ public class Parser extends CompilerPass {
     else if (accept(Category.STRUCT)) {
       baseType = structtype();
 
-    }
-    /*
-     * if its LPAR ['('] then it's a type
-     * PoInterType ::= Type
-     */
-    else if (accept(Category.LPAR)) {
-      nextToken();
-      baseType = parseType();
-      expect(Category.RPAR);
-      return baseType;
     } else {
       error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
       recovery();
@@ -578,7 +568,7 @@ public class Parser extends CompilerPass {
     // Parse the left-hand side of the operator
     Expr lhs = parseLogicalOrExpr();
     // Assignment ::= Expr "=" Expr
-    while (accept(Category.ASSIGN)) {
+    if (accept(Category.ASSIGN)) {
       nextToken();
       // Recursive right hand side of the operator
       Expr rhs = parseExpr();
@@ -708,28 +698,20 @@ public class Parser extends CompilerPass {
       nextToken();
       // Handle sizeof operator
       if (op == Category.SIZEOF) {
-        // consume '('
         expect(Category.LPAR);
-        // check if it's a type (sizeof(int)) or an expression sizeof(a + b)
-        Expr expr;
-        if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
-          // Parse the type of the sizeof operator
-          Type sizeOfType = parseType();
-          expect(Category.RPAR);
-          expr = new SizeOfExpr(sizeOfType);
-        } else {
-          expr = parseExpr();
-          expect(Category.RPAR);
-          expr = new SizeOfExpr(expr);
+
+        if (!accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
+          error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
+          recovery();
+          return new SizeOfExpr(BaseType.UNKNOWN);
         }
-        return expr;
+
+        // handling sizeof
+        Type sizeOfType = parseType();
+        expect(Category.RPAR);
+        return new SizeOfExpr(sizeOfType);
       }
 
-      if (accept(Category.ASTERISK)) {
-        nextToken();
-        Expr operand = parseUnaryExpr();
-        return new ValueAtExpr(operand);
-      }
       // recursively parse the unary expression
       Expr operand = parseUnaryExpr();
       switch (op) {
