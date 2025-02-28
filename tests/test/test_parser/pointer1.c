@@ -15,13 +15,13 @@ int main() {
     int *ptrB;
 
     *ptrB = 50; // Dereference pointer to modify value
-    printf("Pointer Dereference: b = %d\n", b);
+    print_s("Pointer Dereference: b = %d\n");
 
     // Struct Pointer Dereference Example
     //myStruct.value = 10;
     //myStruct.ptr = &myStruct.value;
 
-    printf("Struct Pointer Dereference: *(myStruct.ptr) = %d\n", *(myStruct.ptr));
+    print_s("Struct Pointer Dereference: *(myStruct.ptr) = %d\n");
 
     // Double Reference Example
     int c ;
@@ -29,15 +29,13 @@ int main() {
     int **ptrC2;
     int ***ptrC3;
 
-    printf("Double Reference: ***ptrC3 = %d\n", ***ptrC3);
+    print_s("Double Reference: ***ptrC3 = %d\n");
 
     // Type Casting Example
-    malloc(sizeof(int)); // Allocate memory
-    *(int *)genericPtr = 100;              // Cast void* to int* and assign a value
+    mcmalloc(sizeof(int)); // Allocate memory            
 
-    printf("Type Casting: *(int *)genericPtr = %d\n", *(int *)genericPtr);
+    print_s("Type Casting: *(int *)genericPtr = %d\n");
 
-    free(genericPtr); // Free allocated memory
 
     return 0;
 }

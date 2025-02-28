@@ -8,6 +8,6 @@ void example() {
         }
         
     }
-    int a ;
+    //int a ;
     a = 7 ;
 }

@@ -4,24 +4,26 @@
 void checkValue(int x);
 
 int main() { 
+    int x ;
     x = 10;
+
 
     
     if (x > 5)  // if block
-        printf("x is greater than 5.\n");
+        x = 42;
      else  // else block
-        printf("x is not greater than 5.\n");
+        x = 42;
     
 
     
     if (x % 2 == 0) 
         if (x == 10) 
-            printf("x is exactly 10.\n");
+            x = 42;
         else 
-            printf("x is even but not 10.\n");
+        x = 42;
         
      else 
-        printf("x is odd.\n");
+     x = 42;
      
 
     return 0; 
@@ -31,7 +33,7 @@ int main() {
 void checkValue(int x) {
 
     if (x == 42)
-        printf("x is the answer.\n");
+    x = 42;
     else
-        printf("x is not the answer.\n");
+    x = 42;
 }

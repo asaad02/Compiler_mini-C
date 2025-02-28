@@ -6,7 +6,9 @@ int main() {
     /* to test 
      *  multi-line comment
     */
-    int a = 5; // another comment
-    int b = 10;
+    int a ; 
+    a = 5; // another comment
+    int b ;
+    b = 10;
     return a + b;
 }

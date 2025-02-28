@@ -2,6 +2,6 @@ int main() {
     int a ;
     int* ptr ;
     int** ptr2 ;
-    printf("Value: %d\n", **ptr2); 
+    print_s("Value: %d\n"); 
     return 0;
 }

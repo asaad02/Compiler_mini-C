@@ -13,8 +13,17 @@ int add(int a, int b) {
     return a + b;
 }
 
+
+
 int main() {
     // Variable declarations
+     int a;
+        int b;
+    int c;
+    int* ptr;
+    int val;
+    int arr[10];
+    int first;
      a = 10;
      b = 20;
      c = a + b;  
@@ -25,6 +34,8 @@ int main() {
      arr[5];
      first = arr[0];
 
+     int sum;
+
     // Function call
     sum = add(a, b);  
 
@@ -32,35 +43,31 @@ int main() {
     struct Point p1;
     p1.x = 100;
     p1.y = 200;
+    int x;
      x = p1.x;  // Struct field access
-
+    int y;
+    struct Point p2;
     // Pointer dereference and struct field access
-     Point* pPtr = &p1;
+    struct Point* pPtr;
+    pPtr = &p1;
+     x = (*pPtr).x;  // Struct field access
      y = (*pPtr).y;  // Struct field access
 
-    // Relational and logical operators
-    if (a > b) {
-        printf("a is greater than b\n");
-    } else {
-        printf("b is greater than or equal to a\n");
-    }
 
+    int result;
     // Arithmetic expressions with parentheses
      result = (a + b) * (c - val) / 2;
-
+    int sa;
     // Type casting
      sa = 213;
+     int  intPi;
+    char pi;
     // Type casting
      intPi = (int)pi; 
-
+    int size;
     // Sizeof operator
     size = sizeof(int);  // Sizeof operator
 
-    // Output results
-    printf("a = %d, b = %d, c = %d\n", a, b, c);
-    printf("val = %d, first = %d, sum = %d\n", val, first, sum);
-    printf("p1.x = %d, p1.y = %d\n", p1.x, p1.y);
-    printf("result = %d, intPi = %d, size = %zu\n", result, intPi, size);
 
     return 0;
 }

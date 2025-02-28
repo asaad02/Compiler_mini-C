@@ -1,4 +1,10 @@
+struct Point {
+    int x;
+    int y;
+};
+
+
 int x;
 char c;
-void *ptr;
+char *ptr;
 struct Point p;

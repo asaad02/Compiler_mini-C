@@ -16,6 +16,13 @@ int add(int a, int b) {
 
 int main() {
     // Variable declarations
+    int a;
+    int b;
+    int c;
+    int* ptr;
+    int val;
+    int arr[10];
+
     a = 10;
     b = 20;
     c = a + b;  
@@ -24,9 +31,10 @@ int main() {
     val = *ptr;
     // array declaration and access
     int arr[5];
+    int first;
     // array access
     first = arr[0];
-
+    int sum;
     // function call
     sum = add(a, b);  // Function call
 
@@ -34,20 +42,22 @@ int main() {
     struct Point p1;
     p1.x = 100;
     p1.y = 200;
+    int x;
     // Struct field access
     x = p1.x;  // Struct field access
 
     // Pointer dereference and struct field access
     struct Point* pPtr;
     // Struct field access
+    pPtr = &p1;
+    x = (*pPtr).x;
+    int y;
     y = (*pPtr).y;
 
     // Relational and logical operators
-    if (a > b) {
-        printf("a is greater than b\n");
-    } else {
-        printf("b is greater than or equal to a\n");
-    }
+    int result;
+    int pi;
+    int intPi;
 
     // Arithmetic expressions with parentheses
     result = (a + b) * (c - val) / 2;  // Complex arithmetic expression
@@ -55,22 +65,22 @@ int main() {
     // Type casting
     pi = 314159;
     intPi = (int)pi;  // Type casting
-
+    int size;
     // Sizeof operator
     size = sizeof(int);  // Sizeof operator
 
     // While loop
     int i;
     while (i < 5) {
-        printf("Loop iteration: %d\n", i);
+
         ++i;
     }
 
     // If-else statement
     if (a > b) {
-        printf("a is greater than b\n");
+        a = b;
     } else {
-        printf("b is greater than or equal to a\n");
+        a = b;
     }
 
     // Return statement

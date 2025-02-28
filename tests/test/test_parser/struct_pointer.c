@@ -6,8 +6,10 @@ struct Node {
 };
 
 void printList(struct Node* head) {
-    while (head != NULL) {
-        printf("%d ", head.data);  // Pointer dereference
+    int a ;
+    a = 0 ;
+    while ( a > 0) {
+        print_s("%d ", head.data);  // Pointer dereference
         head = head.next;
     }
 }

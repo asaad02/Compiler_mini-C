@@ -7,6 +7,8 @@ struct Node {
 
 int main() {
     //int a ;
+    int a ;
+    int b ;
     a = 7 ; 
     b =  a + 5 ;
 }

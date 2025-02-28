@@ -1,7 +1,7 @@
 void checkValue(int x) {
-
+    int x;
     if (x == 42)
-        printf("x is the answer.\n");
+    x = 42;
     else
-        printf("x is not the answer.\n");
+    x = 42;
 }

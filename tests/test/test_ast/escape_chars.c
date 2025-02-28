@@ -1,4 +1,17 @@
 int main() {
+    char newLine;
+    char tab;
+    char backslash;
+    char quate;
+    char s;
+    char a;
+    char b;
+    char n;
+    char r;
+    char t;
+    char zero;
+    char* str;
+
     newLine = '\n';
     tab = '\t';
     backslash = '\\';
