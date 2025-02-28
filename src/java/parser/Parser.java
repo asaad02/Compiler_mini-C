@@ -256,16 +256,6 @@ public class Parser extends CompilerPass {
     else if (accept(Category.STRUCT)) {
       baseType = structtype();
 
-    }
-    /*
-     * if its LPAR ['('] then it's a type
-     * PoInterType ::= Type
-     */
-    else if (accept(Category.LPAR)) {
-      nextToken();
-      baseType = parseType();
-      expect(Category.RPAR);
-      return baseType;
     } else {
       error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
       recovery();
@@ -290,26 +280,46 @@ public class Parser extends CompilerPass {
    * represents a struct type (the String is the name of the declared struct type)Struct declaration
    */
   private StructTypeDecl parseStructDecl(Type structType) {
-    // expect the left brace ["{"]
     expect(Category.LBRA);
-    // varDecls is the list of variable declarations in the struct
     List<VarDecl> varDecls = new ArrayList<>();
-    // while we have not reached the right brace ["}"]
+    List<StructTypeDecl> nestedStructs = new ArrayList<>(); // Store inline struct definitions
+
     do {
-      if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
+      if (accept(Category.INT, Category.CHAR, Category.VOID)) {
         varDecls.add(parseVarDecl());
+      } else if (accept(Category.STRUCT)) {
+        Type nestedStructType = structtype();
+
+        if (accept(Category.LBRA)) {
+          StructTypeDecl nestedStruct = parseStructDecl(nestedStructType);
+          nestedStructs.add(nestedStruct); // Store inline struct declaration
+
+          if (accept(Category.SC)) {
+            nextToken(); // Consume the semicolon and continue
+          }
+        } else {
+          while (accept(Category.ASTERISK)) {
+            nextToken();
+            nestedStructType = new PointerType(nestedStructType);
+          }
+
+          varDecls.add(new VarDecl(nestedStructType, expect(Category.IDENTIFIER).data));
+          expect(Category.SC);
+        }
       } else {
         error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
         recovery();
-        return new StructTypeDecl((StructType) structType, varDecls);
+        return new StructTypeDecl((StructType) structType, varDecls, new ArrayList<>());
       }
     } while (!accept(Category.RBRA));
-    // expect the right brace ["}"]
+
     expect(Category.RBRA);
-    // expect the semicolon [";"]
     expect(Category.SC);
-    // return the struct type declaration AST node
-    return new StructTypeDecl((StructType) structType, varDecls);
+    return new StructTypeDecl((StructType) structType, varDecls, nestedStructs);
+  }
+
+  private VarDecl parseVarDecl() {
+    return parseVarDecl(parseType());
   }
 
   /*
@@ -318,8 +328,7 @@ public class Parser extends CompilerPass {
    * Variable declaration
    * VarDecl    ::= Type String
    */
-  private VarDecl parseVarDecl() {
-    Type type = parseType();
+  private VarDecl parseVarDecl(Type type) {
     String varName = expect(Category.IDENTIFIER).data;
     while (accept(Category.LSBR)) {
       nextToken();

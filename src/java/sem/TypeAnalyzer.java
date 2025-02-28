@@ -110,6 +110,12 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Struct '" + std.structType.name + "' is already declared.");
           yield BaseType.UNKNOWN;
         }
+
+        for (StructTypeDecl nested : std.nestedStructs) {
+          currentScope.put(new StructSymbol(nested));
+          visit(nested);
+        }
+
         for (VarDecl field : std.fields) {
           if (field.type.equals(BaseType.VOID)) {
             error("Struct field '" + field.name + "' cannot be void.");
@@ -121,9 +127,11 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Struct '" + std.structType.name + "' is recursive without pointer.");
           yield BaseType.UNKNOWN;
         }
+
         currentScope.put(new StructSymbol(std));
         yield BaseType.NONE;
       }
+
       // **Variable Declaration**
       // VarDecl ::= Type String`
       // VarDecl(v: T):
@@ -496,33 +504,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 yield BaseType.UNKNOWN;
               }
             }
-            case PointerType expectedPtr -> {
-              if (actual instanceof PointerType actualPtr) {
-                if (!expectedPtr.baseType.equals(actualPtr.baseType)) {
-                  error(
-                      "Function '"
-                          + f.name
-                          + "' argument "
-                          + (i + 1)
-                          + " type mismatch: expected pointer to "
-                          + expectedPtr.baseType
-                          + " but got pointer to "
-                          + actualPtr.baseType);
-                  yield BaseType.UNKNOWN;
-                }
-              } else {
-                error(
-                    "Function '"
-                        + f.name
-                        + "' argument "
-                        + (i + 1)
-                        + " type mismatch: expected pointer to "
-                        + expectedPtr.baseType
-                        + " but got "
-                        + actual);
-                yield BaseType.UNKNOWN;
-              }
-            }
             default -> {
               yield BaseType.UNKNOWN;
             }
@@ -553,22 +534,59 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         if (structType instanceof PointerType pt) {
           structType = pt.baseType;
         }
+
         if (!(structType instanceof StructType st)) {
-          error("Field access on non-struct type.");
           yield BaseType.UNKNOWN;
         }
+
         StructSymbol structSymbol = currentScope.lookupStruct(st.name);
         if (structSymbol == null) {
           error("Struct '" + st.name + "' is not declared.");
           yield BaseType.UNKNOWN;
         }
-        Type fieldType = structSymbol.getFieldType(fa.field);
-        if (fieldType == null) {
-          error("Field '" + fa.field + "' does not exist in struct '" + st.name + "'.");
+
+        StructTypeDecl structDecl = structSymbol.std;
+        if (structDecl == null) {
+          error("Struct definition for '" + st.name + "' not found.");
           yield BaseType.UNKNOWN;
         }
-        yield fieldType;
+
+        Type fieldType = structSymbol.getFieldType(fa.field);
+        if (fieldType != null) {
+
+          if (fieldType instanceof StructType nestedStruct) {
+
+            yield fieldType;
+          }
+
+          yield fieldType;
+        }
+
+        for (StructTypeDecl nested : structDecl.nestedStructs) {
+          if (nested.structType.name.equals(fa.field)) {
+            System.out.println(
+                "DEBUG: Field '" + fa.field + "' is a nested struct inside " + st.name);
+            yield new StructType(nested.structType.name);
+          }
+
+          StructSymbol nestedSymbol = currentScope.lookupStruct(nested.structType.name);
+          if (nestedSymbol != null) {
+            fieldType = nestedSymbol.getFieldType(fa.field);
+            if (fieldType != null) {
+              System.out.println(
+                  "DEBUG: Found nested field '"
+                      + fa.field
+                      + "' inside struct "
+                      + nested.structType.name);
+              yield fieldType;
+            }
+          }
+        }
+
+        error("Field '" + fa.field + "' does not exist in struct '" + st.name + "'.");
+        yield BaseType.UNKNOWN;
       }
+
       // typecast expression
       case TypecastExpr tc -> {
         Type exprType = visit(tc.expr);
