@@ -13,7 +13,7 @@ SRC_DIR="."
 TEST_PARSER_DIR="$SRC_DIR/tests/test/test_parser"
 TEST_LEXER_DIR="$SRC_DIR/tests/test/test_lexing"
 TEST_AST_DIR="$SRC_DIR/tests/test/test_ast"
-TEST_SEMANTIC_DIR="$SRC_DIR/tests/test/test_sem"
+TEST_SEMANTIC_DIR="$SRC_DIR/tests/test/old_"
 
 # Function to display a header
 display_header() {
@@ -54,10 +54,10 @@ run_tests() {
       echo -e "${CYAN}Running test: $file${NC}"
       if [[ "$mode" == "parser" ]]; then
         java -cp "$BUILD_DIR" Main1 -parser "$file"
-      #elif [[ "$mode" == "lexer" ]]; then
-        #java -cp "$BUILD_DIR" Main1 -lexer "$file"
-      #if [[ "$mode" == "ast" ]]; then
-        #java -cp "$BUILD_DIR" Main2 -ast "$file"
+      elif [[ "$mode" == "lexer" ]]; then
+        java -cp "$BUILD_DIR" Main1 -lexer "$file"
+      elif [[ "$mode" == "ast" ]]; then
+        java -cp "$BUILD_DIR" Main2 -ast "$file"
       elif [[ "$mode" == "sem" ]]; then
         java -cp "$BUILD_DIR" Main2 -sem "$file"
       fi
@@ -84,18 +84,28 @@ main() {
   run_ant_build
 
   # Run parser tests
-  run_tests "$TEST_PARSER_DIR" "parser"
+  #run_tests "$TEST_PARSER_DIR" "parser"
 
   #run_tests "$TEST_AST_DIR" "parser"
 
+  #run_tests "$TEST_LEXER_DIR" "parser"
+
+  #run_tests "$TEST_SEMANTIC_DIR" "parser"
+
   # Run lexer tests
   #run_tests "$TEST_LEXER_DIR" "lexer"
-
+  
    # Run AST tests
    #run_tests "$TEST_PARSER_DIR" "ast"
 
    # Run semantic tests
     run_tests "$TEST_SEMANTIC_DIR" "sem"
+    run_tests "$TEST_PARSER_DIR" "sem"
+    run_tests "$TEST_AST_DIR" "sem"
+
+    run_tests "$TEST_LEXER_DIR" "sem"
+
+  #run_tests "$TEST_SEMANTIC_DIR" "sem"
 
   display_completion_message
 }

@@ -5,12 +5,14 @@ struct array1
 };
 
 
+
 int main() {
     int x;
     int a[0][0];
     a[0][0] = 1;
     x = 5;
     x = x + 5;
+    char s ;
     return x;
 }
 
