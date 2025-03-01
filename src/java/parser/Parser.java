@@ -737,19 +737,19 @@ public class Parser extends CompilerPass {
 
     // Handles nested field access and array access such as . and []
     while (accept(Category.LSBR, Category.DOT)) {
-      if (accept(Category.DOT)) {
-        nextToken();
-        // Parse the field identifier
-        String field = expect(Category.IDENTIFIER).data;
-        // to test for sort link list
-        return new FieldAccessExpr(expr, field);
-      }
       if (accept(Category.LSBR)) {
         nextToken();
         // parse the index of the array
         Expr index = parseExpr();
         expect(Category.RSBR);
         expr = new ArrayAccessExpr(expr, index);
+      }
+      if (accept(Category.DOT)) {
+        nextToken();
+        // Parse the field identifier
+        String field = expect(Category.IDENTIFIER).data;
+        // to test for sort link list
+        return new FieldAccessExpr(expr, field);
       }
     }
     return expr;

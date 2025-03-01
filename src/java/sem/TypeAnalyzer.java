@@ -57,6 +57,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         if (builtInFunction != null) {
           yield builtInFunction.decl.type;
         }
+        if (currentScope.lookupFunction(fd.name) != null) {
+          error("Function '" + fd.name + "' is already declared.");
+          yield BaseType.UNKNOWN;
+        }
         // if the function is not built-in, add it to the scope
         currentScope.put(new FunSymbol(fd));
         yield fd.type;
@@ -173,6 +177,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Variable '" + v.name + "' is not declared.");
           yield BaseType.UNKNOWN;
         }
+        v.vd = varSymbol.vd;
         // return the variable type
         yield varSymbol.vd.type;
       }
@@ -194,6 +199,14 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         // visit the right-hand side of the assignment
         Type right = visit(a.right);
 
+        if (left.equals(BaseType.VOID)) {
+          error("Cannot assign to a void type.");
+          yield BaseType.UNKNOWN;
+        }
+        if (left instanceof ArrayType) {
+          error("Cannot assign to an array.");
+          yield BaseType.UNKNOWN;
+        }
         //  assigning string literal to an array element and the size is equal
         if (a.left instanceof ArrayAccessExpr arrayAccessExpr
             && arrayAccessExpr.array instanceof VarExpr varExpr
@@ -421,7 +434,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         // visit the function arguments
         List<Type> expectedParams =
             funSymbol.def != null ? funSymbol.def.getParamTypes() : funSymbol.decl.getParamTypes();
-        // if the number of arguments does not match the number of parameters, return an error
+        // if the number of arguments does not match the number of parameters return an error
         if (f.args.size() != expectedParams.size()) {
           error("Function '" + f.name + "' argument count mismatch.");
           yield BaseType.UNKNOWN;
@@ -472,11 +485,29 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               if (actual instanceof PointerType actualPtr) {
                 break;
               } else {
+                error(
+                    "Function '"
+                        + f.name
+                        + "' argument "
+                        + (i + 1)
+                        + " type mismatch: expected pointer to "
+                        + expectedPtr.baseType
+                        + " but got "
+                        + actual);
                 yield BaseType.UNKNOWN;
               }
             }
             default -> {
               if (!expected.equals(actual)) {
+                error(
+                    "Function '"
+                        + f.name
+                        + "' argument "
+                        + (i + 1)
+                        + " type mismatch: expected "
+                        + expected
+                        + " but got "
+                        + actual);
                 yield BaseType.UNKNOWN;
               }
             }
