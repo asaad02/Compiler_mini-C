@@ -284,16 +284,14 @@ public class Parser extends CompilerPass {
     expect(Category.LBRA);
     // varDecls is the list of variable declarations in the struct
     List<VarDecl> varDecls = new ArrayList<>();
+    // Must have at least one variable declaration
+    if (!accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
+      error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
+    }
     // while we have not reached the right brace ["}"]
     do {
-      if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
-        varDecls.add(parseVarDecl());
-      } else {
-        error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
-        recovery();
-        return new StructTypeDecl((StructType) structType, varDecls);
-      }
-    } while (!accept(Category.RBRA));
+      varDecls.add(parseVarDecl());
+    } while (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT));
     // expect the right brace ["}"]
     expect(Category.RBRA);
     // expect the semicolon [";"]
@@ -831,6 +829,14 @@ public class Parser extends CompilerPass {
         //  handle (a + b)
         Expr expr = parseExpr();
         expect(Category.RPAR);
+        // check if field access
+        while (accept(Category.DOT)) {
+          nextToken();
+          // Parse the field identifier
+          String field = expect(Category.IDENTIFIER).data;
+          // to test for sort link list
+          return new FieldAccessExpr(expr, field);
+        }
         return expr;
       }
     }

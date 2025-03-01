@@ -106,6 +106,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       // add x to Γ
 
       case StructTypeDecl std -> {
+        String structName = std.structType.name;
         if (!declaredStructs.add(std.structType.name)) {
           error("Struct '" + std.structType.name + "' is already declared.");
           yield BaseType.UNKNOWN;
@@ -115,13 +116,24 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             error("Struct field '" + field.name + "' cannot be void.");
             yield BaseType.UNKNOWN;
           }
+          // array cant be type void
+          if (field.type instanceof ArrayType at && at.elementType.equals(BaseType.VOID)) {
+            error("Struct field '" + field.name + "' cannot be an array of void.");
+            yield BaseType.UNKNOWN;
+          }
         }
 
         if (isRecursiveWithoutPointer(std)) {
           error("Struct '" + std.structType.name + "' is recursive without pointer.");
           yield BaseType.UNKNOWN;
         }
-        currentScope.put(new StructSymbol(std));
+        // Ensure structs are unified in the symbol table
+        StructSymbol existingSymbol = currentScope.lookupStruct(structName);
+        if (existingSymbol != null) {
+          std = new StructTypeDecl(existingSymbol.std.structType, std.fields);
+        } else {
+          currentScope.put(new StructSymbol(std));
+        }
         yield BaseType.NONE;
       }
       // **Variable Declaration**
@@ -132,41 +144,14 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       // add ⟨ v: T ⟩ to Γ
 
       case VarDecl vd -> {
-        // switch on the variable type
-        switch (vd.type) {
-          case BaseType bt -> {
-            // if the variable is of type void, return an error
-            if (bt.equals(BaseType.VOID)) {
-              error("Variable '" + vd.name + "' cannot be of type void.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          case ArrayType at -> {
-            // if the array element type is void, return an error
-            if (at.elementType.equals(BaseType.VOID)) {
-              error("Array '" + vd.name + "' cannot have void elements.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          case StructType st -> {
-            // if the struct is not declared, return an error
-            if (!declaredStructs.contains(st.name)) {
-              error("Struct '" + st.name + "' is not declared.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          case PointerType pt -> {
-            // if the pointer base type is void, return an error
-            if (pt.baseType.equals(BaseType.VOID)) {
-              error("Pointer '" + vd.name + "' cannot be of type void.");
-              yield BaseType.UNKNOWN;
-            }
-          }
-          default -> {
-            yield BaseType.UNKNOWN;
-          }
+        if (vd.type.equals(BaseType.VOID)) {
+          error("Variable '" + vd.name + "' cannot be of type void.");
+          yield BaseType.UNKNOWN;
         }
-        // put the variable in the current scope
+        if (vd.type instanceof StructType st && !declaredStructs.contains(st.name)) {
+          error("Struct '" + st.name + "' is not declared.");
+          yield BaseType.UNKNOWN;
+        }
         currentScope.put(new VarSymbol(vd));
         yield vd.type;
       }
@@ -347,10 +332,9 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             error("Equality operators cannot be applied to structs or arrays.");
             yield BaseType.UNKNOWN;
           }
-          if (left instanceof PointerType && right.equals(BaseType.INT)) {
-            yield BaseType.INT;
-          }
-          if (left.equals(BaseType.INT) && right instanceof PointerType) {
+          if ((left instanceof PointerType && right.equals(BaseType.INT))
+              || (right instanceof PointerType && left.equals(BaseType.INT))
+              || (left instanceof PointerType && right instanceof PointerType)) {
             yield BaseType.INT;
           }
           if (!left.equals(right)) {
@@ -453,18 +437,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 error("Function argument cannot be of type void.");
                 yield BaseType.UNKNOWN;
               }
-              if (!expected.equals(actual)) {
-                error(
-                    "Function '"
-                        + f.name
-                        + "' argument "
-                        + (i + 1)
-                        + " type mismatch: expected "
-                        + expected
-                        + " but got "
-                        + actual);
-                yield BaseType.UNKNOWN;
-              }
             }
             case ArrayType expectedArray -> {
               if (actual instanceof ArrayType actualArray) {
@@ -498,33 +470,15 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             }
             case PointerType expectedPtr -> {
               if (actual instanceof PointerType actualPtr) {
-                if (!expectedPtr.baseType.equals(actualPtr.baseType)) {
-                  error(
-                      "Function '"
-                          + f.name
-                          + "' argument "
-                          + (i + 1)
-                          + " type mismatch: expected pointer to "
-                          + expectedPtr.baseType
-                          + " but got pointer to "
-                          + actualPtr.baseType);
-                  yield BaseType.UNKNOWN;
-                }
+                break;
               } else {
-                error(
-                    "Function '"
-                        + f.name
-                        + "' argument "
-                        + (i + 1)
-                        + " type mismatch: expected pointer to "
-                        + expectedPtr.baseType
-                        + " but got "
-                        + actual);
                 yield BaseType.UNKNOWN;
               }
             }
             default -> {
-              yield BaseType.UNKNOWN;
+              if (!expected.equals(actual)) {
+                yield BaseType.UNKNOWN;
+              }
             }
           }
         }
