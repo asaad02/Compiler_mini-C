@@ -57,10 +57,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         if (builtInFunction != null) {
           yield builtInFunction.decl.type;
         }
-        if (currentScope.lookupFunction(fd.name) != null) {
-          error("Function '" + fd.name + "' is already declared.");
-          yield BaseType.UNKNOWN;
-        }
         // if the function is not built-in, add it to the scope
         currentScope.put(new FunSymbol(fd));
         yield fd.type;
@@ -199,14 +195,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         // visit the right-hand side of the assignment
         Type right = visit(a.right);
 
-        if (left.equals(BaseType.VOID)) {
-          error("Cannot assign to a void type.");
-          yield BaseType.UNKNOWN;
-        }
-        if (left instanceof ArrayType) {
-          error("Cannot assign to an array.");
-          yield BaseType.UNKNOWN;
-        }
         //  assigning string literal to an array element and the size is equal
         if (a.left instanceof ArrayAccessExpr arrayAccessExpr
             && arrayAccessExpr.array instanceof VarExpr varExpr
