@@ -224,10 +224,6 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
       // Variable declaration
       case VarDecl vd -> {
-        if (currentScope.lookupFunction(vd.name) != null) {
-          error("Variable '" + vd.name + "' cannot be declared with the same name as a function.");
-          return;
-        }
         // System.out.println("Declaring variable: " + vd.name);
         if (currentScope.lookupCurrent(vd.name) != null
             && currentScope.lookupVariable(vd.name) != null) {

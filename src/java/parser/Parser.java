@@ -805,7 +805,6 @@ public class Parser extends CompilerPass {
         expect(Category.RSBR);
         return new ArrayAccessExpr(new VarExpr(id.data), index);
       }
-
       // here the error for sort list
       else if (accept(Category.DOT)) {
         nextToken();
@@ -860,8 +859,12 @@ public class Parser extends CompilerPass {
       Type sizeOfType = parseType();
       expect(Category.RPAR);
       return new SizeOfExpr(sizeOfType);
-    }
-    // check if the token is a left square brace ["["]
+    } else if (accept(Category.LPAR)) {
+      nextToken();
+      Expr expr = parseExpr();
+      expect(Category.RPAR);
+      return expr;
+    } // check if the token is a left square brace ["["]
     else if (accept(Category.LSBR)) {
       nextToken();
       Expr index = parseExpr();
@@ -873,18 +876,27 @@ public class Parser extends CompilerPass {
       String field = expect(Category.IDENTIFIER).data;
       // to test for sort link list
       return new FieldAccessExpr(parsePrimaryExpr(), field);
-    } else if (accept(Category.LPAR)) {
+    } // plus and minus
+    else if (accept(Category.PLUS, Category.MINUS)) {
+      Category op = token.category;
       nextToken();
-      Expr expr = parseExpr();
-      expect(Category.RPAR);
-      return expr;
+      return new BinOp(
+          new IntLiteral(0), op == Category.PLUS ? Op.ADD : Op.SUB, parsePrimaryExpr());
+    } else {
+      error(
+          Category.INT_LITERAL,
+          Category.CHAR_LITERAL,
+          Category.STRING_LITERAL,
+          Category.IDENTIFIER,
+          Category.LPAR,
+          Category.ASTERISK,
+          Category.AND,
+          Category.SIZEOF,
+          Category.LSBR,
+          Category.DOT);
+      recovery();
+      return new IntLiteral(0);
     }
-
-    error(
-        Category.INT_LITERAL, Category.CHAR_LITERAL, Category.STRING_LITERAL, Category.IDENTIFIER);
-    recovery();
-    // return
-    return null;
   }
 
   private void recovery() {
