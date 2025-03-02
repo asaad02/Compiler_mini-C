@@ -471,7 +471,25 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             }
             case PointerType expectedPtr -> {
               if (actual instanceof PointerType actualPtr) {
-                break;
+                // check the type by the struct symbol
+                if (expectedPtr.baseType instanceof StructType expectedStruct
+                    && actualPtr.baseType instanceof StructType actualStruct) {
+                  StructSymbol expectedStructSymbol =
+                      currentScope.lookupStruct(expectedStruct.name);
+                  StructSymbol actualStructSymbol = currentScope.lookupStruct(actualStruct.name);
+                  if (!expectedStructSymbol.equals(actualStructSymbol)) {
+                    error(
+                        "Function '"
+                            + f.name
+                            + "' argument "
+                            + (i + 1)
+                            + " type mismatch: expected pointer to "
+                            + expectedPtr.baseType
+                            + " but got "
+                            + actual);
+                    yield BaseType.UNKNOWN;
+                  }
+                }
               } else {
                 error(
                     "Function '"
