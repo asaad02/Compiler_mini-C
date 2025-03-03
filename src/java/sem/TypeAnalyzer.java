@@ -127,13 +127,8 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Struct '" + std.structType.name + "' is recursive without pointer.");
           yield BaseType.UNKNOWN;
         }
-        // Ensure structs are unified in the symbol table
-        StructSymbol existingSymbol = currentScope.lookupStruct(structName);
-        if (existingSymbol != null) {
-          std = new StructTypeDecl(existingSymbol.std.structType, std.fields);
-        } else {
-          currentScope.put(new StructSymbol(std));
-        }
+        StructSymbol structSymbol = new StructSymbol(std);
+        currentScope.put(structSymbol);
         yield BaseType.NONE;
       }
       // **Variable Declaration**
@@ -411,10 +406,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 
       case FunCallExpr f -> {
         FunSymbol funSymbol = currentScope.lookupFunction(f.name);
-        // if function is built-in, return the type
-        if (funSymbol != null && funSymbol.def == null) {
-          yield funSymbol.decl.type;
-        }
         if (funSymbol == null) {
           error("Function '" + f.name + "' is not declared.");
           yield BaseType.UNKNOWN;
@@ -432,6 +423,16 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         for (int i = 0; i < f.args.size(); i++) {
           Type expected = expectedParams.get(i);
           Type actual = visit(f.args.get(i));
+          if (!typesAreEquivalent(expected, actual)) {
+            error(
+                "Argument "
+                    + (i + 1)
+                    + " type mismatch: expected "
+                    + expected
+                    + " but got "
+                    + actual);
+            yield BaseType.UNKNOWN;
+          }
           switch (expected) {
             case BaseType bt -> {
               if (bt.equals(BaseType.VOID)) {
@@ -469,54 +470,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 yield BaseType.UNKNOWN;
               }
             }
-            case PointerType expectedPtr -> {
-              if (actual instanceof PointerType actualPtr) {
-                // check the type by the struct symbol
-                if (expectedPtr.baseType instanceof StructType expectedStruct
-                    && actualPtr.baseType instanceof StructType actualStruct) {
-                  StructSymbol expectedStructSymbol =
-                      currentScope.lookupStruct(expectedStruct.name);
-                  StructSymbol actualStructSymbol = currentScope.lookupStruct(actualStruct.name);
-                  if (!expectedStructSymbol.equals(actualStructSymbol)) {
-                    error(
-                        "Function '"
-                            + f.name
-                            + "' argument "
-                            + (i + 1)
-                            + " type mismatch: expected pointer to "
-                            + expectedPtr.baseType
-                            + " but got "
-                            + actual);
-                    yield BaseType.UNKNOWN;
-                  }
-                }
-              } else {
-                error(
-                    "Function '"
-                        + f.name
-                        + "' argument "
-                        + (i + 1)
-                        + " type mismatch: expected pointer to "
-                        + expectedPtr.baseType
-                        + " but got "
-                        + actual);
-                yield BaseType.UNKNOWN;
-              }
-            }
-            default -> {
-              if (!expected.equals(actual)) {
-                error(
-                    "Function '"
-                        + f.name
-                        + "' argument "
-                        + (i + 1)
-                        + " type mismatch: expected "
-                        + expected
-                        + " but got "
-                        + actual);
-                yield BaseType.UNKNOWN;
-              }
-            }
+            default -> {}
           }
         }
         yield funSymbol.def != null ? funSymbol.def.type : funSymbol.decl.type;
@@ -555,7 +509,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
         Type fieldType = structSymbol.getFieldType(fa.field);
         if (fieldType == null) {
-          error("Field '" + fa.field + "' does not exist in struct '" + st.name + "'.");
+          error("Struct '" + st.name + "' has no field named '" + fa.field + "'");
           yield BaseType.UNKNOWN;
         }
         yield fieldType;
@@ -668,5 +622,21 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
     return std.fields.stream()
         .anyMatch(
             field -> field.type instanceof StructType st && st.name.equals(std.structType.name));
+  }
+
+  // check structural equivalence of types
+  private boolean typesAreEquivalent(Type expected, Type actual) {
+    if (expected == actual) return true;
+
+    if (expected instanceof PointerType expectedPtr && actual instanceof PointerType actualPtr) {
+      return typesAreEquivalent(expectedPtr.baseType, actualPtr.baseType);
+    } else if (expected instanceof StructType expectedSt && actual instanceof StructType actualSt) {
+      return expectedSt.name.equals(actualSt.name);
+    } else if (expected instanceof ArrayType expectedArr && actual instanceof ArrayType actualArr) {
+      return expectedArr.size == actualArr.size
+          && typesAreEquivalent(expectedArr.elementType, actualArr.elementType);
+    } else {
+      return expected.equals(actual);
+    }
   }
 }
