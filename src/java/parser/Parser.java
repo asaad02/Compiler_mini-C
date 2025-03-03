@@ -734,25 +734,7 @@ public class Parser extends CompilerPass {
   private Expr parsePostfixExpr() {
     // we will parse the primary expression
     Expr expr = parsePrimaryExpr();
-
-    // Handles nested field access and array access such as . and []
-    while (accept(Category.LSBR, Category.DOT)) {
-      if (accept(Category.LSBR)) {
-        nextToken();
-        // parse the index of the array
-        Expr index = parseExpr();
-        expect(Category.RSBR);
-        expr = new ArrayAccessExpr(expr, index);
-      }
-      if (accept(Category.DOT)) {
-        nextToken();
-        // Parse the field identifier
-        String field = expect(Category.IDENTIFIER).data;
-        // to test for sort link list
-        return new FieldAccessExpr(expr, field);
-      }
-    }
-    return expr;
+    return parsePostfixExprTail(expr);
   }
 
   // parse the function call expression
@@ -829,14 +811,9 @@ public class Parser extends CompilerPass {
         Expr expr = parseExpr();
         expect(Category.RPAR);
         // check if field access
-        while (accept(Category.DOT)) {
-          nextToken();
-          // Parse the field identifier
-          String field = expect(Category.IDENTIFIER).data;
-          // to test for sort link list
-          return new FieldAccessExpr(expr, field);
-        }
-        return expr;
+        // Reenter postfix parsing after parenthesized expression
+        return parsePostfixExprTail(expr);
+        // return expr;
       }
     }
     // check if the token is value at ["*"] - Value at operator (pointer indirection)
@@ -897,6 +874,28 @@ public class Parser extends CompilerPass {
       recovery();
       return new IntLiteral(0);
     }
+  }
+
+  // handle postfix operators after primary expression
+  private Expr parsePostfixExprTail(Expr expr) {
+    while (true) {
+      if (accept(Category.LSBR)) {
+        nextToken();
+        Expr index = parseExpr();
+        expect(Category.RSBR);
+        expr = new ArrayAccessExpr(expr, index);
+      } else if (accept(Category.DOT)) {
+        nextToken();
+        String field = expect(Category.IDENTIFIER).data;
+        expr = new FieldAccessExpr(expr, field);
+      } else if (accept(Category.LPAR)) {
+        Token id = expect(Category.IDENTIFIER);
+        expr = parseFuncCallExpr(id);
+      } else {
+        break;
+      }
+    }
+    return expr;
   }
 
   private void recovery() {
