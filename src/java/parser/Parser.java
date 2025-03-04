@@ -397,18 +397,24 @@ public class Parser extends CompilerPass {
   private Block parseBlock() {
     expect(Category.LBRA); // Consume '{'
 
-    List<ASTNode> elements = new ArrayList<>(); // Store both VarDecl and Stmt in order
+    // Store VarDecl
+    List<VarDecl> vds = new ArrayList<>();
+    // store statements
+    List<Stmt> stmts = new ArrayList<>(); // Store Stmt
 
     while (!accept(Category.RBRA) && !accept(Category.EOF)) {
       if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
-        elements.add(parseVarDecl());
+        // elements.add(parseVarDecl());
+        vds.add(parseVarDecl());
       } else {
-        elements.add(parseStmt());
+        // elements.add(parseStmt());
+        stmts.add(parseStmt());
       }
     }
 
     expect(Category.RBRA);
-    return new Block(elements);
+    // return new Block(elements);
+    return new Block(vds, stmts);
   }
 
   /*
