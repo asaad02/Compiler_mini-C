@@ -13,7 +13,7 @@ SRC_DIR="."
 TEST_PARSER_DIR="$SRC_DIR/tests/test/test_parser"
 TEST_LEXER_DIR="$SRC_DIR/tests/test/test_lexing"
 TEST_AST_DIR="$SRC_DIR/tests/test/test_ast"
-TEST_SEMANTIC_DIR="$SRC_DIR/tests/test/old_"
+TEST_SEMANTIC_DIR="$SRC_DIR/tests/test/old_test"
 
 # Function to display a header
 display_header() {
