@@ -9,7 +9,7 @@ void printList(struct Node* head) {
     int a ;
     a = 0 ;
     while ( a > 0) {
-        print_s("%d ", head.data);  // Pointer dereference
+        //print_s("%d ", head.data);  // Pointer dereference
         head = head.next;
     }
 }

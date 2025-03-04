@@ -1,75 +1,55 @@
-#include "stdio.h"
-#include "stdlib.h"
 
-// Variable Declaration
-int a; 
-
-// Struct Declaration
 struct Node {
     int data;
     struct Node* next;
 };
 
-// Function Prototype
-void insertSorted(struct Node** head, int value);
-void printList(struct Node* head);
+
+struct NodeWrapper {
+     struct Node* node;
+};
+
+void insertSorted(struct Node** headRef, int value);
 
 int main() {
-    // Variable Initialization
-    a = 0; 
 
-    // Create an empty linked list
-    struct Node* head ;
+ 
+    struct Node* head;
     head = NULL;
+    insertSorted(&head, 2); 
 
-    // Insert elements into the sorted linked list
-    insertSorted(&head, 5);
-    insertSorted(&head, 2);
-    insertSorted(&head, 8);
-    insertSorted(&head, 1);
 
-    // Print sorted linked list
-    printList(head);
+    struct Node** headPtr;
+    headPtr = &head;
+    insertSorted(headPtr, 3);
+
+
+    struct Node myNode;
+    //insertSorted(&myNode, 4);
+
+    struct Node** nullPtr ;
+    nullPtr = NULL;
+    insertSorted(nullPtr, 6);
+
+
+    struct Node** ptrArray[5];
+    ptrArray[0] = headPtr;
+    (*(ptrArray[0])).data = 10;
+
+    struct Node* nodePtr ;
+    nodePtr = &myNode;
+    nodePtr.next = (struct Node*)mcmalloc(sizeof(struct Node));
+    nodePtr.next.data = 7;
+
+    struct NodeWrapper wrapper;
+    wrapper.node = nodePtr;
+    wrapper.node.next.data = 8;
+
+
 
     return 0;
 }
 
-// Function Definition: Insert a node in sorted order
-void insertSorted(struct Node** head, int value) {
-    // Allocate memory for new node
-    struct Node* newNode;
-    newNode = (struct Node*)mcmalloc(sizeof(struct Node));
-    newNode.data = value;
-    newNode.next = NULL;
-
-    // Handle empty list or insertion at the beginning
-
-        newNode.next = *head;
-        *head = newNode;
-
-
-    // Find the correct position to insert
-    struct Node* current ;
-    current = *head;
-    while (current.next != (struct Node*)NULL && current.next.data < value){
-
-        current = current.next;
-    }
-
-    // Insert the new node
-    newNode.next = current.next;
-    current.next = newNode;
-}
-
-// Function Definition: Print the linked list
-void printList(struct Node* head) {
-    struct Node* temp ;
-    temp = head;
-
-    print_s("Sorted List: ");
-    while (temp != NULL) {
-        print_s("%d -> ", temp.data);
-        temp = temp.next;
-    }
-    print_s("NULL\n");
+void insertSorted(struct Node** headRef, int value) {
+    
 }
