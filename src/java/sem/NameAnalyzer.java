@@ -214,8 +214,15 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         // current scope is now the new scope
         currentScope = new Scope(oldScope);
         // visit all the elements in the block
-        for (ASTNode elem : b.children()) {
-          visit(elem);
+        // for (ASTNode elem : b.children()) {
+        // visit(elem);
+        // }
+
+        for (VarDecl vd : b.vds) {
+          visit(vd);
+        }
+        for (Stmt stmt : b.stmts) {
+          visit(stmt);
         }
         // current scope is now the old scope
         currentScope = oldScope;

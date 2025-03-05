@@ -5,16 +5,21 @@ import java.util.List;
 
 // Represents a code block containing variable declarations and statements.
 public final class Block extends Stmt {
-  private final List<ASTNode> elements; // Store both VarDecl and Stmt together
+  public List<VarDecl> vds;
+  public List<Stmt> stmts;
 
-  public Block(List<ASTNode> elements) {
-    this.elements = elements;
+  // Store both VarDecl and Stmt together
+
+  public Block(List<VarDecl> vds, List<Stmt> stmts) {
+    this.vds = vds;
+    this.stmts = stmts;
   }
 
   @Override
   public List<ASTNode> children() {
     List<ASTNode> children = new ArrayList<>();
-    children.addAll(elements);
+    children.addAll(vds);
+    children.addAll(stmts);
     return children;
   }
 }

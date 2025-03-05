@@ -106,7 +106,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       // add x to Γ
 
       case StructTypeDecl std -> {
-        String structName = std.structType.name;
         if (!declaredStructs.add(std.structType.name)) {
           error("Struct '" + std.structType.name + "' is already declared.");
           yield BaseType.UNKNOWN;
@@ -406,6 +405,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 
       case FunCallExpr f -> {
         FunSymbol funSymbol = currentScope.lookupFunction(f.name);
+        // if the function in built-in, return the type
+        if (funSymbol != null && funSymbol.def == null) {
+          yield funSymbol.decl.type;
+        }
         if (funSymbol == null) {
           error("Function '" + f.name + "' is not declared.");
           yield BaseType.UNKNOWN;
