@@ -36,7 +36,7 @@ public class FunCodeGen extends CodeGen {
 
     int frameSize = allocator.getFrameSize(fd);
     frameSize += 8; // Space for $RA and $FP
-    frameSize = (frameSize + 15) & ~15; // ✅ Ensure stack alignment to 16 bytes
+    frameSize = (frameSize + 15) & ~15; // ensure stack alignment to 16 bytes
 
     // allocate stack space
     textSection.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -frameSize);
