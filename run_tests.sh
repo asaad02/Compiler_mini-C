@@ -14,12 +14,15 @@ TEST_PARSER_DIR="$SRC_DIR/tests/test/test_parser"
 TEST_LEXER_DIR="$SRC_DIR/tests/test/test_lexing"
 TEST_AST_DIR="$SRC_DIR/tests/test/test_ast"
 TEST_SEMANTIC_DIR="$SRC_DIR/tests/test/old_test"
+TEST_CODEGEN_DIR="$SRC_DIR/tests/test/test_codegen"
+CODEGEN_OUTPUT_DIR="./description/part3"
+MARS_JAR="./description/part3/Mars4_5.jar"
 
 # Function to display a header
 display_header() {
   echo -e "${CYAN}"
   echo "======================================"
-  echo "       JAVA TEST       please run lol" 
+  echo "      JAVA COMPILER TEST SUITE       "
   echo "======================================"
   echo -e "${NC}"
 }
@@ -52,17 +55,17 @@ run_tests() {
   for file in "$dir"/*.c; do
     if [ -f "$file" ]; then
       echo -e "${CYAN}Running test: $file${NC}"
-      if [[ "$mode" == "parser" ]]; then
-        java -cp "$BUILD_DIR" Main1 -parser "$file"
-      elif [[ "$mode" == "lexer" ]]; then
-        java -cp "$BUILD_DIR" Main1 -lexer "$file"
-      elif [[ "$mode" == "ast" ]]; then
-        java -cp "$BUILD_DIR" Main2 -ast "$file"
-      elif [[ "$mode" == "sem" ]]; then
-        java -cp "$BUILD_DIR" Main2 -sem "$file"
-      fi
+      case $mode in
+        "parser") java -cp "$BUILD_DIR" Main1 -parser "$file" ;;
+        "lexer") java -cp "$BUILD_DIR" Main1 -lexer "$file" ;;
+        "ast") java -cp "$BUILD_DIR" Main2 -ast "$file" ;;
+        "sem") java -cp "$BUILD_DIR" Main2 -sem "$file" ;;
+        "gen")
+          output_file="$CODEGEN_OUTPUT_DIR/$(basename "$file" .c).ast"
+          java -cp "$BUILD_DIR" Main3 -gen "$file" "$output_file"
+          ;;
+      esac
 
-      # Check if the test passed or failed
       if [ $? -ne 0 ]; then
         echo -e "${RED}Test failed for file: $file${NC}"
       else
@@ -72,9 +75,27 @@ run_tests() {
   done
 }
 
+# Run all .ast files through MARS simulator
+run_mars_simulation() {
+  echo -e "${YELLOW}Running MARS Simulator on all .ast files...${NC}"
+  
+  for ast_file in "$CODEGEN_OUTPUT_DIR"/*.ast; do
+    if [ -f "$ast_file" ]; then
+      echo -e "${CYAN}Processing file: $ast_file${NC}"
+      java -jar "$MARS_JAR" sm nc  "$ast_file"
+
+      if [ $? -ne 0 ]; then
+        echo -e "${RED}MARS execution failed for: $ast_file${NC}"
+      else
+        echo -e "${GREEN}MARS execution completed successfully for: $ast_file${NC}"
+      fi
+    fi
+  done
+}
+
 # Function to display a completion message
 display_completion_message() {
-  echo -e "${GREEN}All tests completed.${NC}"
+  echo -e "${GREEN}All tests and simulations completed.${NC}"
 }
 
 # Main script logic
@@ -83,29 +104,15 @@ main() {
   check_build_file
   run_ant_build
 
-  # Run parser tests
+  # Run various test phases
   #run_tests "$TEST_PARSER_DIR" "parser"
-
-  #run_tests "$TEST_AST_DIR" "parser"
-
-  #run_tests "$TEST_LEXER_DIR" "parser"
-
-  #run_tests "$TEST_SEMANTIC_DIR" "parser"
-
-  # Run lexer tests
   #run_tests "$TEST_LEXER_DIR" "lexer"
-  
-   # Run AST tests
-   #run_tests "$TEST_PARSER_DIR" "ast"
-
-   # Run semantic tests
-    run_tests "$TEST_SEMANTIC_DIR" "sem"
-    run_tests "$TEST_PARSER_DIR" "sem"
-    run_tests "$TEST_AST_DIR" "sem"
-
-    run_tests "$TEST_LEXER_DIR" "sem"
-
+  #run_tests "$TEST_AST_DIR" "ast"
   #run_tests "$TEST_SEMANTIC_DIR" "sem"
+  run_tests "$TEST_CODEGEN_DIR" "gen"
+
+  # Run MARS on all .ast files
+  run_mars_simulation
 
   display_completion_message
 }
