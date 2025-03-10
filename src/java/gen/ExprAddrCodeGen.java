@@ -6,7 +6,7 @@ import gen.asm.*;
 /** Generates code to calculate the address of an expression and return the result in a register. */
 
 /**
- * Generates code to compute memory addresses for expressions and Variables (global/local) and Array
+ * Generates code to compute memory addresses for expressions and Variables global and local Array
  * elements - Struct fields.
  */
 public class ExprAddrCodeGen extends CodeGen {
@@ -55,72 +55,107 @@ public class ExprAddrCodeGen extends CodeGen {
       }
 
       case ArrayAccessExpr aa -> {
-        System.out.println("[ExprAddrCodeGen] Resolving array element address: " + aa);
+        System.out.println("[ExprAddrCodeGen] Resolving array access: " + aa);
 
-        // retrieve base address of the array
         Register baseReg = visit(aa.array);
+        Register indexReg = visit(aa.index);
 
-        // ensure the variable has an array type
-        VarDecl arrayDecl = allocator.getVarDecl(((VarExpr) aa.array).name);
-        if (!(arrayDecl.type instanceof ArrayType at)) {
-          throw new IllegalStateException(
-              "[ExprAddrCodeGen] ERROR: Variable " + arrayDecl.name + " is not an array!");
+        // ensure array type is set
+        if (aa.array.type == null && aa.array instanceof VarExpr varExpr) {
+          VarDecl varDecl = allocator.getVarDecl(varExpr.name);
+          if (varDecl != null && varDecl.type instanceof ArrayType arrayType) {
+            aa.array.type = arrayType;
+          }
         }
 
-        int elemSize = allocator.computeSizeWithMask(at.elementType);
+        if (aa.array.type instanceof ArrayType arrayType) {
+          System.out.println("[ExprAddrCodeGen] Array type: " + arrayType);
+          int elementSize = allocator.computeSizeWithMask(arrayType.elementType);
+          System.out.println("[ExprAddrCodeGen] Element size: " + elementSize);
 
-        // compute index offset
-        Register indexReg = new ExprValCodeGen(asmProg, allocator).visit(aa.index);
-        Register offsetReg = Register.Virtual.create();
-        text.emit(OpCode.LI, offsetReg, elemSize);
-        text.emit(OpCode.MUL, offsetReg, indexReg, offsetReg);
-        text.emit(OpCode.ADD, addrReg, baseReg, offsetReg);
+          // correcting multiplication operation
+          Register elementSizeReg = Register.Virtual.create();
+          asmProg.getCurrentTextSection().emit(OpCode.LI, elementSizeReg, elementSize);
+          asmProg.getCurrentTextSection().emit(OpCode.MUL, indexReg, indexReg, elementSizeReg);
 
-        return addrReg;
+          asmProg.getCurrentTextSection().emit(OpCode.ADDU, baseReg, baseReg, indexReg);
+        }
+
+        return baseReg;
       }
 
       case FieldAccessExpr fa -> {
-        System.out.println("[ExprAddrCodeGen] Resolving struct field address: " + fa.field);
+        System.out.println("[ExprAddrCodeGen] Resolving field access: " + fa);
 
-        // base struct variable
         Register baseReg = visit(fa.structure);
 
-        // retrieve struct type from variable declaration
-        VarDecl structVar = allocator.getVarDecl(((VarExpr) fa.structure).name);
-
-        if (!(structVar.type instanceof StructType structType)) {
-          throw new IllegalStateException(
-              "[ExprAddrCodeGen] ERROR: Variable " + structVar.name + " is not a struct!");
+        // Ensure struct type is set
+        if (fa.structure.type == null && fa.structure instanceof VarExpr varExpr) {
+          VarDecl varDecl = allocator.getVarDecl(varExpr.name);
+          if (varDecl != null && varDecl.type instanceof StructType structType) {
+            fa.structure.type = structType;
+          }
         }
 
-        // compute field offset correctly
-        int fieldOffset = computeFieldOffset(structType, fa.field);
+        if (fa.structure.type instanceof StructType structType) {
+          System.out.println("[ExprAddrCodeGen] Struct type: " + structType);
+          int offset = computeFieldOffset(structType, fa.field);
+          System.out.println("[ExprAddrCodeGen] Field offset: " + offset);
 
-        // add offset to base address
-        text.emit(OpCode.ADDIU, addrReg, baseReg, fieldOffset);
+          asmProg.getCurrentTextSection().emit(OpCode.ADDIU, baseReg, baseReg, offset);
+        }
 
+        return baseReg;
+      }
+      case ValueAtExpr va -> {
+        Register pointerReg = visit(va.expr);
+        text.emit(OpCode.LW, addrReg, pointerReg, 0);
         return addrReg;
       }
 
-      default -> {
-        throw new UnsupportedOperationException(
-            "[ExprAddrCodeGen] Unsupported address computation: " + e.getClass().getSimpleName());
+      case AddressOfExpr ao -> {
+        return visit(ao.expr);
       }
+
+      case Assign a -> {
+        return visit(a.left);
+      }
+
+      case SizeOfExpr sz -> {
+        Register sizeReg = Register.Virtual.create();
+        text.emit(OpCode.LI, sizeReg, allocator.computeSizeWithMask(sz.type));
+        text.emit(OpCode.ADDU, addrReg, sizeReg, Register.Arch.zero);
+        return addrReg;
+      }
+
+      case TypecastExpr tc -> addrReg = visit(tc.expr);
+
+      case IntLiteral i -> {
+        Register intReg = Register.Virtual.create();
+        text.emit(OpCode.LI, intReg, i.value);
+        text.emit(OpCode.ADDU, addrReg, intReg, Register.Arch.zero);
+      }
+
+      default ->
+          throw new UnsupportedOperationException(
+              "[ExprAddrCodeGen] Unsupported address computation: " + e.getClass().getSimpleName());
     }
+    return addrReg;
   }
 
   /** Computes the byte offset of a struct field with proper alignment. */
   int computeFieldOffset(StructType structType, String fieldName) {
-    StructTypeDecl decl = allocator.findStructDeclaration(structType);
+    // StructTypeDecl decl = allocator.findStructDeclaration(structType);
+    StructTypeDecl structDecl = allocator.findStructDeclaration(structType);
 
-    if (decl == null) {
+    if (structDecl == null) {
       System.out.println(
           "[ExprAddrCodeGen] ERROR: Struct not found for field lookup: " + structType.name);
       return -1; // Return invalid offset
     }
 
     int offset = 0;
-    for (VarDecl field : decl.fields) {
+    for (VarDecl field : structDecl.fields) {
       int alignment = allocator.computeAlignment(field.type);
       offset = (offset + alignment - 1) & ~(alignment - 1);
       if (field.name.equals(fieldName)) {
@@ -131,6 +166,7 @@ public class ExprAddrCodeGen extends CodeGen {
 
     System.out.println(
         "[ExprAddrCodeGen] ERROR: Field " + fieldName + " not found in struct " + structType.name);
-    return -1; // Field not found
+    // Field not found
+    return -1;
   }
 }

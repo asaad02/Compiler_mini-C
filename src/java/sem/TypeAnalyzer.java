@@ -160,16 +160,18 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         VarSymbol varSymbol = currentScope.lookupVariable(v.name);
         if (v.name.equals("NULL")) {
           v.vd = new VarDecl(new PointerType(BaseType.VOID), "NULL");
-          yield new PointerType(BaseType.VOID);
+          v.type = new PointerType(BaseType.VOID);
+          yield v.type;
         }
         // if the variable is not declared, return an error
         if (varSymbol == null) {
           error("Variable '" + v.name + "' is not declared.");
+          v.type = BaseType.UNKNOWN;
           yield BaseType.UNKNOWN;
         }
         v.vd = varSymbol.vd;
-        // return the variable type
-        yield varSymbol.vd.type;
+        v.type = varSymbol.vd.type;
+        yield v.type;
       }
       // **Assignment**
       // Assign ::= Expr Expr`
@@ -195,6 +197,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             && varExpr.vd.type instanceof ArrayType arrayType
             && a.right instanceof StrLiteral strLiteral
             && arrayType.size < strLiteral.value.length() + 1) {
+          arrayAccessExpr.type = arrayType.elementType; // Assign
           // if the left-hand side of the assignment is not an lvalue, return an error
           if (!arrayType.elementType.equals(BaseType.CHAR)) {
             error("Array element type mismatch.");
@@ -260,6 +263,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 yield BaseType.UNKNOWN;
               }
             }
+
             yield leftArray;
           }
           default -> {
@@ -478,20 +482,29 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
         yield funSymbol.def != null ? funSymbol.def.type : funSymbol.decl.type;
       }
-      // array access
       case ArrayAccessExpr a -> {
-        Type array = visit(a.array);
-        Type index = visit(a.index);
-        if (!index.equals(BaseType.INT)) {
+        Type arrayType = visit(a.array); // Get base array type
+        Type indexType = visit(a.index); // Get index type
+
+        if (!indexType.equals(BaseType.INT)) {
           error("Array index must be of type int.");
           yield BaseType.UNKNOWN;
         }
-        yield switch (array) {
-          case ArrayType at -> {
-            yield at.elementType;
-          }
-          default -> BaseType.UNKNOWN;
-        };
+
+        if (!(arrayType instanceof ArrayType arrType)) {
+          error("Attempted array access on non-array type.");
+          yield BaseType.UNKNOWN;
+        }
+
+        // **Ensure Nested Arrays Retain Correct Type**
+        a.array.type = arrType;
+        a.type = arrType.elementType;
+
+        // Debugging output
+        System.out.println("[TypeAnalyzer] Array Type Assigned: " + arrayType);
+        System.out.println("[TypeAnalyzer] Array Element Type Assigned: " + arrType.elementType);
+
+        yield arrType.elementType; // Always propagate correct element type
       }
 
       // field access
@@ -515,6 +528,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Struct '" + st.name + "' has no field named '" + fa.field + "'");
           yield BaseType.UNKNOWN;
         }
+        System.out.println("1return value " + fieldType);
         yield fieldType;
       }
       // typecast expression

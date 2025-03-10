@@ -6,3 +6,4 @@ project/
 target/
 out.log
 tests/test/test_ast_output/*
+description/*

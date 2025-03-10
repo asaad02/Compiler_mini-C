@@ -13,20 +13,16 @@ public class FunCodeGen extends CodeGen {
   }
 
   /**
-   * Generates assembly code for a function definition. Emitting a global label for main ,
-   * Generating a function prologue stack frame setup , Generating code for the function body , and
-   * Generating the function epilogue stack frame cleanup
+   * Generates assembly code for a function definition. Emitting a global label for main Generating
+   * a function prologue stack frame setup Generating code for the function body Generating the
+   * function epilogue stack frame cleanup
    */
   void visit(FunDef fd) {
-    System.out.println("[FunCodeGen] Generating function: " + fd.name);
-
     // create a new text section for the function
     AssemblyProgram.TextSection textSection = asmProg.emitNewTextSection();
 
-    // mark main as a global entry point
-    if (fd.name.equals("main")) {
-      textSection.emit(new Directive("globl main"));
-    }
+    // Function prologue
+    textSection.emit(new Directive("globl " + fd.name));
 
     // emit function label
     textSection.emit(Label.get(fd.name));
@@ -34,9 +30,12 @@ public class FunCodeGen extends CodeGen {
     // function Prologue (Stack Frame Setup)
     System.out.println("[FunCodeGen] Generating prologue for function: " + fd.name);
 
+    // Calculate stack frame size 16-byte aligned
     int frameSize = allocator.getFrameSize(fd);
-    frameSize += 8; // Space for $RA and $FP
-    frameSize = (frameSize + 15) & ~15; // ensure stack alignment to 16 bytes
+    // Space for $RA and $FP
+    frameSize += 8;
+    // ensure stack alignment to 16 bytes
+    frameSize = (frameSize + 15) & ~15;
 
     // allocate stack space
     textSection.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -frameSize);
@@ -48,23 +47,36 @@ public class FunCodeGen extends CodeGen {
     // set new frame pointer ($FP = $SP)
     textSection.emit(OpCode.ADDU, Register.Arch.fp, Register.Arch.sp, Register.Arch.zero);
 
-    // save registers used in the function
+    // Save registers
     textSection.emit(OpCode.PUSH_REGISTERS);
 
     // parameter Handling (Save function arguments)
     System.out.println("[FunCodeGen] Saving function parameters for: " + fd.name);
+    // save registers used in the function
     for (int i = 0; i < fd.params.size(); i++) {
       VarDecl param = fd.params.get(i);
       int offset = allocator.getLocalOffset(param);
-      if (i < 4) {
-        textSection.emit(OpCode.SW, getArgumentRegister(i), Register.Arch.fp, offset);
+
+      if (param.type instanceof StructType || param.type instanceof ArrayType) {
+        // Copy struct/array from caller's stack to callee's stack
+        int size = allocator.computeSizeWithMask(param.type);
+
+        for (int j = 0; j < size; j += 4) {
+          // Load from caller
+          textSection.emit(OpCode.LW, Register.Arch.t0, Register.Arch.fp, 8 + i * 4 + j);
+          // Store locally
+          textSection.emit(OpCode.SW, Register.Arch.t0, Register.Arch.fp, offset + j);
+        }
+      } else if (i < 4) {
+        // first 4 arguments in $a0-$a3
+        textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.fp, offset);
       } else {
-        int stackOffset = (i - 4) * 4;
-        textSection.emit(OpCode.LW, Register.Arch.t0, Register.Arch.fp, stackOffset + 8);
+        // load from caller stack for args beyond $a3
+        int stackOffset = 8 + (i - 4) * 4;
+        textSection.emit(OpCode.LW, Register.Arch.t0, Register.Arch.fp, stackOffset);
         textSection.emit(OpCode.SW, Register.Arch.t0, Register.Arch.fp, offset);
       }
     }
-
     // generate Function Body
     System.out.println("[FunCodeGen] Generating function body for: " + fd.name);
     new StmtCodeGen(asmProg, allocator, fd).visit(fd.block);
@@ -89,7 +101,7 @@ public class FunCodeGen extends CodeGen {
 
     // correct return handling
     if (fd.name.equals("main")) {
-      textSection.emit(OpCode.LI, Register.Arch.v0, 10); // Exit syscall
+      textSection.emit(OpCode.LI, Register.Arch.v0, 10);
       textSection.emit(OpCode.SYSCALL);
     } else {
       textSection.emit(OpCode.JR, Register.Arch.ra);
@@ -98,16 +110,13 @@ public class FunCodeGen extends CodeGen {
     System.out.println("[FunCodeGen] Finished generating function: " + fd.name);
   }
 
-  /** returns the appropriate MIPS argument register ($a0 - $a3) for a given index. */
-  private Register getArgumentRegister(int index) {
+  private Register getArgReg(int index) {
     return switch (index) {
       case 0 -> Register.Arch.a0;
       case 1 -> Register.Arch.a1;
       case 2 -> Register.Arch.a2;
       case 3 -> Register.Arch.a3;
-      default ->
-          throw new IllegalArgumentException(
-              "[FunCodeGen] ERROR: Invalid argument index: " + index);
+      default -> throw new IllegalArgumentException("Invalid argument index");
     };
   }
 }

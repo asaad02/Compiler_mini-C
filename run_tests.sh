@@ -91,6 +91,8 @@ run_mars_simulation() {
       fi
     fi
   done
+            # after running remove all ast files with ending .ast
+        rm -f "$CODEGEN_OUTPUT_DIR"/*.ast
 }
 
 # Function to display a completion message

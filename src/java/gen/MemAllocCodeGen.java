@@ -171,4 +171,29 @@ public class MemAllocCodeGen extends CodeGen {
   public boolean isGlobal(String varName) {
     return globalVars.containsKey(varName);
   }
+
+  /** Computes the offset of a field within a struct. */
+  int computeFieldOffset(StructType structType, String fieldName) {
+    StructTypeDecl decl = findStructDeclaration(structType);
+
+    if (decl == null) {
+      throw new IllegalStateException(
+          "[MemAlloc] ERROR: Struct not found for field lookup: " + structType.name);
+    }
+
+    int offset = 0;
+    for (VarDecl field : decl.fields) {
+      int fieldAlignment = computeAlignment(field.type);
+      // Align fields properly
+      offset = (offset + fieldAlignment - 1) & ~(fieldAlignment - 1);
+
+      if (field.name.equals(fieldName)) {
+        return offset;
+      }
+      offset += computeSizeWithMask(field.type);
+    }
+
+    throw new IllegalStateException(
+        "[MemAlloc] ERROR: Field " + fieldName + " not found in struct " + structType.name);
+  }
 }
