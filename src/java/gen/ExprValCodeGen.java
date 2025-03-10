@@ -12,49 +12,50 @@ import gen.asm.*;
  */
 public class ExprValCodeGen extends CodeGen {
   private final MemAllocCodeGen allocator;
-  private static int strCounter = 0; // Unique counter for string literals
+  private static int strCounter = 0;
 
   public ExprValCodeGen(AssemblyProgram asmProg, MemAllocCodeGen allocator) {
     this.asmProg = asmProg;
     this.allocator = allocator;
   }
 
-  /** Generates assembly code for evaluating an expression. */
+  // generates assembly code for evaluating an expression.
   public Register visit(Expr e) {
     System.out.println("[ExprValCodeGen] Processing expression: " + e.getClass().getSimpleName());
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
-    Register resReg = Register.Virtual.create(); // Allocate a new register for result
+    // allocate a new register for result
+    Register resReg = Register.Virtual.create();
 
     switch (e) {
       case IntLiteral i -> {
-        System.out.println("[ExprValCodeGen] Loading integer literal: " + i.value);
         text.emit(OpCode.LI, resReg, i.value);
         return resReg;
       }
 
       case StrLiteral s -> {
-        System.out.println("[ExprValCodeGen] Allocating string literal: " + s.value);
-        // ensure wordaligned strings in .data
         Label strLabel = Label.get("str_" + strCounter++);
-
-        // emit properly aligned string
-        asmProg.dataSection.emit(new Directive("align 2"));
+        // correct alignment
+        asmProg.dataSection.emit(new Directive("align 2")); // Ensure correct alignment
+        String escapeChar = s.value.replace("\n", "\\n").replace("\t", "\\t").replace("\"", "\\\"");
         asmProg.dataSection.emit(strLabel);
-        asmProg.dataSection.emit(new Directive("asciiz \"" + s.value + "\""));
-
-        // load the string address
+        asmProg.dataSection.emit(new Directive("asciiz \"" + escapeChar + "\""));
+        asmProg.dataSection.emit(new Directive("align 2"));
         text.emit(OpCode.LA, resReg, strLabel);
         return resReg;
       }
 
       case ChrLiteral c -> {
-        System.out.println("[ExprValCodeGen] Loading character literal: " + c.value);
+        asmProg.dataSection.emit(new Directive("align 2"));
         text.emit(OpCode.LI, resReg, c.value.charAt(0));
+        asmProg.dataSection.emit(new Directive("align 2"));
         return resReg;
       }
 
+      case SizeOfExpr sz -> {
+        text.emit(OpCode.LI, resReg, allocator.computeSizeWithMask(sz.type));
+        return resReg;
+      }
       case BinOp b -> {
-        System.out.println("[ExprValCodeGen] Processing binary operation: " + b.op);
         Register leftReg = visit(b.left);
         Register rightReg = visit(b.right);
 
@@ -64,11 +65,11 @@ public class ExprValCodeGen extends CodeGen {
           case MUL -> text.emit(OpCode.MUL, resReg, leftReg, rightReg);
           case DIV -> {
             text.emit(OpCode.DIV, leftReg, rightReg);
-            text.emit(OpCode.MFLO, resReg); // Quotient in LO
+            text.emit(OpCode.MFLO, resReg);
           }
           case MOD -> {
             text.emit(OpCode.DIV, leftReg, rightReg);
-            text.emit(OpCode.MFHI, resReg); // Remainder in HI
+            text.emit(OpCode.MFHI, resReg);
           }
           case EQ, NE -> {
             Label trueLabel = Label.create();
@@ -81,15 +82,10 @@ public class ExprValCodeGen extends CodeGen {
             text.emit(endLabel);
           }
           case LT -> text.emit(OpCode.SLT, resReg, leftReg, rightReg);
-          case LE -> {
+          case GT -> text.emit(OpCode.SLT, resReg, rightReg, leftReg);
+          case LE, GE -> {
             Register tempReg = Register.Virtual.create();
             text.emit(OpCode.SLT, tempReg, rightReg, leftReg);
-            text.emit(OpCode.XORI, resReg, tempReg, 1);
-          }
-          case GT -> text.emit(OpCode.SLT, resReg, rightReg, leftReg);
-          case GE -> {
-            Register tempReg = Register.Virtual.create();
-            text.emit(OpCode.SLT, tempReg, leftReg, rightReg);
             text.emit(OpCode.XORI, resReg, tempReg, 1);
           }
           case AND -> text.emit(OpCode.AND, resReg, leftReg, rightReg);
@@ -100,149 +96,131 @@ public class ExprValCodeGen extends CodeGen {
         return resReg;
       }
 
-      case VarExpr v -> {
-        System.out.println("[ExprValCodeGen] Processing variable: " + v.name);
-        if (allocator.isGlobal(v.name)) {
-          Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(v);
-          text.emit(v.type == BaseType.CHAR ? OpCode.LB : OpCode.LW, resReg, addrReg, 0);
+      case Assign a -> {
+        Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(a.left);
+        Register rhsReg = visit(a.right);
+        Type type = a.left.type;
+        if (type != null && type.equals(BaseType.CHAR)) {
+          text.emit(OpCode.SB, rhsReg, addrReg, 0);
         } else {
-          int offset = allocator.getLocalOffset(allocator.getVarDecl(v.name));
-          text.emit(
-              v.type == BaseType.CHAR ? OpCode.LB : OpCode.LW, resReg, Register.Arch.fp, offset);
+          text.emit(OpCode.SW, rhsReg, addrReg, 0);
+        }
+        return rhsReg;
+      }
+
+      case VarExpr v -> {
+        Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(v);
+        VarDecl varDecl = allocator.getVarDecl(v.name);
+        Type type = varDecl.type;
+        if (type.equals(BaseType.CHAR)) {
+          text.emit(OpCode.LB, resReg, addrReg, 0);
+        } else {
+          text.emit(OpCode.LW, resReg, addrReg, 0);
         }
         return resReg;
       }
       case FunCallExpr fc -> {
-        System.out.println("[ExprValCodeGen] Processing function call: " + fc.name);
-        Register argReg = fc.args.isEmpty() ? null : visit(fc.args.get(0));
+        if (SyscallCodeGen.isSyscall(fc.name)) {
+          Register argReg = null;
 
-        switch (fc.name) {
-          case "print_i" -> {
-            text.emit(OpCode.ADDU, Register.Arch.a0, argReg, Register.Arch.zero);
-            text.emit(OpCode.LI, Register.Arch.v0, 1);
-            text.emit(OpCode.SYSCALL);
-          }
-          case "print_c" -> {
-            text.emit(OpCode.ADDU, Register.Arch.a0, argReg, Register.Arch.zero);
-            text.emit(OpCode.LI, Register.Arch.v0, 11);
-            text.emit(OpCode.SYSCALL);
-          }
-          case "mcmalloc" -> {
-            text.emit(OpCode.ADDU, Register.Arch.a0, argReg, Register.Arch.zero);
-            text.emit(OpCode.LI, Register.Arch.v0, 9);
-            text.emit(OpCode.SYSCALL);
-          }
-          case "print_s" -> {
-            if (argReg == null) {
-              throw new IllegalStateException(
-                  "[ExprValCodeGen] ERROR: print_s requires an argument!");
+          if (!fc.args.isEmpty()) {
+            Expr firstArg = fc.args.get(0);
+
+            // accessing an array element, resolve it as a value not an address
+            if (firstArg instanceof ArrayAccessExpr || firstArg instanceof FieldAccessExpr) {
+              argReg = new ExprValCodeGen(asmProg, allocator).visit(firstArg);
+            } else if (firstArg instanceof VarExpr) {
+              VarDecl varDecl = allocator.getVarDecl(((VarExpr) firstArg).name);
+              if (varDecl.type instanceof ArrayType || varDecl.type instanceof StructType) {
+                argReg = new ExprAddrCodeGen(asmProg, allocator).visit(firstArg);
+              } else {
+                argReg = visit(firstArg);
+              }
+            } else {
+              argReg = visit(firstArg);
             }
-            text.emit(OpCode.ADDU, Register.Arch.a0, argReg, Register.Arch.zero);
-            text.emit(OpCode.LI, Register.Arch.v0, 4); // Syscall: print string
-            text.emit(OpCode.SYSCALL);
-            return argReg;
           }
-          case "read_i" -> {
-            text.emit(OpCode.LI, Register.Arch.v0, 5); // Syscall: read integer
-            text.emit(OpCode.SYSCALL);
-            return Register.Arch.v0;
-          }
-          case "read_c" -> {
-            text.emit(OpCode.LI, Register.Arch.v0, 12); // Syscall: read character
-            text.emit(OpCode.SYSCALL);
-            return Register.Arch.v0;
-          }
-          default -> {}
+
+          SyscallCodeGen.generateSyscall(text, fc.name, argReg);
+          return Register.Arch.v0;
         }
-        return argReg;
+
+        Label funcLabel = Label.get(fc.name);
+        int stackOffset = 0;
+
+        // handle function arguments, including structs and arrays
+        for (int i = 0; i < fc.args.size(); i++) {
+          Expr arg = fc.args.get(i);
+          Type argType = arg.type;
+          Register argReg;
+
+          if (arg instanceof ArrayAccessExpr || arg instanceof FieldAccessExpr) {
+            argReg = new ExprValCodeGen(asmProg, allocator).visit(arg);
+          } else if (arg instanceof VarExpr) {
+            VarDecl varDecl = allocator.getVarDecl(((VarExpr) arg).name);
+            if (varDecl.type instanceof ArrayType || varDecl.type instanceof StructType) {
+              argReg = new ExprAddrCodeGen(asmProg, allocator).visit(arg);
+            } else {
+              argReg = visit(arg);
+            }
+          } else {
+            argReg = visit(arg);
+          }
+
+          if (i < 4) {
+            text.emit(OpCode.ADDU, getArgumentRegister(i), argReg, Register.Arch.zero);
+          } else {
+            text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -4);
+            text.emit(OpCode.SW, argReg, Register.Arch.sp, 0);
+            stackOffset += 4;
+          }
+        }
+
+        text.emit(OpCode.JAL, funcLabel);
+
+        if (stackOffset > 0) {
+          text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, stackOffset);
+        }
+
+        return Register.Arch.v0;
       }
 
-      case ArrayAccessExpr aa -> {
-        System.out.println("[ExprValCodeGen] Processing array access: " + aa);
+      case ArrayAccessExpr a -> {
+        System.out.println("[ExprValCodeGen] Resolving array access value: " + a);
 
-        // ensure the array expression retains the correct type
-        if (!(aa.array instanceof VarExpr v)) {
-          throw new IllegalStateException(
-              "[ExprValCodeGen] ERROR: Array expression is not a variable!");
-        }
+        // Compute the address of arr[i][j]
+        Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(a);
 
-        VarDecl arrayDecl = allocator.getVarDecl(v.name);
-        if (!(arrayDecl.type instanceof ArrayType at)) {
-          throw new IllegalStateException(
-              "[ExprValCodeGen] ERROR: Variable " + arrayDecl.name + " is not an array!");
-        }
+        // Load value from computed address
+        Register valueReg = Register.Virtual.create();
+        // Load integer value
+        text.emit(OpCode.LW, valueReg, addrReg, 0);
 
-        // get base address of array
-        Register baseReg = new ExprAddrCodeGen(asmProg, allocator).visit(aa);
-
-        // load value from computed address
-        text.emit(OpCode.LW, resReg, baseReg, 0);
-
-        return resReg;
+        System.out.println("[ExprValCodeGen] Loaded value into register: " + valueReg);
+        return valueReg;
       }
 
       case FieldAccessExpr fa -> {
-        System.out.println("[ExprValCodeGen] Processing field access: " + fa.field);
-        Register baseReg = new ExprAddrCodeGen(asmProg, allocator).visit(fa.structure);
+        Register baseReg = new ExprAddrCodeGen(asmProg, allocator).visit(fa);
+        Register fieldValue = Register.Virtual.create();
+        // Load from computed address
+        text.emit(OpCode.LW, fieldValue, baseReg, 0);
+        return fieldValue;
+      }
 
-        VarDecl structVar = allocator.getVarDecl(((VarExpr) fa.structure).name);
-        if (!(structVar.type instanceof StructType structType)) {
-          throw new IllegalStateException(
-              "[ExprValCodeGen] ERROR: Variable " + structVar.name + " is not a struct!");
-        }
-
-        int fieldOffset =
-            new ExprAddrCodeGen(asmProg, allocator).computeFieldOffset(structType, fa.field);
-        text.emit(fa.type == BaseType.CHAR ? OpCode.LB : OpCode.LW, resReg, baseReg, fieldOffset);
+      case ValueAtExpr va -> {
+        Register addrReg = visit(va.expr);
+        text.emit(OpCode.LW, resReg, addrReg, 0);
         return resReg;
       }
 
-      case Assign a -> {
-        switch (a.left) {
-          case VarExpr v -> {
-            System.out.println("[ExprValCodeGen] Processing assignment to variable: " + v.name);
-            Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(v);
-            Register rhsReg = visit(a.right);
-            text.emit(a.type == BaseType.CHAR ? OpCode.SB : OpCode.SW, rhsReg, addrReg, 0);
-            return rhsReg;
-          }
-
-          case ArrayAccessExpr aa -> {
-            System.out.println("[ExprValCodeGen] Processing assignment to array: " + aa);
-            Register baseReg = new ExprAddrCodeGen(asmProg, allocator).visit(aa);
-            Register rhsReg = visit(a.right);
-            text.emit(OpCode.SW, rhsReg, baseReg, 0);
-            return rhsReg;
-          }
-
-          case FieldAccessExpr fa -> {
-            System.out.println("[ExprValCodeGen] Processing assignment to field: " + fa.field);
-            Register baseReg = new ExprAddrCodeGen(asmProg, allocator).visit(fa.structure);
-            int fieldOffset =
-                new ExprAddrCodeGen(asmProg, allocator)
-                    .computeFieldOffset(
-                        (StructType) allocator.getVarDecl(((VarExpr) fa.structure).name).type,
-                        fa.field);
-            Register rhsReg = visit(a.right);
-            text.emit(
-                a.type == BaseType.CHAR ? OpCode.SB : OpCode.SW, rhsReg, baseReg, fieldOffset);
-            return rhsReg;
-          }
-
-          default ->
-              throw new UnsupportedOperationException(
-                  "[ExprValCodeGen] Unsupported assignment target: "
-                      + a.left.getClass().getSimpleName());
-        }
+      case AddressOfExpr ao -> {
+        return new ExprAddrCodeGen(asmProg, allocator).visit(ao.expr);
       }
+
       case TypecastExpr tc -> {
-        System.out.println("[ExprValCodeGen] Processing typecast: " + tc.type);
-        Register valReg = visit(tc.expr);
-        if (tc.type == BaseType.CHAR) {
-          text.emit(OpCode.ANDI, resReg, valReg, 0xFF);
-        } else {
-          text.emit(OpCode.ADDU, resReg, valReg, Register.Arch.zero);
-        }
+        Register castReg = visit(tc.expr);
+        text.emit(OpCode.ADDU, resReg, castReg, Register.Arch.zero);
         return resReg;
       }
 
