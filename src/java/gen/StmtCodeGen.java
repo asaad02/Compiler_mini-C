@@ -61,7 +61,6 @@ public class StmtCodeGen extends CodeGen {
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
     Register result = new ExprValCodeGen(asmProg, allocator).visit(es.expr);
 
-    // Discard result if it's not used (except for function calls)
     if (!(es.expr instanceof FunCallExpr)) {
       text.emit(OpCode.ADDU, Register.Arch.zero, result, Register.Arch.zero);
     }
@@ -109,7 +108,6 @@ public class StmtCodeGen extends CodeGen {
     // Loop condition check
     text.emit(startLabel);
     Register condReg = new ExprValCodeGen(asmProg, allocator).visit(w.condition);
-    // Exit loop if condition false
     text.emit(OpCode.BEQ, condReg, Register.Arch.zero, endLabel);
 
     // Loop body
@@ -126,7 +124,6 @@ public class StmtCodeGen extends CodeGen {
   /** Handles return statements, including returning values. */
   private void handleReturn(Return rs) {
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
-
     System.out.println("[StmtCodeGen] Processing return statement...");
 
     // save function result in $v0 if returning a value
@@ -134,17 +131,6 @@ public class StmtCodeGen extends CodeGen {
       Register resultReg = new ExprValCodeGen(asmProg, allocator).visit(rs.expr);
       text.emit(OpCode.ADDU, Register.Arch.v0, resultReg, Register.Arch.zero);
     }
-
-    // restore registers before returning
-    text.emit(OpCode.POP_REGISTERS);
-
-    // restore frame pointer and return address
-    text.emit(OpCode.LW, Register.Arch.fp, Register.Arch.sp, 0);
-    text.emit(OpCode.LW, Register.Arch.ra, Register.Arch.sp, 4);
-    text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, 8);
-
-    // correct return handling
-    text.emit(OpCode.JR, Register.Arch.ra);
   }
 
   /** Handles continue statements by jumping to the start of the nearest enclosing loop. */
