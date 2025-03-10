@@ -290,7 +290,17 @@ public class Parser extends CompilerPass {
     }
     // while we have not reached the right brace ["}"]
     do {
-      varDecls.add(parseVarDecl());
+      if (accept(Category.STRUCT)
+          && lookAhead(1).category == Category.IDENTIFIER
+          && lookAhead(2).category == Category.LBRA) {
+        // Parse nested struct declaration
+        Type nestedStructType = structtype();
+        StructTypeDecl nestedStructDecl = parseStructDecl(nestedStructType);
+        // Add the nested struct declaration as a variable declaration
+        varDecls.add(new VarDecl(nestedStructDecl.structType, nestedStructDecl.structType.name));
+      } else {
+        varDecls.add(parseVarDecl());
+      }
     } while (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT));
     // expect the right brace ["}"]
     expect(Category.RBRA);
