@@ -52,6 +52,8 @@ public class StmtCodeGen extends CodeGen {
   /** handles block statements by recursively visiting each statement inside the block. */
   private void handleBlock(Block b) {
     System.out.println("[StmtCodeGen] Entering block...");
+    // alocate all variable inside the block
+    b.vds.forEach((vd) -> allocator.visit(vd));
     b.stmts.forEach(this::visit);
     System.out.println("[StmtCodeGen] Exiting block.");
   }
