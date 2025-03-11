@@ -73,7 +73,6 @@ public class ExprAddrCodeGen extends CodeGen {
           int elementSize = allocator.computeSizeWithMask(arrayType.elementType);
           System.out.println("[ExprAddrCodeGen] Element size: " + elementSize);
 
-          // correcting multiplication operation
           Register elementSizeReg = Register.Virtual.create();
           asmProg.getCurrentTextSection().emit(OpCode.LI, elementSizeReg, elementSize);
           asmProg.getCurrentTextSection().emit(OpCode.MUL, indexReg, indexReg, elementSizeReg);
@@ -114,7 +113,9 @@ public class ExprAddrCodeGen extends CodeGen {
       }
 
       case AddressOfExpr ao -> {
-        return visit(ao.expr);
+        Register addrReg1 = visit(ao.expr);
+        text.emit(OpCode.ADDU, addrReg1, addrReg, Register.Arch.zero);
+        return addrReg;
       }
 
       case Assign a -> {
@@ -131,9 +132,7 @@ public class ExprAddrCodeGen extends CodeGen {
       case TypecastExpr tc -> addrReg = visit(tc.expr);
 
       case IntLiteral i -> {
-        Register intReg = Register.Virtual.create();
-        text.emit(OpCode.LI, intReg, i.value);
-        text.emit(OpCode.ADDU, addrReg, intReg, Register.Arch.zero);
+        text.emit(OpCode.LI, addrReg, i.value);
       }
 
       default ->
@@ -143,30 +142,30 @@ public class ExprAddrCodeGen extends CodeGen {
     return addrReg;
   }
 
-  /** Computes the byte offset of a struct field with proper alignment. */
+  // Computes the byte offset of a struct field with proper alignment.
   int computeFieldOffset(StructType structType, String fieldName) {
     // StructTypeDecl decl = allocator.findStructDeclaration(structType);
     StructTypeDecl structDecl = allocator.findStructDeclaration(structType);
 
-    if (structDecl == null) {
-      System.out.println(
-          "[ExprAddrCodeGen] ERROR: Struct not found for field lookup: " + structType.name);
-      return -1; // Return invalid offset
-    }
-
     int offset = 0;
+    // Track max alignment for struct
+    int maxAlignment = 1;
+
     for (VarDecl field : structDecl.fields) {
-      int alignment = allocator.computeAlignment(field.type);
-      offset = (offset + alignment - 1) & ~(alignment - 1);
+      int fieldAlignment = allocator.computeAlignment(field.type);
+      // align field start
+      offset = (offset + fieldAlignment - 1) & ~(fieldAlignment - 1);
+
       if (field.name.equals(fieldName)) {
         return offset;
       }
+
       offset += allocator.computeSizeWithMask(field.type);
+      maxAlignment = Math.max(maxAlignment, fieldAlignment);
     }
 
-    System.out.println(
-        "[ExprAddrCodeGen] ERROR: Field " + fieldName + " not found in struct " + structType.name);
-    // Field not found
-    return -1;
+    // ensure struct size is a multiple of max alignment
+    offset = (offset + maxAlignment - 1) & ~(maxAlignment - 1);
+    return offset;
   }
 }

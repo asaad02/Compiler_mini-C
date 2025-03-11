@@ -53,18 +53,16 @@ public class MemAllocCodeGen extends CodeGen {
     int maxAlignment = 1;
 
     for (VarDecl field : structDecl.fields) {
-      System.out.println("[MemAlloc] Field: " + field.name + " Type: " + field.type);
       int fieldAlignment = computeAlignment(field.type);
 
-      // ensure the field is correctly aligned
+      // Ensure correct field alignment
       offset = (offset + fieldAlignment - 1) & ~(fieldAlignment - 1);
       offset += computeSizeWithMask(field.type);
 
-      // keep track of max alignment needed
       maxAlignment = Math.max(maxAlignment, fieldAlignment);
     }
 
-    // ensure total struct size is a multiple of max alignment
+    // Ensure struct size is a multiple of its largest field alignment
     return (offset + maxAlignment - 1) & ~(maxAlignment - 1);
   }
 
@@ -73,7 +71,14 @@ public class MemAllocCodeGen extends CodeGen {
     return switch (type) {
       case BaseType.INT -> 4;
       case BaseType.CHAR -> 1;
-      case ArrayType at -> computeSizeWithMask(at.elementType) * at.size;
+      case ArrayType at -> {
+        int elementSize = computeSizeWithMask(at.elementType);
+        int alignment = computeAlignment(at.elementType);
+        // Ensure proper alignment
+        int alignedSize = (elementSize + (alignment - 1)) & ~(alignment - 1);
+        yield alignedSize * at.size;
+      }
+
       case StructType st -> structSizes.getOrDefault(st.name, 0);
       case PointerType p -> 4;
       default -> throw new UnsupportedOperationException("Unknown type: " + type);
@@ -106,14 +111,13 @@ public class MemAllocCodeGen extends CodeGen {
       dataSection.emit(new Directive("space " + size));
     } else {
       localVars.put(vd.name, vd);
-      int size = computeSizeWithMask(vd.type);
-      int alignment = computeAlignment(vd.type);
 
       // Align offset properly
-      fpOffset -= size;
+      int alignment = computeAlignment(vd.type);
+      // Allocate space first
+      fpOffset -= computeSizeWithMask(vd.type);
       // Ensure alignment
-      fpOffset = (fpOffset - alignment) & ~(alignment - 1);
-
+      fpOffset = (fpOffset - alignment + 1) & ~(alignment - 1);
       localVarOffsets.put(vd, fpOffset);
 
       // store struct type mapping
@@ -184,16 +188,24 @@ public class MemAllocCodeGen extends CodeGen {
     int offset = 0;
     for (VarDecl field : decl.fields) {
       int fieldAlignment = computeAlignment(field.type);
-      // Align fields properly
+      // Align field start
       offset = (offset + fieldAlignment - 1) & ~(fieldAlignment - 1);
-
-      if (field.name.equals(fieldName)) {
-        return offset;
-      }
       offset += computeSizeWithMask(field.type);
     }
+    // Ensure struct size is a multiple of 16
+    offset = (offset + 15) & ~15;
 
     throw new IllegalStateException(
         "[MemAlloc] ERROR: Field " + fieldName + " not found in struct " + structType.name);
+  }
+
+  // getReturnOffset
+  public int getReturnOffset(FunDef fd) {
+    // Skip $RA and $FP
+    int offset = 8;
+    for (VarDecl param : fd.params) {
+      offset += computeSizeWithMask(param.type);
+    }
+    return offset;
   }
 }

@@ -35,7 +35,7 @@ public class ExprValCodeGen extends CodeGen {
       case StrLiteral s -> {
         Label strLabel = Label.get("str_" + strCounter++);
         // correct alignment
-        asmProg.dataSection.emit(new Directive("align 2")); // Ensure correct alignment
+        asmProg.dataSection.emit(new Directive("align 2")); 
         String escapeChar = s.value.replace("\n", "\\n").replace("\t", "\\t").replace("\"", "\\\"");
         asmProg.dataSection.emit(strLabel);
         asmProg.dataSection.emit(new Directive("asciiz \"" + escapeChar + "\""));
@@ -148,7 +148,6 @@ public class ExprValCodeGen extends CodeGen {
         Label funcLabel = Label.get(fc.name);
         int stackOffset = 0;
 
-        // handle function arguments, including structs and arrays
         for (int i = 0; i < fc.args.size(); i++) {
           Expr arg = fc.args.get(i);
           Type argType = arg.type;

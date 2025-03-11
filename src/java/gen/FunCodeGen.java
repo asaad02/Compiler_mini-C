@@ -30,21 +30,15 @@ public class FunCodeGen extends CodeGen {
     // function Prologue (Stack Frame Setup)
     System.out.println("[FunCodeGen] Generating prologue for function: " + fd.name);
 
-    // Calculate stack frame size 16-byte aligned
     int frameSize = allocator.getFrameSize(fd);
     // Space for $RA and $FP
     frameSize += 8;
     // ensure stack alignment to 16 bytes
     frameSize = (frameSize + 15) & ~15;
 
-    // allocate stack space
     textSection.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -frameSize);
-
-    // save return address ($RA) and old frame pointer ($FP)
     textSection.emit(OpCode.SW, Register.Arch.ra, Register.Arch.sp, frameSize - 4);
     textSection.emit(OpCode.SW, Register.Arch.fp, Register.Arch.sp, frameSize - 8);
-
-    // set new frame pointer ($FP = $SP)
     textSection.emit(OpCode.ADDU, Register.Arch.fp, Register.Arch.sp, Register.Arch.zero);
 
     // Save registers
@@ -86,7 +80,13 @@ public class FunCodeGen extends CodeGen {
 
     // If function returns a value, move it to $v0 before returning
     if (!fd.type.equals(BaseType.VOID)) {
-      textSection.emit(OpCode.LW, Register.Arch.v0, Register.Arch.fp, -4);
+      if (fd.type instanceof StructType) {
+        int size = allocator.computeSizeWithMask(fd.type);
+        for (int i = 0; i < size; i += 4) {
+          textSection.emit(OpCode.LW, Register.Arch.t0, Register.Arch.fp, -size + i);
+          textSection.emit(OpCode.SW, Register.Arch.t0, Register.Arch.sp, i);
+        }
+      }
     }
 
     // restore registers before function returns
