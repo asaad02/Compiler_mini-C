@@ -88,8 +88,32 @@ public class ExprValCodeGen extends CodeGen {
             text.emit(OpCode.SLT, tempReg, rightReg, leftReg);
             text.emit(OpCode.XORI, resReg, tempReg, 1);
           }
-          case AND -> text.emit(OpCode.AND, resReg, leftReg, rightReg);
-          case OR -> text.emit(OpCode.OR, resReg, leftReg, rightReg);
+          case AND -> {
+            Label falseLabel = Label.create();
+            Label endLabel = Label.create();
+            // Evaluate left operand
+            text.emit(OpCode.BEQ, leftReg, Register.Arch.zero, falseLabel);
+            // Evaluate right operand if left is true
+            text.emit(OpCode.BEQ, rightReg, Register.Arch.zero, falseLabel);
+            text.emit(OpCode.LI, resReg, 1);
+            text.emit(OpCode.J, endLabel);
+            text.emit(falseLabel);
+            text.emit(OpCode.LI, resReg, 0);
+            text.emit(endLabel);
+          }
+          case OR -> {
+            Label trueLabel = Label.create();
+            Label endLabel = Label.create();
+            // Evaluate left operand
+            text.emit(OpCode.BNE, leftReg, Register.Arch.zero, trueLabel);
+            // Evaluate right operand if left is false
+            text.emit(OpCode.BNE, rightReg, Register.Arch.zero, trueLabel);
+            text.emit(OpCode.LI, resReg, 0);
+            text.emit(OpCode.J, endLabel);
+            text.emit(trueLabel);
+            text.emit(OpCode.LI, resReg, 1);
+            text.emit(endLabel);
+          }
           default ->
               throw new UnsupportedOperationException("Unsupported binary operator: " + b.op);
         }
@@ -180,7 +204,6 @@ public class ExprValCodeGen extends CodeGen {
         if (stackOffset > 0) {
           text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, stackOffset);
         }
-
         return Register.Arch.v0;
       }
 
