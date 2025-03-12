@@ -44,7 +44,6 @@ public class FunCodeGen extends CodeGen {
     // Save registers
     textSection.emit(OpCode.PUSH_REGISTERS);
 
-    // parameter Handling (Save function arguments)
     System.out.println("[FunCodeGen] Saving function parameters for: " + fd.name);
     for (int i = 0; i < fd.params.size(); i++) {
       VarDecl param = fd.params.get(i);
@@ -71,6 +70,8 @@ public class FunCodeGen extends CodeGen {
     System.out.println("[FunCodeGen] Generating function body for: " + fd.name);
     new StmtCodeGen(asmProg, allocator, fd).visit(fd.block);
 
+    // print all scopes
+    allocator.printScope();
     allocator.exitScope(); // Exit local variables scope
     allocator.exitScope(); // Exit parameters scope
 
