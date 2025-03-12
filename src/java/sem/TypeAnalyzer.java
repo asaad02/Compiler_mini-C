@@ -410,11 +410,20 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       case FunCallExpr f -> {
         FunSymbol funSymbol = currentScope.lookupFunction(f.name);
 
-        // error was here
-        // if the function in built-in, return the type
-        // if (funSymbol != null && funSymbol.def == null) {
-        // yield funSymbol.decl.type;
-        // }
+        // if the function is not declared and is a built-in function, return the built-in function
+        // type if it exists
+        if (funSymbol == null) {
+          FunDecl builtInFunction =
+              BUILT_IN_FUNCTIONS.stream()
+                  .filter(fd -> fd.name.equals(f.name))
+                  .findFirst()
+                  .orElse(null);
+          if (builtInFunction != null) {
+            System.out.println("return value " + builtInFunction.type);
+            yield builtInFunction.type;
+          }
+        }
+
         if (funSymbol == null) {
           error("Function '" + f.name + "' is not declared.");
           yield BaseType.UNKNOWN;
@@ -432,7 +441,8 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         for (int i = 0; i < f.args.size(); i++) {
           Type expected = expectedParams.get(i);
           Type actual = visit(f.args.get(i));
-          if (!typesAreEquivalent(expected, actual)) {
+          /*
+          if (!typesAreEquivalent(expected, actual) &) {
             error(
                 "Argument "
                     + (i + 1)
@@ -442,6 +452,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                     + actual);
             yield BaseType.UNKNOWN;
           }
+            */
           switch (expected) {
             case BaseType bt -> {
               if (bt.equals(BaseType.VOID)) {
