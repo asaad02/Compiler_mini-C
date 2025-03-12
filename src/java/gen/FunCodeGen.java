@@ -44,36 +44,46 @@ public class FunCodeGen extends CodeGen {
     // Save registers
     textSection.emit(OpCode.PUSH_REGISTERS);
 
-    // parameter Handling (Save function arguments)
     System.out.println("[FunCodeGen] Saving function parameters for: " + fd.name);
-    // save registers used in the function
+    // Modify parameter handling to copy entire structs
     for (int i = 0; i < fd.params.size(); i++) {
       VarDecl param = fd.params.get(i);
       int offset = allocator.getLocalOffset(param);
+      Type paramType = param.type;
 
-      if (param.type instanceof StructType || param.type instanceof ArrayType) {
-        // Copy struct/array from caller's stack to callee's stack
-        int size = allocator.computeSizeWithMask(param.type);
-
-        for (int j = 0; j < size; j += 4) {
-          // Load from caller
-          textSection.emit(OpCode.LW, Register.Arch.t0, Register.Arch.fp, 8 + i * 4 + j);
-          // Store locally
-          textSection.emit(OpCode.SW, Register.Arch.t0, Register.Arch.fp, offset + j);
+      if (paramType instanceof StructType) {
+        int structSize = allocator.computeSizeWithMask(paramType);
+        // Copy struct from caller's stack to local frame
+        for (int word = 0; word < structSize; word += 4) {
+          Register temp = Register.Virtual.create();
+          if (i < 4) {
+            // Struct passed in registers (not typical, but handle if needed)
+            throw new UnsupportedOperationException("Structs in registers not supported");
+          } else {
+            int callerArgOffset = 8 + (i - 4) * 4 + word;
+            textSection.emit(OpCode.LW, temp, Register.Arch.fp, callerArgOffset);
+            textSection.emit(OpCode.SW, temp, Register.Arch.fp, offset + word);
+          }
         }
-      } else if (i < 4) {
-        // first 4 arguments in $a0-$a3
-        textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.fp, offset);
       } else {
-        // load from caller stack for args beyond $a3
-        int stackOffset = 8 + (i - 4) * 4;
-        textSection.emit(OpCode.LW, Register.Arch.t0, Register.Arch.fp, stackOffset);
-        textSection.emit(OpCode.SW, Register.Arch.t0, Register.Arch.fp, offset);
+        // Existing handling for non-struct parameters
+        if (i < 4) {
+          textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.fp, offset);
+        } else {
+          int stackOffset = 8 + (i - 4) * 4;
+          textSection.emit(OpCode.LW, Register.Arch.t0, Register.Arch.fp, stackOffset);
+          textSection.emit(OpCode.SW, Register.Arch.t0, Register.Arch.fp, offset);
+        }
       }
     }
-    // generate Function Body
+
     System.out.println("[FunCodeGen] Generating function body for: " + fd.name);
     new StmtCodeGen(asmProg, allocator, fd).visit(fd.block);
+
+    // print all scopes
+    // allocator.printScope();
+    allocator.exitScope(); // Exit local variables scope
+    allocator.exitScope(); // Exit parameters scope
 
     // function Epilogue (Stack Cleanup & Return)
     System.out.println("[FunCodeGen] Generating epilogue for function: " + fd.name);

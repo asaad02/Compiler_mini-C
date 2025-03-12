@@ -23,6 +23,9 @@ public class SyscallCodeGen {
 
     switch (syscall) {
       case "print_i" -> {
+        if (arg == null) {
+          throw new IllegalArgumentException("[SyscallCodeGen] NULL argument in print_i");
+        }
         text.emit(OpCode.LI, Register.Arch.v0, 1);
         text.emit(OpCode.SYSCALL);
       }
