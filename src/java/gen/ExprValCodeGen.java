@@ -35,7 +35,7 @@ public class ExprValCodeGen extends CodeGen {
       case StrLiteral s -> {
         Label strLabel = Label.get("str_" + strCounter++);
         // correct alignment
-        asmProg.dataSection.emit(new Directive("align 2")); 
+        asmProg.dataSection.emit(new Directive("align 2"));
         String escapeChar = s.value.replace("\n", "\\n").replace("\t", "\\t").replace("\"", "\\\"");
         asmProg.dataSection.emit(strLabel);
         asmProg.dataSection.emit(new Directive("asciiz \"" + escapeChar + "\""));

@@ -46,26 +46,22 @@ public class FunCodeGen extends CodeGen {
 
     // parameter Handling (Save function arguments)
     System.out.println("[FunCodeGen] Saving function parameters for: " + fd.name);
-    // save registers used in the function
     for (int i = 0; i < fd.params.size(); i++) {
       VarDecl param = fd.params.get(i);
       int offset = allocator.getLocalOffset(param);
 
       if (param.type instanceof StructType || param.type instanceof ArrayType) {
-        // Copy struct/array from caller's stack to callee's stack
         int size = allocator.computeSizeWithMask(param.type);
-
         for (int j = 0; j < size; j += 4) {
-          // Load from caller
-          textSection.emit(OpCode.LW, Register.Arch.t0, Register.Arch.fp, 8 + i * 4 + j);
-          // Store locally
+          // Parameters start at $fp + 8 + (i * 4)
+          int srcOffset = 8 + i * 4 + j;
+          textSection.emit(OpCode.LW, Register.Arch.t0, Register.Arch.fp, srcOffset);
+          // Destination Local variable offset
           textSection.emit(OpCode.SW, Register.Arch.t0, Register.Arch.fp, offset + j);
         }
       } else if (i < 4) {
-        // first 4 arguments in $a0-$a3
         textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.fp, offset);
       } else {
-        // load from caller stack for args beyond $a3
         int stackOffset = 8 + (i - 4) * 4;
         textSection.emit(OpCode.LW, Register.Arch.t0, Register.Arch.fp, stackOffset);
         textSection.emit(OpCode.SW, Register.Arch.t0, Register.Arch.fp, offset);
@@ -74,6 +70,9 @@ public class FunCodeGen extends CodeGen {
     // generate Function Body
     System.out.println("[FunCodeGen] Generating function body for: " + fd.name);
     new StmtCodeGen(asmProg, allocator, fd).visit(fd.block);
+
+    allocator.exitScope(); // Exit local variables scope
+    allocator.exitScope(); // Exit parameters scope
 
     // function Epilogue (Stack Cleanup & Return)
     System.out.println("[FunCodeGen] Generating epilogue for function: " + fd.name);

@@ -52,9 +52,19 @@ public class StmtCodeGen extends CodeGen {
   /** handles block statements by recursively visiting each statement inside the block. */
   private void handleBlock(Block b) {
     System.out.println("[StmtCodeGen] Entering block...");
-    // alocate all variable inside the block
-    b.vds.forEach((vd) -> allocator.visit(vd));
-    b.stmts.forEach(this::visit);
+    allocator.enterScope(); // Enter new scope for the block
+
+    // Allocate variables declared in this block
+    for (VarDecl vd : b.vds) {
+      allocator.allocateVariable(vd);
+    }
+
+    // Process statements within the block
+    for (Stmt stmt : b.stmts) {
+      visit(stmt);
+    }
+
+    allocator.exitScope(); // Exit block scope
     System.out.println("[StmtCodeGen] Exiting block.");
   }
 
@@ -84,7 +94,6 @@ public class StmtCodeGen extends CodeGen {
 
     // Then branch
     visit(i.thenBranch);
-    // Jump to end after then-block
     text.emit(OpCode.J, endLabel);
 
     // Else branch (only emit if there's an else branch)
@@ -142,21 +151,6 @@ public class StmtCodeGen extends CodeGen {
       throw new IllegalStateException("[StmtCodeGen] Continue outside loop");
     }
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
-    // Ensure stack is aligned before jumping back to loop start
-    Register tempReg = Register.Virtual.create();
-    Register negTempReg = Register.Virtual.create();
-
-    text.emit(OpCode.ANDI, tempReg, Register.Arch.sp, 15); // tempReg = sp % 16
-    text.emit(
-        OpCode.BEQ,
-        tempReg,
-        Register.Arch.zero,
-        loopStack.peek().start); // If already aligned, jump
-    // negTempReg = -tempReg
-    text.emit(OpCode.SUBU, negTempReg, Register.Arch.zero, tempReg);
-    // Correct misalignment
-    text.emit(OpCode.ADDU, Register.Arch.sp, Register.Arch.sp, negTempReg);
-    // Jump to loop start
     text.emit(OpCode.J, loopStack.peek().start);
   }
 
@@ -167,7 +161,6 @@ public class StmtCodeGen extends CodeGen {
       throw new IllegalStateException("[StmtCodeGen] Break outside loop");
     }
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
-    // Jump to loop end
     text.emit(OpCode.J, loopStack.peek().end);
   }
 }

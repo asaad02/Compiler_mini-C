@@ -53,7 +53,6 @@ public class ExprAddrCodeGen extends CodeGen {
 
         return addrReg;
       }
-
       case ArrayAccessExpr aa -> {
         System.out.println("[ExprAddrCodeGen] Resolving array access: " + aa);
 
