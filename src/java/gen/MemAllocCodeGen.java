@@ -279,7 +279,7 @@ public class MemAllocCodeGen extends CodeGen {
   }
 
   // Returns the total stack frame size for a function.
-  public int getFrameSize(FunDef fd) { 
+  public int getFrameSize(FunDef fd) {
     return frameSizes.getOrDefault(fd, 0);
   }
 
