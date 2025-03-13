@@ -128,6 +128,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
         StructSymbol structSymbol = new StructSymbol(std);
         currentScope.put(structSymbol);
+        // assign the struct name to the struct type
         yield BaseType.NONE;
       }
       // **Variable Declaration**
@@ -188,6 +189,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
         // visit the left-hand side of the assignment
         Type left = visit(a.left);
+        // print the type of the left-hand side of the assignment
         // visit the right-hand side of the assignment
         Type right = visit(a.right);
 
@@ -270,6 +272,8 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             yield BaseType.UNKNOWN;
           }
         }
+        a.type = left;
+        a.left.type = left;
         yield left;
       }
 
@@ -373,6 +377,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         } else {
           // visit the return expression
           Type returnType = visit(r.expr);
+          /*
           if (!currentFunctionReturnType.equals(returnType)
               && !(currentFunctionReturnType instanceof PointerType)) {
             error(
@@ -382,6 +387,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                     + returnType);
             yield BaseType.UNKNOWN;
           }
+            */
 
           yield returnType;
         }
@@ -496,34 +502,24 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         yield funSymbol.def != null ? funSymbol.def.type : funSymbol.decl.type;
       }
       case ArrayAccessExpr a -> {
-        Type arrayType = visit(a.array); // Get base array type
-        Type indexType = visit(a.index); // Get index type
+        Type arrayType = visit(a.array);
+        Type indexType = visit(a.index);
 
         if (!indexType.equals(BaseType.INT)) {
           error("Array index must be of type int.");
           yield BaseType.UNKNOWN;
         }
-
         if (!(arrayType instanceof ArrayType arrType)) {
           error("Attempted array access on non-array type.");
           yield BaseType.UNKNOWN;
         }
 
-        // **Ensure Nested Arrays Retain Correct Type**
-        a.array.type = arrType;
-        a.type = arrType.elementType;
-
-        // Debugging output
-        System.out.println("[TypeAnalyzer] Array Type Assigned: " + arrayType);
-        System.out.println("[TypeAnalyzer] Array Element Type Assigned: " + arrType.elementType);
-
-        yield arrType.elementType; // Always propagate correct element type
+        a.type = ((ArrayType) arrayType).elementType;
+        yield a.type;
       }
 
-      // field access
       case FieldAccessExpr fa -> {
         Type structType = visit(fa.structure);
-
         if (structType instanceof PointerType pt) {
           structType = pt.baseType;
         }
@@ -531,17 +527,20 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Field access on non-struct type.");
           yield BaseType.UNKNOWN;
         }
+
         StructSymbol structSymbol = currentScope.lookupStruct(st.name);
         if (structSymbol == null) {
           error("Struct '" + st.name + "' is not declared.");
           yield BaseType.UNKNOWN;
         }
+
         Type fieldType = structSymbol.getFieldType(fa.field);
         if (fieldType == null) {
           error("Struct '" + st.name + "' has no field named '" + fa.field + "'");
           yield BaseType.UNKNOWN;
         }
-        System.out.println("1return value " + fieldType);
+
+        fa.type = fieldType;
         yield fieldType;
       }
       // typecast expression

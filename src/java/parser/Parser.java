@@ -180,7 +180,11 @@ public class Parser extends CompilerPass {
       // or we look ahead to see if the next token is an identifier and a left parenthesis ["("]
       // or we look ahead to see if the next token is an identifier and an Asterisk and an
       // identifier and a left parenthesis ["("]
-      if ((lookAhead(1).category == Category.ASTERISK
+      if ((accept(Category.STRUCT)
+              && lookAhead(1).category == Category.IDENTIFIER
+              && lookAhead(2).category == Category.IDENTIFIER
+              && lookAhead(3).category == Category.LPAR)
+          || (lookAhead(1).category == Category.ASTERISK
               && lookAhead(2).category == Category.IDENTIFIER
               && lookAhead(3).category == Category.LPAR)
           || (lookAhead(1).category == Category.IDENTIFIER
@@ -189,6 +193,7 @@ public class Parser extends CompilerPass {
               && lookAhead(2).category == Category.ASTERISK
               && lookAhead(3).category == Category.IDENTIFIER
               && lookAhead(4).category == Category.LPAR)) {
+
         // handle the type of the declaration and Asterisk and identifier
         // type  ::= ("int" | "char" | "void" | structtype) ("*")*
         Type type = parseType();
