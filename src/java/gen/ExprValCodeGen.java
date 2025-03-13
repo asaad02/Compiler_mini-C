@@ -201,14 +201,14 @@ public class ExprValCodeGen extends CodeGen {
         Register indexReg = visit(a.index);
 
         Type elementType = ((ArrayType) a.array.type).elementType;
-        int elementSize = allocator.computeSize(elementType); // Compute sizeof(elementType)
+        int elementSize = allocator.computeSize(elementType);
 
         Register offsetReg = Register.Virtual.create();
-        // offset = index * sizeof(type)
         text.emit(OpCode.LI, offsetReg, elementSize);
+        text.emit(OpCode.MUL, indexReg, indexReg, offsetReg);
 
         Register finalAddr = Register.Virtual.create();
-        text.emit(OpCode.ADDU, finalAddr, baseAddr, offsetReg); // finalAddr = base + offset
+        text.emit(OpCode.ADDU, finalAddr, baseAddr, indexReg); // finalAddr = base + offset
 
         if (elementType.equals(BaseType.CHAR)) {
           text.emit(OpCode.LBU, resReg, finalAddr, 0); // Load Byte (Unsigned)

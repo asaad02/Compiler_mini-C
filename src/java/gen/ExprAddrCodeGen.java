@@ -58,21 +58,39 @@ public class ExprAddrCodeGen extends CodeGen {
       }
 
       case ArrayAccessExpr ae -> {
-        Register baseReg = new ExprAddrCodeGen(asmProg, allocator).visit(ae.array);
+        System.out.println("[ExprAddrCodeGen] Resolving array access: " + ae.array);
+
+        Register baseReg = visit(ae.array);
         Register indexReg = visit(ae.index);
-        // Get the element type of the array
-        ArrayType arrayType = (ArrayType) ae.array.type;
+
+        // base address is retrieved
+        if (ae.array instanceof VarExpr ve) {
+          VarDecl varDecl = allocator.getVarDecl(ve.name);
+          int scopeLevel = allocator.getScopeLevel(ve.name);
+          int offset = allocator.getLocalOffset(varDecl, scopeLevel);
+          System.out.println("[ExprAddrCodeGen] Array base resolved at offset: " + offset);
+        }
+
+        // element type of the array
+        if (!(ae.array.type instanceof ArrayType arrayType)) {
+          throw new IllegalStateException(
+              "[ExprAddrCodeGen] ERROR: ArrayAccessExpr on non-array type.");
+        }
+
         Type elementType = arrayType.elementType;
         int elementSize = allocator.computeSize(elementType);
 
-        // Multiply index by the element's actual size
         Register sizeReg = Register.Virtual.create();
         text.emit(OpCode.LI, sizeReg, elementSize);
         text.emit(OpCode.MUL, indexReg, indexReg, sizeReg);
 
-        text.emit(OpCode.ADDU, addrReg, baseReg, indexReg);
+        // Compute the final address
+        Register finalAddr = Register.Virtual.create();
+        text.emit(OpCode.ADDU, finalAddr, baseReg, indexReg);
 
-        return addrReg;
+        System.out.println("[ExprAddrCodeGen] Computed array element address.");
+
+        return finalAddr;
       }
 
       case FieldAccessExpr fa -> {
