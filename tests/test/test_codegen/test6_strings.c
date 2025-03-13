@@ -1,3 +1,3 @@
 void main() {
-    print_s("Hello_Compiler!\n"); 
+    print_s("Hello, Compiler!\n");  // Expected: Hello, Compiler!
 }

@@ -2,6 +2,7 @@ package gen;
 
 import ast.*;
 import gen.asm.*;
+import java.util.List;
 import java.util.Stack;
 
 /**
@@ -12,6 +13,7 @@ public class StmtCodeGen extends CodeGen {
   private final MemAllocCodeGen allocator;
   private final FunDef currentFunctionDef;
   private final Stack<LoopLabels> loopStack = new Stack<>();
+  private final List<String> definedFunctions;
 
   /** class to store labels for break and continue statements inside loops. */
   private static class LoopLabels {
@@ -25,10 +27,14 @@ public class StmtCodeGen extends CodeGen {
   }
 
   public StmtCodeGen(
-      AssemblyProgram asmProg, MemAllocCodeGen allocator, FunDef currentFunctionDef) {
+      AssemblyProgram asmProg,
+      MemAllocCodeGen allocator,
+      FunDef currentFunctionDef,
+      List<String> definedFunctions) {
     this.asmProg = asmProg;
     this.allocator = allocator;
     this.currentFunctionDef = currentFunctionDef;
+    this.definedFunctions = definedFunctions;
   }
 
   /** Dispatches statement processing based on statement type. */
@@ -49,32 +55,47 @@ public class StmtCodeGen extends CodeGen {
     }
   }
 
-  /** handles block statements by recursively visiting each statement inside the block. */
+  // Handles block statements by recursively visiting each statement inside the block.
   private void handleBlock(Block b) {
     System.out.println("[StmtCodeGen] Entering block...");
-    allocator.enterScope(); // Enter new scope for the block
+    allocator.enterScope();
 
-    // Allocate variables declared in this block
+    // allocate variables declared in this block
     for (VarDecl vd : b.vds) {
       allocator.allocateVariable(vd);
     }
 
-    // Process statements within the block
+    // process statements within the block
     for (Stmt stmt : b.stmts) {
       visit(stmt);
     }
 
-    allocator.exitScope(); // Exit block scope
+    allocator.exitScope();
     System.out.println("[StmtCodeGen] Exiting block.");
   }
 
   /** handles expression statements (e.g., function calls, assignments). */
   private void handleExprStmt(ExprStmt es) {
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
-    Register result = new ExprValCodeGen(asmProg, allocator).visit(es.expr);
+    Register result = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(es.expr);
 
-    if (!(es.expr instanceof FunCallExpr)) {
-      text.emit(OpCode.ADDU, Register.Arch.zero, result, Register.Arch.zero);
+    if (es.expr instanceof FunCallExpr fc) {
+      for (int i = 0; i < fc.args.size(); i++) {
+        Expr arg = fc.args.get(i);
+        Type argType = arg.type;
+
+        if (argType instanceof StructType) {
+          int structSize = allocator.computeSize(argType);
+          structSize = allocator.alignTo16(structSize);
+          Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(arg);
+
+          for (int word = 0; word < structSize; word += 4) {
+            Register temp = Register.Virtual.create();
+            text.emit(OpCode.LW, temp, addrReg, word);
+            text.emit(OpCode.SW, temp, Register.Arch.sp, word);
+          }
+        }
+      }
     }
   }
 
@@ -82,29 +103,36 @@ public class StmtCodeGen extends CodeGen {
   private void handleIf(If i) {
     System.out.println("[StmtCodeGen] Processing if statement...");
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
-    ExprValCodeGen exprGen = new ExprValCodeGen(asmProg, allocator);
+    ExprValCodeGen exprGen = new ExprValCodeGen(asmProg, allocator, definedFunctions);
 
     // Generate unique labels for else and end
-    Label elseLabel = Label.create(currentFunctionDef.name + "_if_else");
+    Label elseLabel =
+        i.elseBranch != null ? Label.create(currentFunctionDef.name + "_if_else") : null;
     Label endLabel = Label.create(currentFunctionDef.name + "_if_end");
 
     // Evaluate condition
     Register condReg = exprGen.visit(i.condition);
-    text.emit(OpCode.BEQ, condReg, Register.Arch.zero, elseLabel);
+    if (elseLabel != null) {
+      text.emit(OpCode.BEQ, condReg, Register.Arch.zero, elseLabel);
+    } else {
+      text.emit(OpCode.BEQ, condReg, Register.Arch.zero, endLabel);
+    }
 
     // Then branch
     visit(i.thenBranch);
     text.emit(OpCode.J, endLabel);
 
     // Else branch (only emit if there's an else branch)
-    text.emit(elseLabel);
-    if (i.elseBranch != null) visit(i.elseBranch);
+    if (elseLabel != null) {
+      text.emit(elseLabel);
+      visit(i.elseBranch);
+    }
 
     // End of if statement
     text.emit(endLabel);
   }
 
-  /** Handles while loops by generating loop start, condition check, and loop body. */
+  // Handles while loops by generating loop start, condition check, and loop body. */
   private void handleWhile(While w) {
     System.out.println("[StmtCodeGen] Processing while loop...");
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
@@ -118,7 +146,8 @@ public class StmtCodeGen extends CodeGen {
 
     // Loop condition check
     text.emit(startLabel);
-    Register condReg = new ExprValCodeGen(asmProg, allocator).visit(w.condition);
+    Register condReg = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(w.condition);
+
     text.emit(OpCode.BEQ, condReg, Register.Arch.zero, endLabel);
 
     // Loop body
@@ -132,33 +161,48 @@ public class StmtCodeGen extends CodeGen {
     System.out.println("[StmtCodeGen] Exiting while loop.");
   }
 
-  /** Handles return statements, including returning values. */
   private void handleReturn(Return rs) {
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
     System.out.println("[StmtCodeGen] Processing return statement...");
 
-    // save function result in $v0 if returning a value
     if (rs.expr != null) {
-      Register resultReg = new ExprValCodeGen(asmProg, allocator).visit(rs.expr);
-      text.emit(OpCode.ADDU, Register.Arch.v0, resultReg, Register.Arch.zero);
+      Register resultReg = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(rs.expr);
+
+      if (rs.expr.type instanceof StructType) {
+        int structSize = allocator.computeSize(rs.expr.type);
+        structSize = allocator.alignTo(structSize, 8);
+        Register returnAddr = Register.Virtual.create();
+
+        for (int word = 0; word < structSize; word += 4) {
+          Register temp = Register.Virtual.create();
+          text.emit(OpCode.LW, temp, resultReg, word);
+          text.emit(OpCode.SW, temp, Register.Arch.sp, word);
+        }
+
+        text.emit(OpCode.ADDU, Register.Arch.v0, returnAddr, Register.Arch.zero);
+      } else {
+        text.emit(OpCode.ADDU, Register.Arch.v0, resultReg, Register.Arch.zero);
+      }
     }
+
+    text.emit(OpCode.J, Label.get("func_epilogue_" + currentFunctionDef.name));
   }
 
-  /** Handles continue statements by jumping to the start of the nearest enclosing loop. */
+  // handles continue statements by jumping to the start of the nearest enclosing loop.
   private void handleContinue(Continue c) {
     System.out.println("[StmtCodeGen] Processing continue statement...");
     if (loopStack.isEmpty()) {
-      throw new IllegalStateException("[StmtCodeGen] Continue outside loop");
+      throw new IllegalStateException("[StmtCodeGen] ERROR: Continue statement outside loop.");
     }
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
     text.emit(OpCode.J, loopStack.peek().start);
   }
 
-  /** Handles break statements by jumping to the end of the nearest enclosing loop. */
+  // Handles break statements by jumping to the end of the nearest enclosing loop.
   private void handleBreak(Break b) {
     System.out.println("[StmtCodeGen] Processing break statement...");
     if (loopStack.isEmpty()) {
-      throw new IllegalStateException("[StmtCodeGen] Break outside loop");
+      throw new IllegalStateException("[StmtCodeGen] ERROR: Break statement outside loop.");
     }
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
     text.emit(OpCode.J, loopStack.peek().end);

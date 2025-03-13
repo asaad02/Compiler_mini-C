@@ -2,124 +2,121 @@ package gen;
 
 import ast.*;
 import gen.asm.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 /** A visitor that produces code for a single function declaration */
 public class FunCodeGen extends CodeGen {
   private final MemAllocCodeGen allocator;
+  // list of defined functions
+  private final List<String> definedFunctions;
 
-  public FunCodeGen(AssemblyProgram asmProg, MemAllocCodeGen allocator) {
+  public FunCodeGen(
+      AssemblyProgram asmProg, MemAllocCodeGen allocator, Set<String> definedFunctions) {
     this.asmProg = asmProg;
+    // Store allocator
     this.allocator = allocator;
+    // convert set to list
+    this.definedFunctions = new ArrayList<>(definedFunctions);
   }
 
-  /**
-   * Generates assembly code for a function definition. Emitting a global label for main Generating
-   * a function prologue stack frame setup Generating code for the function body Generating the
-   * function epilogue stack frame cleanup
-   */
   void visit(FunDef fd) {
-    // create a new text section for the function
     AssemblyProgram.TextSection textSection = asmProg.emitNewTextSection();
 
-    // Function prologue
-    textSection.emit(new Directive("globl " + fd.name));
+    // create a unique function label
+    String functionLabel = getUniqueFunctionName(fd);
 
     // emit function label
-    textSection.emit(Label.get(fd.name));
+    textSection.emit(Label.get(functionLabel));
 
-    // function Prologue (Stack Frame Setup)
-    System.out.println("[FunCodeGen] Generating prologue for function: " + fd.name);
+    // emit function label for main
+    if (fd.name.equals("main")) {
+      textSection.emit(new Directive("globl main"));
+    }
 
-    int frameSize = allocator.getFrameSize(fd);
-    // Space for $RA and $FP
-    frameSize += 8;
-    // ensure stack alignment to 16 bytes
-    frameSize = (frameSize + 15) & ~15;
+    System.out.println("[FunCodeGen] Generating function: " + functionLabel);
 
+    int frameSize = allocator.alignTo16(allocator.getFrameSize(fd) + 8);
+
+    // print table of memory allocations
+    allocator.printMemoryTable(fd);
+
+    // function prologue
     textSection.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -frameSize);
     textSection.emit(OpCode.SW, Register.Arch.ra, Register.Arch.sp, frameSize - 4);
     textSection.emit(OpCode.SW, Register.Arch.fp, Register.Arch.sp, frameSize - 8);
     textSection.emit(OpCode.ADDU, Register.Arch.fp, Register.Arch.sp, Register.Arch.zero);
-
-    // Save registers
     textSection.emit(OpCode.PUSH_REGISTERS);
 
-    System.out.println("[FunCodeGen] Saving function parameters for: " + fd.name);
-    // Modify parameter handling to copy entire structs
+    // Save function parameters in the stack frame
+    saveFunctionParameters(fd, textSection);
+
+    // Generate function body
+    new StmtCodeGen(asmProg, allocator, fd, definedFunctions).visit(fd.block);
+
+    // print table of memory allocations
+
+    allocator.printMemoryTable(fd);
+
+    // function epilogue
+    generateFunctionEpilogue(fd, textSection, frameSize);
+  }
+
+  private void saveFunctionParameters(FunDef fd, AssemblyProgram.TextSection textSection) {
     for (int i = 0; i < fd.params.size(); i++) {
       VarDecl param = fd.params.get(i);
       int offset = allocator.getLocalOffset(param);
+      offset = (offset / 4) * 4;
       Type paramType = param.type;
 
       if (paramType instanceof StructType) {
-        int structSize = allocator.computeSizeWithMask(paramType);
-        // Copy struct from caller's stack to local frame
+
+        int structSize = allocator.computeSize(paramType);
+        offset = allocator.alignTo(offset, 8);
+        structSize = allocator.alignTo(structSize, 8);
+
+        int paramOffset = allocator.getLocalOffset(param);
         for (int word = 0; word < structSize; word += 4) {
           Register temp = Register.Virtual.create();
-          if (i < 4) {
-            // Struct passed in registers (not typical, but handle if needed)
-            throw new UnsupportedOperationException("Structs in registers not supported");
-          } else {
-            int callerArgOffset = 8 + (i - 4) * 4 + word;
-            textSection.emit(OpCode.LW, temp, Register.Arch.fp, callerArgOffset);
-            textSection.emit(OpCode.SW, temp, Register.Arch.fp, offset + word);
-          }
+          textSection.emit(OpCode.LW, temp, Register.Arch.sp, paramOffset + word);
+          textSection.emit(OpCode.SW, temp, Register.Arch.fp, offset + word);
         }
       } else {
-        // Existing handling for non-struct parameters
         if (i < 4) {
           textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.fp, offset);
         } else {
-          int stackOffset = 8 + (i - 4) * 4;
-          textSection.emit(OpCode.LW, Register.Arch.t0, Register.Arch.fp, stackOffset);
-          textSection.emit(OpCode.SW, Register.Arch.t0, Register.Arch.fp, offset);
+          int stackOffset = allocator.alignTo16((i - 4) * 4);
+          Register temp = Register.Virtual.create();
+          textSection.emit(OpCode.LW, temp, Register.Arch.sp, stackOffset);
+          textSection.emit(OpCode.SW, temp, Register.Arch.fp, offset);
         }
       }
     }
+  }
 
-    System.out.println("[FunCodeGen] Generating function body for: " + fd.name);
-    new StmtCodeGen(asmProg, allocator, fd).visit(fd.block);
+  //
+  private void generateFunctionEpilogue(
+      FunDef fd, AssemblyProgram.TextSection textSection, int frameSize) {
+    System.out.println("[FunCodeGen] Generating function epilogue for: " + fd.name);
 
-    // print all scopes
-    // allocator.printScope();
-    allocator.exitScope(); // Exit local variables scope
-    allocator.exitScope(); // Exit parameters scope
+    Label epilogueLabel = Label.get("func_epilogue_" + fd.name);
+    textSection.emit(epilogueLabel);
 
-    // function Epilogue (Stack Cleanup & Return)
-    System.out.println("[FunCodeGen] Generating epilogue for function: " + fd.name);
-
-    // If function returns a value, move it to $v0 before returning
-    if (!fd.type.equals(BaseType.VOID)) {
-      if (fd.type instanceof StructType) {
-        int size = allocator.computeSizeWithMask(fd.type);
-        for (int i = 0; i < size; i += 4) {
-          textSection.emit(OpCode.LW, Register.Arch.t0, Register.Arch.fp, -size + i);
-          textSection.emit(OpCode.SW, Register.Arch.t0, Register.Arch.sp, i);
-        }
-      }
-    }
-
-    // restore registers before function returns
     textSection.emit(OpCode.POP_REGISTERS);
-
-    // restore frame pointer and return address
-    textSection.emit(OpCode.LW, Register.Arch.fp, Register.Arch.sp, frameSize - 8);
     textSection.emit(OpCode.LW, Register.Arch.ra, Register.Arch.sp, frameSize - 4);
-
-    // restore stack pointer (must be last)
+    textSection.emit(OpCode.LW, Register.Arch.fp, Register.Arch.sp, frameSize - 8);
     textSection.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, frameSize);
 
-    // correct return handling
     if (fd.name.equals("main")) {
       textSection.emit(OpCode.LI, Register.Arch.v0, 10);
       textSection.emit(OpCode.SYSCALL);
     } else {
       textSection.emit(OpCode.JR, Register.Arch.ra);
     }
-
-    System.out.println("[FunCodeGen] Finished generating function: " + fd.name);
   }
 
+  // Get the register for the argument at the given index
   private Register getArgReg(int index) {
     return switch (index) {
       case 0 -> Register.Arch.a0;
@@ -128,5 +125,10 @@ public class FunCodeGen extends CodeGen {
       case 3 -> Register.Arch.a3;
       default -> throw new IllegalArgumentException("Invalid argument index");
     };
+  }
+
+  // Generate a unique function name
+  private String getUniqueFunctionName(FunDef fd) {
+    return fd.name.equals("main") ? "main" : fd.name + "_" + fd.params.size();
   }
 }

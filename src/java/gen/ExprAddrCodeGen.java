@@ -25,8 +25,6 @@ public class ExprAddrCodeGen extends CodeGen {
     switch (e) {
       case VarExpr v -> {
         System.out.println("[ExprAddrCodeGen] Resolving variable address: " + v.name);
-
-        // retrieve variable declaration
         VarDecl varDecl = allocator.getVarDecl(v.name);
 
         if (varDecl == null) {
@@ -40,85 +38,91 @@ public class ExprAddrCodeGen extends CodeGen {
           System.out.println("[ExprAddrCodeGen] Variable is NOT an array: " + v.name);
         }
 
-        if (allocator.isGlobal(v.name)) {
-          Label varLabel = Label.get(v.name);
-          text.emit(OpCode.LA, addrReg, varLabel);
-        } else {
-          int offset = allocator.getLocalOffset(varDecl);
+        // Get the correct scope level for the variable
+        int scopeLevel = allocator.getScopeLevel(v.name);
+        System.out.println(
+            "[ExprAddrCodeGen] Variable '" + v.name + "' found at scope level: " + scopeLevel);
+
+        if (scopeLevel >= 0) {
+          // Retrieve the correct offset for the local variable
+          int offset = allocator.getLocalOffset(varDecl, scopeLevel);
+          System.out.println("[ExprAddrCodeGen] Using local variable at offset: " + offset);
           text.emit(OpCode.ADDIU, addrReg, Register.Arch.fp, offset);
+        } else {
+          // Access the global variable if no local variable is found
+          System.out.println("[ExprAddrCodeGen] Accessing global variable: " + v.name);
+          text.emit(OpCode.LA, addrReg, Label.get(v.name));
         }
 
         return addrReg;
       }
-      case ArrayAccessExpr aa -> {
-        System.out.println("[ExprAddrCodeGen] Resolving array access: " + aa);
 
-        Register baseReg = visit(aa.array);
-        Register indexReg = visit(aa.index);
+      case ArrayAccessExpr ae -> {
+        Register baseReg = new ExprAddrCodeGen(asmProg, allocator).visit(ae.array);
+        Register indexReg = visit(ae.index);
+        // Get the element type of the array
+        ArrayType arrayType = (ArrayType) ae.array.type;
+        Type elementType = arrayType.elementType;
+        int elementSize = allocator.computeSize(elementType);
 
-        if (aa.array.type instanceof ArrayType arrayType) {
-          System.out.println("[ExprAddrCodeGen] Array type: " + arrayType);
-          int elementSize = allocator.computeSizeWithMask(arrayType.elementType);
+        // Multiply index by the element's actual size
+        Register sizeReg = Register.Virtual.create();
+        text.emit(OpCode.LI, sizeReg, elementSize);
+        text.emit(OpCode.MUL, indexReg, indexReg, sizeReg);
 
-          Register elementSizeReg = Register.Virtual.create();
-          asmProg.getCurrentTextSection().emit(OpCode.LI, elementSizeReg, elementSize);
-          asmProg.getCurrentTextSection().emit(OpCode.MUL, indexReg, indexReg, elementSizeReg);
-          asmProg.getCurrentTextSection().emit(OpCode.ADDU, baseReg, baseReg, indexReg);
-        }
+        text.emit(OpCode.ADDU, addrReg, baseReg, indexReg);
 
-        return baseReg;
+        return addrReg;
       }
 
       case FieldAccessExpr fa -> {
-        System.out.println("[ExprAddrCodeGen] Resolving field access: " + fa);
-
         Register baseReg = visit(fa.structure);
+        int offset = allocator.computeFieldOffset((StructType) fa.structure.type, fa.field);
 
-        // Ensure struct type is set
-        if (fa.structure.type == null && fa.structure instanceof VarExpr varExpr) {
-          VarDecl varDecl = allocator.getVarDecl(varExpr.name);
-          if (varDecl != null && varDecl.type instanceof StructType structType) {
-            fa.structure.type = structType;
-          }
-        }
+        System.out.println(
+            "[ExprAddrCodeGen] Resolving field access: " + fa.field + " at offset " + offset);
 
-        if (fa.structure.type instanceof StructType structType) {
-          System.out.println("[ExprAddrCodeGen] Struct type: " + structType);
-          int offset = computeFieldOffset(structType, fa.field);
-          System.out.println("[ExprAddrCodeGen] Field offset: " + offset);
+        text.emit(OpCode.ADDIU, addrReg, baseReg, offset);
 
-          asmProg.getCurrentTextSection().emit(OpCode.ADDIU, baseReg, baseReg, offset);
-        }
-
-        return baseReg;
+        return addrReg;
       }
 
       case AddressOfExpr ao -> {
-        Register addrReg1 = visit(ao.expr);
-        text.emit(OpCode.ADDU, addrReg1, addrReg, Register.Arch.zero);
+        System.out.println("[ExprAddrCodeGen] Resolving address-of expression");
+        Register exprReg = visit(ao.expr);
+        text.emit(OpCode.ADDU, addrReg, exprReg, Register.Arch.zero);
         return addrReg;
       }
 
       case Assign a -> {
+        System.out.println("[ExprAddrCodeGen] Resolving assignment address");
         return visit(a.left);
       }
 
       case SizeOfExpr sz -> {
+        System.out.println("[ExprAddrCodeGen] Resolving sizeof expression");
         Register sizeReg = Register.Virtual.create();
-        text.emit(OpCode.LI, sizeReg, allocator.computeSizeWithMask(sz.type));
+        text.emit(OpCode.LI, sizeReg, allocator.computeSize(sz.type));
         text.emit(OpCode.ADDU, addrReg, sizeReg, Register.Arch.zero);
         return addrReg;
       }
 
-      case TypecastExpr tc -> addrReg = visit(tc.expr);
+      case TypecastExpr tc -> {
+        System.out.println("[ExprAddrCodeGen] Resolving typecast expression");
+        addrReg = visit(tc.expr);
+        return addrReg;
+      }
 
       case IntLiteral i -> {
+        System.out.println("[ExprAddrCodeGen] Resolving integer literal: " + i.value);
         text.emit(OpCode.LI, addrReg, i.value);
+        return addrReg;
       }
 
       case ValueAtExpr va -> {
-        Register addrReg1 = visit(va.expr);
-        text.emit(OpCode.LW, addrReg, addrReg1, 0);
+        System.out.println("[ExprAddrCodeGen] Resolving value-at (dereferencing) expression");
+        Register exprReg = visit(va.expr);
+        text.emit(OpCode.LW, addrReg, exprReg, 0);
         return addrReg;
       }
 
@@ -126,33 +130,5 @@ public class ExprAddrCodeGen extends CodeGen {
           throw new UnsupportedOperationException(
               "[ExprAddrCodeGen] Unsupported address computation: " + e.getClass().getSimpleName());
     }
-    return addrReg;
-  }
-
-  // Computes the byte offset of a struct field with proper alignment.
-  int computeFieldOffset(StructType structType, String fieldName) {
-    // StructTypeDecl decl = allocator.findStructDeclaration(structType);
-    StructTypeDecl structDecl = allocator.findStructDeclaration(structType);
-
-    int offset = 0;
-    // Track max alignment for struct
-    int maxAlignment = 1;
-
-    for (VarDecl field : structDecl.fields) {
-      int fieldAlignment = allocator.computeAlignment(field.type);
-      // align field start
-      offset = (offset + fieldAlignment - 1) & ~(fieldAlignment - 1);
-
-      if (field.name.equals(fieldName)) {
-        return offset;
-      }
-
-      offset += allocator.computeSizeWithMask(field.type);
-      maxAlignment = Math.max(maxAlignment, fieldAlignment);
-    }
-
-    // ensure struct size is a multiple of max alignment
-    offset = (offset + maxAlignment - 1) & ~(maxAlignment - 1);
-    return offset;
   }
 }

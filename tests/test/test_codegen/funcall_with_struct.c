@@ -3,9 +3,9 @@ struct Point {
     int y;
 };
 
-void printPoint(struct Point p) {
+void print_point(struct Point p) {
     print_i(p.x);
-    print_c(' ');
+    print_c('\n');
     print_i(p.y);
     print_c('\n');
 }
@@ -14,5 +14,11 @@ void main() {
     struct Point p;
     p.x = 10;
     p.y = 20;
-    printPoint(p);
+
+    print_i(p.x);
+    print_c('\n');
+    print_i(p.y);
+    print_c('\n');
+
+    print_point(p);  // Struct passed by value
 }

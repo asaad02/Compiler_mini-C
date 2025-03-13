@@ -15,17 +15,19 @@ import java.util.List;
 public class ExprValCodeGen extends CodeGen {
   private final MemAllocCodeGen allocator;
   private static int strCounter = 0;
+  private final List<String> definedFunctions;
 
-  public ExprValCodeGen(AssemblyProgram asmProg, MemAllocCodeGen allocator) {
+  public ExprValCodeGen(
+      AssemblyProgram asmProg, MemAllocCodeGen allocator, List<String> definedFunctions) {
     this.asmProg = asmProg;
     this.allocator = allocator;
+    this.definedFunctions = definedFunctions;
   }
 
   // generates assembly code for evaluating an expression.
   public Register visit(Expr e) {
     System.out.println("[ExprValCodeGen] Processing expression: " + e.getClass().getSimpleName());
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
-    // allocate a new register for result
     Register resReg = Register.Virtual.create();
 
     switch (e) {
@@ -47,16 +49,15 @@ public class ExprValCodeGen extends CodeGen {
       }
 
       case ChrLiteral c -> {
-        asmProg.dataSection.emit(new Directive("align 2"));
         text.emit(OpCode.LI, resReg, c.value.charAt(0));
-        asmProg.dataSection.emit(new Directive("align 2"));
         return resReg;
       }
 
       case SizeOfExpr sz -> {
-        text.emit(OpCode.LI, resReg, allocator.computeSizeWithMask(sz.type));
+        text.emit(OpCode.LI, resReg, allocator.computeSize(sz.type));
         return resReg;
       }
+
       case BinOp b -> {
         Register leftReg = visit(b.left);
         Register rightReg = visit(b.right);
@@ -73,16 +74,7 @@ public class ExprValCodeGen extends CodeGen {
             text.emit(OpCode.DIV, leftReg, rightReg);
             text.emit(OpCode.MFHI, resReg);
           }
-          case EQ, NE -> {
-            Label trueLabel = Label.create();
-            Label endLabel = Label.create();
-            text.emit(b.op == Op.EQ ? OpCode.BEQ : OpCode.BNE, leftReg, rightReg, trueLabel);
-            text.emit(OpCode.LI, resReg, 0);
-            text.emit(OpCode.J, endLabel);
-            text.emit(trueLabel);
-            text.emit(OpCode.LI, resReg, 1);
-            text.emit(endLabel);
-          }
+          case EQ, NE -> generateEqualityCheck(text, leftReg, rightReg, resReg, b.op);
           case LT -> text.emit(OpCode.SLT, resReg, leftReg, rightReg);
           case GT -> text.emit(OpCode.SLT, resReg, rightReg, leftReg);
           case LE, GE -> {
@@ -90,34 +82,10 @@ public class ExprValCodeGen extends CodeGen {
             text.emit(OpCode.SLT, tempReg, rightReg, leftReg);
             text.emit(OpCode.XORI, resReg, tempReg, 1);
           }
-          case AND -> {
-            Label falseLabel = Label.create();
-            Label endLabel = Label.create();
-            // Evaluate left operand
-            text.emit(OpCode.BEQ, leftReg, Register.Arch.zero, falseLabel);
-            // Evaluate right operand if left is true
-            text.emit(OpCode.BEQ, rightReg, Register.Arch.zero, falseLabel);
-            text.emit(OpCode.LI, resReg, 1);
-            text.emit(OpCode.J, endLabel);
-            text.emit(falseLabel);
-            text.emit(OpCode.LI, resReg, 0);
-            text.emit(endLabel);
-          }
-          case OR -> {
-            Label trueLabel = Label.create();
-            Label endLabel = Label.create();
-            // Evaluate left operand
-            text.emit(OpCode.BNE, leftReg, Register.Arch.zero, trueLabel);
-            // Evaluate right operand if left is false
-            text.emit(OpCode.BNE, rightReg, Register.Arch.zero, trueLabel);
-            text.emit(OpCode.LI, resReg, 0);
-            text.emit(OpCode.J, endLabel);
-            text.emit(trueLabel);
-            text.emit(OpCode.LI, resReg, 1);
-            text.emit(endLabel);
-          }
+          case AND, OR -> generateLogicalOperator(b.op, leftReg, rightReg, resReg, text);
           default ->
-              throw new UnsupportedOperationException("Unsupported binary operator: " + b.op);
+              throw new UnsupportedOperationException(
+                  "[ExprValCodeGen] Unsupported binary operator: " + b.op);
         }
         return resReg;
       }
@@ -126,7 +94,12 @@ public class ExprValCodeGen extends CodeGen {
         Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(a.left);
         Register rhsReg = visit(a.right);
         Type type = a.left.type;
-        if (type != null && type.equals(BaseType.CHAR)) {
+        if (type == null) {
+          throw new IllegalStateException(
+              "[ExprValCodeGen] ERROR: Left-hand side type is NULL for assignment.");
+        }
+
+        if (type.equals(BaseType.CHAR)) {
           text.emit(OpCode.SB, rhsReg, addrReg, 0); // Store Byte
         } else {
           text.emit(OpCode.SW, rhsReg, addrReg, 0); // Store Word
@@ -137,9 +110,21 @@ public class ExprValCodeGen extends CodeGen {
       case VarExpr v -> {
         Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(v);
         VarDecl varDecl = allocator.getVarDecl(v.name);
+
+        if (varDecl == null || varDecl.type == null) {
+          throw new IllegalStateException(
+              "[ExprValCodeGen] ERROR: Variable type not found: " + v.name);
+        }
+
         Type type = varDecl.type;
+        if (type instanceof StructType) {
+          System.out.printf(
+              "[ExprValCodeGen] Struct '%s' loaded from offset: %d\n",
+              v.name, allocator.getLocalOffset(varDecl));
+        }
+
         if (type.equals(BaseType.CHAR)) {
-          text.emit(OpCode.LW, resReg, addrReg, 0);
+          text.emit(OpCode.LBU, resReg, addrReg, 0);
         } else {
           text.emit(OpCode.LW, resReg, addrReg, 0);
         }
@@ -147,92 +132,52 @@ public class ExprValCodeGen extends CodeGen {
       }
 
       case FunCallExpr fc -> {
-
-        // Check if function call is a syscall like "print_i"
         if (SyscallCodeGen.isSyscall(fc.name)) {
-          Register argReg = null;
-
-          if (!fc.args.isEmpty()) {
-            Expr firstArg = fc.args.get(0);
-            argReg = visit(firstArg);
-            System.out.println("[ExprValCodeGen] Syscall argument: " + argReg);
-          }
-
-          // Generate syscall for print_i and similar functions
+          Register argReg = fc.args.isEmpty() ? null : visit(fc.args.get(0));
           SyscallCodeGen.generateSyscall(text, fc.name, argReg);
-          return Register.Arch.v0; // Syscall return value in $v0
+          return Register.Arch.v0;
         }
 
-        // Normal function call handling
-        Label funcLabel = Label.get(fc.name);
-        int stackOffset = 0;
-        List<Register> argumentRegs = new ArrayList<>();
-        System.out.println("[ExprValCodeGen] Calling function: " + fc.name);
-        for (int i = 0; i < argumentRegs.size(); i++) {
-          System.out.println("[ExprValCodeGen] Arg " + i + " in register: " + argumentRegs.get(i));
+        String mangledFunctionName = getMangledFunctionName(fc.name, fc.args);
+        Label funcLabel = Label.get(mangledFunctionName);
+
+        if (!definedFunctions.contains(mangledFunctionName)) {
+          throw new IllegalStateException(
+              "[ExprValCodeGen] ERROR: Function not found: " + mangledFunctionName);
         }
-        // Evaluate and store all function arguments
+
+        List<Register> argumentRegs = new ArrayList<>();
+
         for (Expr arg : fc.args) {
-          Register argReg = visit(arg);
-          if (arg.type instanceof StructType) {
-            // Compute struct size and copy each word to the argument area
-            int structSize = allocator.computeSizeWithMask(arg.type);
+          Type argType = arg.type;
+          if (argType instanceof StructType) {
+            // Copy struct field by field onto the stack
+            int structSize = allocator.computeSize(argType);
+            structSize = allocator.alignTo16(structSize);
             Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(arg);
+
             for (int word = 0; word < structSize; word += 4) {
               Register temp = Register.Virtual.create();
               text.emit(OpCode.LW, temp, addrReg, word);
-              argumentRegs.add(temp);
-              // Handle stack arguments beyond the 4th
-              if (argumentRegs.size() > 4) {
-                int stackPos = (argumentRegs.size() - 5) * 4;
-                text.emit(OpCode.SW, temp, Register.Arch.sp, stackPos);
-              }
+              text.emit(OpCode.SW, temp, Register.Arch.sp, word);
             }
           } else {
-            argumentRegs.add(argReg);
+            argumentRegs.add(visit(arg));
           }
         }
 
-        // Preserve function arguments before making the call
-        text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -argumentRegs.size() * 4);
-        for (int i = 0; i < argumentRegs.size(); i++) {
-          text.emit(OpCode.SW, argumentRegs.get(i), Register.Arch.sp, i * 4);
-        }
-        stackOffset += argumentRegs.size() * 4;
-
-        // Load arguments into `a0-a3` registers or keep them on the stack
         for (int i = 0; i < argumentRegs.size(); i++) {
           if (i < 4) {
-            text.emit(OpCode.ADDU, getArgumentRegister(i), argumentRegs.get(i), Register.Arch.zero);
+            text.emit(OpCode.ADDU, getArgReg(i), argumentRegs.get(i), Register.Arch.zero);
+          } else {
+            int stackPos = (i - 4) * 4;
+            text.emit(OpCode.SW, argumentRegs.get(i), Register.Arch.sp, stackPos);
           }
         }
 
-        // Step 4: Call the function
         text.emit(OpCode.JAL, funcLabel);
-
-        // Step 5: Restore stack
-        if (stackOffset > 0) {
-          text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, stackOffset);
-        }
-
-        return Register.Arch.v0; // Return value from function call
-      }
-
-      case ArrayAccessExpr a -> {
-        Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(a);
-
-        // Load value from computed address
-        Register valueReg = Register.Virtual.create();
-        text.emit(OpCode.LW, valueReg, addrReg, 0);
-        return valueReg;
-      }
-
-      case FieldAccessExpr fa -> {
-        Register baseReg = new ExprAddrCodeGen(asmProg, allocator).visit(fa);
-        Register fieldValue = Register.Virtual.create();
-        // Load from computed address
-        text.emit(OpCode.LW, fieldValue, baseReg, 0);
-        return fieldValue;
+        text.emit(OpCode.NOP);
+        return Register.Arch.v0;
       }
 
       case ValueAtExpr va -> {
@@ -251,14 +196,91 @@ public class ExprValCodeGen extends CodeGen {
         return resReg;
       }
 
-      default -> {
-        throw new UnsupportedOperationException(
-            "[ExprValCodeGen] Unsupported expression type: " + e.getClass().getSimpleName());
+      case ArrayAccessExpr a -> {
+        Register baseAddr = new ExprAddrCodeGen(asmProg, allocator).visit(a.array);
+        Register indexReg = visit(a.index);
+
+        Type elementType = ((ArrayType) a.array.type).elementType;
+        int elementSize = allocator.computeSize(elementType); // Compute sizeof(elementType)
+
+        Register offsetReg = Register.Virtual.create();
+        // offset = index * sizeof(type)
+        text.emit(OpCode.LI, offsetReg, elementSize);
+
+        Register finalAddr = Register.Virtual.create();
+        text.emit(OpCode.ADDU, finalAddr, baseAddr, offsetReg); // finalAddr = base + offset
+
+        if (elementType.equals(BaseType.CHAR)) {
+          text.emit(OpCode.LBU, resReg, finalAddr, 0); // Load Byte (Unsigned)
+        } else {
+          text.emit(OpCode.LW, resReg, finalAddr, 0); // Load Word
+        }
+        return resReg;
       }
+      case FieldAccessExpr fa -> {
+        Register baseReg = new ExprAddrCodeGen(asmProg, allocator).visit(fa.structure);
+        if (fa.structure.type instanceof StructType structType) {
+          int offset = allocator.computeFieldOffset(structType, fa.field);
+          offset = allocator.alignTo(offset, 4);
+
+          if (fa.type.equals(BaseType.CHAR)) {
+            text.emit(OpCode.LB, resReg, baseReg, offset);
+          } else {
+            text.emit(OpCode.LW, resReg, baseReg, offset);
+          }
+          return resReg;
+        } else {
+          throw new IllegalStateException(
+              "[ExprValCodeGen] ERROR: Field access on non-struct type: " + fa.structure.type);
+        }
+      }
+
+      default ->
+          throw new UnsupportedOperationException(
+              "[ExprValCodeGen] Unsupported expression type: " + e.getClass().getSimpleName());
     }
+    // return resReg;
   }
 
-  private Register getArgumentRegister(int index) {
+  private void generateEqualityCheck(
+      AssemblyProgram.TextSection text, Register left, Register right, Register res, Op op) {
+    Label trueLabel = Label.create();
+    Label endLabel = Label.create();
+    text.emit(op == Op.EQ ? OpCode.BEQ : OpCode.BNE, left, right, trueLabel);
+    text.emit(OpCode.LI, res, 0);
+    text.emit(OpCode.J, endLabel);
+    text.emit(trueLabel);
+    text.emit(OpCode.LI, res, 1);
+    text.emit(endLabel);
+  }
+
+  private void generateLogicalOperator(
+      Op op,
+      Register leftReg,
+      Register rightReg,
+      Register resReg,
+      AssemblyProgram.TextSection text) {
+    Label trueLabel = Label.create();
+    Label endLabel = Label.create();
+    if (op == Op.AND) {
+      text.emit(OpCode.BEQ, leftReg, Register.Arch.zero, endLabel);
+      text.emit(OpCode.BEQ, rightReg, Register.Arch.zero, endLabel);
+    } else {
+      text.emit(OpCode.BNE, leftReg, Register.Arch.zero, trueLabel);
+      text.emit(OpCode.BNE, rightReg, Register.Arch.zero, trueLabel);
+    }
+    text.emit(OpCode.LI, resReg, 0);
+    text.emit(OpCode.J, endLabel);
+    text.emit(trueLabel);
+    text.emit(OpCode.LI, resReg, 1);
+    text.emit(endLabel);
+  }
+
+  private String getMangledFunctionName(String functionName, List<Expr> args) {
+    return functionName + "_" + args.size();
+  }
+
+  private Register getArgReg(int index) {
     return switch (index) {
       case 0 -> Register.Arch.a0;
       case 1 -> Register.Arch.a1;
