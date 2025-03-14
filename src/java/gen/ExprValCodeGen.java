@@ -203,9 +203,8 @@ public class ExprValCodeGen extends CodeGen {
         for (Expr arg : fc.args) {
           Type argType = arg.type;
           if (argType instanceof StructType) {
-            // Copy struct field by field onto the stack
             int structSize = allocator.computeSize(argType);
-            structSize = allocator.alignTo16(structSize);
+            structSize = allocator.alignTo8(structSize);
             Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(arg);
 
             for (int word = 0; word < structSize; word += 4) {
@@ -218,6 +217,7 @@ public class ExprValCodeGen extends CodeGen {
           }
         }
 
+        // Pass arguments in registers and stack
         for (int i = 0; i < argumentRegs.size(); i++) {
           if (i < 4) {
             text.emit(OpCode.ADDU, getArgReg(i), argumentRegs.get(i), Register.Arch.zero);
@@ -229,6 +229,31 @@ public class ExprValCodeGen extends CodeGen {
 
         text.emit(OpCode.JAL, funcLabel);
         text.emit(OpCode.NOP);
+
+        // Struct Return Values
+        if (fc.type instanceof StructType structType) {
+          int structSize = allocator.computeSize(structType);
+          structSize = allocator.alignTo8(structSize);
+
+          Register returnAddr = Register.Virtual.create();
+          Register structAddr = Register.Virtual.create();
+
+          System.out.printf(
+              "[ExprValCodeGen] Copying struct return value (Size: %d, Align: 8) from $sp\n",
+              structSize);
+
+          text.emit(OpCode.ADDIU, returnAddr, Register.Arch.sp, -structSize); // Align return space
+          text.emit(OpCode.ADDIU, structAddr, Register.Arch.fp, -structSize);
+
+          for (int word = 0; word < structSize; word += 4) {
+            Register temp = Register.Virtual.create();
+            text.emit(OpCode.LW, temp, returnAddr, word);
+            text.emit(OpCode.SW, temp, structAddr, word);
+          }
+
+          return structAddr;
+        }
+
         return Register.Arch.v0;
       }
 

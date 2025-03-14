@@ -193,13 +193,22 @@ public class StmtCodeGen extends CodeGen {
 
       if (rs.expr.type instanceof StructType) {
         int structSize = allocator.computeSize(rs.expr.type);
-        structSize = allocator.alignTo(structSize, 8);
+        structSize = allocator.alignTo8(structSize);
+
+        Register structAddr = new ExprAddrCodeGen(asmProg, allocator).visit(rs.expr);
         Register returnAddr = Register.Virtual.create();
+
+        System.out.printf(
+            "[StmtCodeGen] Copying return struct (Size: %d, Align: 8) from %s to $sp\n",
+            structSize, structAddr);
+
+        text.emit(
+            OpCode.ADDIU, returnAddr, Register.Arch.sp, -structSize); //  allocate return space
 
         for (int word = 0; word < structSize; word += 4) {
           Register temp = Register.Virtual.create();
-          text.emit(OpCode.LW, temp, resultReg, word);
-          text.emit(OpCode.SW, temp, Register.Arch.sp, word);
+          text.emit(OpCode.LW, temp, structAddr, word);
+          text.emit(OpCode.SW, temp, returnAddr, word);
         }
 
         text.emit(OpCode.ADDU, Register.Arch.v0, returnAddr, Register.Arch.zero);
