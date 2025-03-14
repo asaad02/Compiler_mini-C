@@ -59,30 +59,82 @@ public class ExprValCodeGen extends CodeGen {
       }
 
       case BinOp b -> {
-        Register leftReg = visit(b.left);
-        Register rightReg = visit(b.right);
-
         switch (b.op) {
-          case ADD -> text.emit(OpCode.ADD, resReg, leftReg, rightReg);
-          case SUB -> text.emit(OpCode.SUB, resReg, leftReg, rightReg);
-          case MUL -> text.emit(OpCode.MUL, resReg, leftReg, rightReg);
-          case DIV -> {
-            text.emit(OpCode.DIV, leftReg, rightReg);
-            text.emit(OpCode.MFLO, resReg);
+          case ADD, SUB, MUL, DIV, MOD, EQ, NE, LT, GT, LE, GE -> {
+            Register leftReg = visit(b.left);
+            Register rightReg = visit(b.right);
+
+            switch (b.op) {
+              case ADD -> text.emit(OpCode.ADD, resReg, leftReg, rightReg);
+              case SUB -> text.emit(OpCode.SUB, resReg, leftReg, rightReg);
+              case MUL -> text.emit(OpCode.MUL, resReg, leftReg, rightReg);
+
+              case DIV -> {
+                text.emit(OpCode.DIV, leftReg, rightReg);
+                text.emit(OpCode.MFLO, resReg);
+              }
+              case MOD -> {
+                text.emit(OpCode.DIV, leftReg, rightReg);
+                text.emit(OpCode.MFHI, resReg);
+              }
+
+              case EQ, NE -> generateEqualityCheck(text, leftReg, rightReg, resReg, b.op);
+              case LT -> text.emit(OpCode.SLT, resReg, leftReg, rightReg);
+              case GT -> text.emit(OpCode.SLT, resReg, rightReg, leftReg);
+
+              case LE -> { // Less than or equal (left <= right)
+                Register tempReg = Register.Virtual.create();
+                text.emit(OpCode.SLT, tempReg, rightReg, leftReg); // right < left
+                text.emit(OpCode.XORI, resReg, tempReg, 1); // Flip result (1 if left <= right)
+              }
+              case GE -> { // Greater than or equal (left >= right)
+                Register tempReg = Register.Virtual.create();
+                text.emit(OpCode.SLT, tempReg, leftReg, rightReg); // left < right
+                text.emit(OpCode.XORI, resReg, tempReg, 1); // Flip result (1 if left >= right)
+              }
+            }
           }
-          case MOD -> {
-            text.emit(OpCode.DIV, leftReg, rightReg);
-            text.emit(OpCode.MFHI, resReg);
+
+          case AND -> {
+            Label falseLabel = Label.create();
+            Label endLabel = Label.create();
+            Register leftReg = visit(b.left);
+
+            // Short-circuit if left operand is zero
+            text.emit(OpCode.BEQZ, leftReg, falseLabel);
+
+            // evaluate right operand if needed
+            Register rightReg = visit(b.right);
+            text.emit(OpCode.BEQZ, rightReg, falseLabel);
+            text.emit(OpCode.LI, resReg, 1); // If both nonzero, return 1
+            text.emit(OpCode.J, endLabel);
+
+            // Short-circuit case If left was 0, return 0
+            text.emit(falseLabel);
+            text.emit(OpCode.LI, resReg, 0);
+            text.emit(endLabel);
           }
-          case EQ, NE -> generateEqualityCheck(text, leftReg, rightReg, resReg, b.op);
-          case LT -> text.emit(OpCode.SLT, resReg, leftReg, rightReg);
-          case GT -> text.emit(OpCode.SLT, resReg, rightReg, leftReg);
-          case LE, GE -> {
-            Register tempReg = Register.Virtual.create();
-            text.emit(OpCode.SLT, tempReg, rightReg, leftReg);
-            text.emit(OpCode.XORI, resReg, tempReg, 1);
+
+          case OR -> {
+            Label trueLabel = Label.create();
+            Label endLabel = Label.create();
+            Register leftReg = visit(b.left);
+
+            // Short-circuit if left operand is 1
+            text.emit(OpCode.BNEZ, leftReg, trueLabel);
+
+            // Now evaluate right operand only if needed
+            Register rightReg = visit(b.right);
+            text.emit(OpCode.BNEZ, rightReg, trueLabel);
+            text.emit(OpCode.LI, resReg, 0); // If both are 0, return 0
+            text.emit(OpCode.J, endLabel);
+
+            // Short-circuit case If left was 1, return 1
+            text.emit(trueLabel);
+            text.emit(OpCode.LI, resReg, 1);
+            text.emit(endLabel);
           }
-          case AND, OR -> generateLogicalOperator(b.op, leftReg, rightReg, resReg, text);
+
           default ->
               throw new UnsupportedOperationException(
                   "[ExprValCodeGen] Unsupported binary operator: " + b.op);
@@ -251,28 +303,6 @@ public class ExprValCodeGen extends CodeGen {
     text.emit(OpCode.J, endLabel);
     text.emit(trueLabel);
     text.emit(OpCode.LI, res, 1);
-    text.emit(endLabel);
-  }
-
-  private void generateLogicalOperator(
-      Op op,
-      Register leftReg,
-      Register rightReg,
-      Register resReg,
-      AssemblyProgram.TextSection text) {
-    Label trueLabel = Label.create();
-    Label endLabel = Label.create();
-    if (op == Op.AND) {
-      text.emit(OpCode.BEQ, leftReg, Register.Arch.zero, endLabel);
-      text.emit(OpCode.BEQ, rightReg, Register.Arch.zero, endLabel);
-    } else {
-      text.emit(OpCode.BNE, leftReg, Register.Arch.zero, trueLabel);
-      text.emit(OpCode.BNE, rightReg, Register.Arch.zero, trueLabel);
-    }
-    text.emit(OpCode.LI, resReg, 0);
-    text.emit(OpCode.J, endLabel);
-    text.emit(trueLabel);
-    text.emit(OpCode.LI, resReg, 1);
     text.emit(endLabel);
   }
 
