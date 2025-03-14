@@ -55,6 +55,13 @@ public class SyscallCodeGen {
       case "read_c" -> {
         text.emit(OpCode.LI, Register.Arch.v0, 12); // Syscall code for read char
         text.emit(OpCode.SYSCALL);
+        if (arg != null) {
+          text.emit(OpCode.ADDU, arg, Register.Arch.v0, Register.Arch.zero);
+        } else {
+          // Explicitly discard character safely in temp register
+          Register temp = Register.Arch.t0;
+          text.emit(OpCode.ADDU, temp, Register.Arch.v0, Register.Arch.zero);
+        }
       }
       case "mcmalloc" -> {
         ensureArgNotNull(syscall, arg);
