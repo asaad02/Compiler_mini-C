@@ -82,7 +82,38 @@ public class ExprValCodeGen extends CodeGen {
             text.emit(OpCode.SLT, tempReg, rightReg, leftReg);
             text.emit(OpCode.XORI, resReg, tempReg, 1);
           }
-          case AND, OR -> generateLogicalOperator(b.op, leftReg, rightReg, resReg, text);
+          case AND -> {
+            Label falseLabel = Label.create();
+            Label endLabel = Label.create();
+
+            text.emit(OpCode.BEQZ, leftReg, falseLabel); // If left == 0, short-circuit
+            rightReg = visit(b.right);
+            text.emit(OpCode.BEQZ, rightReg, falseLabel);
+            text.emit(OpCode.LI, resReg, 1);
+            text.emit(OpCode.J, endLabel);
+
+            text.emit(falseLabel);
+            text.emit(OpCode.LI, resReg, 0);
+            text.emit(endLabel);
+            return resReg;
+          }
+
+          case OR -> {
+            Label trueLabel = Label.create();
+            Label endLabel = Label.create();
+
+            text.emit(OpCode.BNEZ, leftReg, trueLabel); // If left != 0, short-circuit
+            rightReg = visit(b.right);
+            text.emit(OpCode.BNEZ, rightReg, trueLabel);
+            text.emit(OpCode.LI, resReg, 0);
+            text.emit(OpCode.J, endLabel);
+
+            text.emit(trueLabel);
+            text.emit(OpCode.LI, resReg, 1);
+            text.emit(endLabel);
+            return resReg;
+          }
+
           default ->
               throw new UnsupportedOperationException(
                   "[ExprValCodeGen] Unsupported binary operator: " + b.op);
@@ -251,28 +282,6 @@ public class ExprValCodeGen extends CodeGen {
     text.emit(OpCode.J, endLabel);
     text.emit(trueLabel);
     text.emit(OpCode.LI, res, 1);
-    text.emit(endLabel);
-  }
-
-  private void generateLogicalOperator(
-      Op op,
-      Register leftReg,
-      Register rightReg,
-      Register resReg,
-      AssemblyProgram.TextSection text) {
-    Label trueLabel = Label.create();
-    Label endLabel = Label.create();
-    if (op == Op.AND) {
-      text.emit(OpCode.BEQ, leftReg, Register.Arch.zero, endLabel);
-      text.emit(OpCode.BEQ, rightReg, Register.Arch.zero, endLabel);
-    } else {
-      text.emit(OpCode.BNE, leftReg, Register.Arch.zero, trueLabel);
-      text.emit(OpCode.BNE, rightReg, Register.Arch.zero, trueLabel);
-    }
-    text.emit(OpCode.LI, resReg, 0);
-    text.emit(OpCode.J, endLabel);
-    text.emit(trueLabel);
-    text.emit(OpCode.LI, resReg, 1);
     text.emit(endLabel);
   }
 

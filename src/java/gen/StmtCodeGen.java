@@ -74,29 +74,52 @@ public class StmtCodeGen extends CodeGen {
     System.out.println("[StmtCodeGen] Exiting block.");
   }
 
-  /** handles expression statements (e.g., function calls, assignments). */
+  // handles expression statements (assignments, function calls, increments, and decrements).
   private void handleExprStmt(ExprStmt es) {
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
-    Register result = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(es.expr);
 
-    if (es.expr instanceof FunCallExpr fc) {
-      for (int i = 0; i < fc.args.size(); i++) {
-        Expr arg = fc.args.get(i);
-        Type argType = arg.type;
+    // Handle Assignments (i = expr)
+    if (es.expr instanceof Assign a) {
+      System.out.println("[StmtCodeGen] Resolving assignment: " + a.left);
 
-        if (argType instanceof StructType) {
-          int structSize = allocator.computeSize(argType);
-          structSize = allocator.alignTo16(structSize);
-          Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(arg);
+      Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(a.left);
+      Register rhsReg = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(a.right);
 
-          for (int word = 0; word < structSize; word += 4) {
-            Register temp = Register.Virtual.create();
-            text.emit(OpCode.LW, temp, addrReg, word);
-            text.emit(OpCode.SW, temp, Register.Arch.sp, word);
+      // Store updated value back to memory
+      text.emit(OpCode.SW, rhsReg, addrReg, 0);
+      return;
+    }
+
+    // handle increments and decrements
+    if (es.expr instanceof BinOp bo) {
+      if ((bo.op == Op.ADD || bo.op == Op.SUB) && bo.right instanceof IntLiteral il) {
+        if (bo.left instanceof VarExpr v) {
+          System.out.println(
+              "[StmtCodeGen] Handling standalone " + (bo.op == Op.ADD ? "increment" : "decrement"));
+
+          // Resolve variable address
+          Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(v);
+          Register tempReg = Register.Virtual.create();
+
+          // Load current value
+          text.emit(OpCode.LW, tempReg, addrReg, 0);
+
+          // Perform increment or decrement
+          if (bo.op == Op.ADD) {
+            text.emit(OpCode.ADDIU, tempReg, tempReg, il.value);
+          } else {
+            text.emit(OpCode.ADDIU, tempReg, tempReg, -il.value);
           }
+
+          // Store updated value back to memory
+          text.emit(OpCode.SW, tempReg, addrReg, 0);
+          return;
         }
       }
     }
+
+    // Evaluate Expression
+    new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(es.expr);
   }
 
   /** Handles if else statements by generating conditional branching. */
