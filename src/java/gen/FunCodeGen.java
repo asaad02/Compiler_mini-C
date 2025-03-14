@@ -50,7 +50,7 @@ public class FunCodeGen extends CodeGen {
     textSection.emit(OpCode.PUSH_REGISTERS);
 
     // Save function parameters in the stack frame
-    saveFunctionParameters(fd, textSection);
+    saveFunctionParameters(fd, textSection, frameSize);
 
     // Generate function body
     new StmtCodeGen(asmProg, allocator, fd, definedFunctions).visit(fd.block);
@@ -63,39 +63,40 @@ public class FunCodeGen extends CodeGen {
     generateFunctionEpilogue(fd, textSection, frameSize);
   }
 
-  private void saveFunctionParameters(FunDef fd, AssemblyProgram.TextSection textSection) {
+  private void saveFunctionParameters(
+      FunDef fd, AssemblyProgram.TextSection textSection, int frameSize) {
+    // start at FP + frameSize
+    int paramStackOffset = frameSize;
+
     for (int i = 0; i < fd.params.size(); i++) {
       VarDecl param = fd.params.get(i);
-      int offset = allocator.getLocalOffset(param);
-      offset = (offset / 4) * 4;
+      int localOffset = allocator.getLocalOffset(param);
       Type paramType = param.type;
 
       if (paramType instanceof StructType) {
-
         int structSize = allocator.computeSize(paramType);
-        offset = allocator.alignTo(offset, 8);
-        structSize = allocator.alignTo(structSize, 8);
-
-        int paramOffset = allocator.getLocalOffset(param);
         for (int word = 0; word < structSize; word += 4) {
           Register temp = Register.Virtual.create();
-          textSection.emit(OpCode.LW, temp, Register.Arch.sp, paramOffset + word);
-          textSection.emit(OpCode.SW, temp, Register.Arch.fp, offset + word);
+          // Correctly copy from caller's stack
+          textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset + word);
+          textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset + word);
         }
+        paramStackOffset += allocator.alignTo4(structSize);
       } else {
         if (i < 4) {
-          textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.fp, offset);
+          textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.fp, localOffset);
         } else {
-          int stackOffset = allocator.alignTo16((i - 4) * 4);
+          // Parameter passed on stack after first 4 args
           Register temp = Register.Virtual.create();
-          textSection.emit(OpCode.LW, temp, Register.Arch.sp, stackOffset);
-          textSection.emit(OpCode.SW, temp, Register.Arch.fp, offset);
+          textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
+          textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
+          paramStackOffset += 4;
         }
       }
     }
   }
 
-  //
+  // Generate function epilogue
   private void generateFunctionEpilogue(
       FunDef fd, AssemblyProgram.TextSection textSection, int frameSize) {
     System.out.println("[FunCodeGen] Generating function epilogue for: " + fd.name);

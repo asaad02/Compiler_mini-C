@@ -80,14 +80,39 @@ public class MemAllocCodeGen extends CodeGen {
     int offset;
     if (vd.type instanceof StructType) {
       int structSize = computeSize(vd.type);
-      structSize = alignTo16(structSize);
-      offset = -(paramIndex + 1) * structSize;
+      structSize = alignTo8(structSize);
+      offset = -((paramIndex + 1) * structSize); // structs are aligned
     } else {
       offset = alignTo4(-(paramIndex + 1) * 4);
     }
 
     localVarOffsets.put(vd, offset);
-    System.out.printf("[MemAllocCodeGen] Allocated parameter '%s' at offset %d\n", vd.name, offset);
+    System.out.printf(
+        "[MemAllocCodeGen] Allocated parameter '%s' at offset %d (Size: %d, Align: %d)\n",
+        vd.name, offset, computeSize(vd.type), computeAlignment(vd.type));
+  }
+
+  private void allocateLocalVariable(VarDecl vd) {
+    if (scopeStack.isEmpty()) {
+      throw new IllegalStateException(
+          "[MemAllocCodeGen] ERROR: No active scope for local variable.");
+    }
+
+    Map<String, VarDecl> currentScope = scopeStack.peek();
+    if (currentScope.containsKey(vd.name)) {
+      throw new IllegalStateException(
+          "[MemAllocCodeGen] ERROR: Variable redeclared in the same scope: " + vd.name);
+    }
+
+    currentScope.put(vd.name, vd);
+
+    int alignedSize = alignTo4(computeSize(vd.type));
+    fpOffset -= alignedSize;
+    int offset = fpOffset;
+
+    localVarOffsets.put(vd, offset);
+    System.out.printf(
+        "[MemAllocCodeGen] Allocated local variable '%s' at offset %d\n", vd.name, offset);
   }
 
   // allocateVariable
@@ -110,28 +135,6 @@ public class MemAllocCodeGen extends CodeGen {
     dataSection.emit(new Directive("align 4"));
     dataSection.emit(Label.get(vd.name));
     dataSection.emit(new Directive("space 4"));
-  }
-
-  // allocateLocalVariable
-  private void allocateLocalVariable(VarDecl vd) {
-    if (scopeStack.isEmpty()) {
-      throw new IllegalStateException(
-          "[MemAllocCodeGen] ERROR: No active scope for local variable.");
-    }
-
-    Map<String, VarDecl> currentScope = scopeStack.peek();
-    if (currentScope.containsKey(vd.name)) {
-      throw new IllegalStateException(
-          "[MemAllocCodeGen] ERROR: Variable redeclared in the same scope: " + vd.name);
-    }
-
-    currentScope.put(vd.name, vd);
-    int alignedSize = alignTo4(computeSize(vd.type));
-    fpOffset -= alignedSize;
-    int offset = fpOffset;
-    localVarOffsets.put(vd, offset);
-    System.out.println(
-        "[MemAllocCodeGen] Allocated local variable " + vd.name + " at offset " + offset);
   }
 
   public int getLocalOffset(VarDecl varDecl, int scopeLevel) {
@@ -348,6 +351,27 @@ public class MemAllocCodeGen extends CodeGen {
       frameSize += computeSize(local.type);
     }
     return frameSize;
+  }
+
+  // getFunctionDefinition
+  public FunDef getFunctionDefinition(String name) {
+    for (FunDef fd : frameSizes.keySet()) {
+      if (fd.name.equals(name)) {
+        return fd;
+      }
+    }
+    throw new IllegalStateException("[MemAllocCodeGen] ERROR: Function not found: " + name);
+  }
+
+  // getLocalOffset string
+  public int getLocalOffset(String varName) {
+    for (int i = scopeStack.size() - 1; i >= 0; i--) {
+      Map<String, VarDecl> scope = scopeStack.get(i);
+      if (scope.containsKey(varName)) {
+        return localVarOffsets.get(scope.get(varName));
+      }
+    }
+    throw new IllegalStateException("[MemAllocCodeGen] ERROR: Variable not found: " + varName);
   }
 
   public void printStructDebugInfo() {
