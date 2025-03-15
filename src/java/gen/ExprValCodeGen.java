@@ -146,13 +146,27 @@ public class ExprValCodeGen extends CodeGen {
         Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(a.left);
         Register rhsReg = visit(a.right);
         Type type = a.left.type;
-        if (type == null) {
-          throw new IllegalStateException(
-              "[ExprValCodeGen] ERROR: Left-hand side type is NULL for assignment.");
-        }
 
-        if (type.equals(BaseType.CHAR)) {
-          text.emit(OpCode.SB, rhsReg, addrReg, 0); // Store Byte
+        if (type instanceof StructType) {
+          int structSize = allocator.computeSize(type);
+          structSize = allocator.alignTo8(structSize); // Ensure proper alignment
+          for (int offset = 0; offset < structSize; offset += 4) {
+            Register temp = Register.Virtual.create();
+            text.emit(OpCode.LW, temp, rhsReg, offset); // Load struct data
+            text.emit(OpCode.SW, temp, addrReg, offset); // Store struct data
+          }
+        } // if array type
+        else if (type instanceof ArrayType) {
+          Register rhsAddr = new ExprAddrCodeGen(asmProg, allocator).visit(a.right);
+          Register rhsSize = Register.Virtual.create();
+          text.emit(OpCode.LI, rhsSize, allocator.computeSize(type));
+          for (int offset = 0; offset < allocator.computeSize(type); offset += 4) {
+            Register temp = Register.Virtual.create();
+            text.emit(OpCode.LW, temp, rhsAddr, offset); // Load array data
+            text.emit(OpCode.SW, temp, addrReg, offset); // Store array data
+          }
+        } else if (type.equals(BaseType.CHAR)) {
+          text.emit(OpCode.SB, rhsReg, addrReg, 0);
         } else {
           text.emit(OpCode.SW, rhsReg, addrReg, 0); // Store Word
         }
@@ -169,10 +183,28 @@ public class ExprValCodeGen extends CodeGen {
         }
 
         Type type = varDecl.type;
-        if (type instanceof StructType) {
+        if (type instanceof StructType structType) {
+          int structSize = allocator.computeSize(structType);
+          structSize = allocator.alignTo8(structSize);
+
+          Register structAddr = Register.Virtual.create();
+          text.emit(OpCode.ADDIU, structAddr, Register.Arch.sp, -structSize);
+
           System.out.printf(
-              "[ExprValCodeGen] Struct '%s' loaded from offset: %d\n",
-              v.name, allocator.getLocalOffset(varDecl));
+              "[ExprValCodeGen] Struct '%s' loaded at address: %s\n", v.name, structAddr);
+
+          return structAddr;
+        } else if (type instanceof ArrayType arrayType) {
+          int arraySize = allocator.computeSize(arrayType);
+          arraySize = allocator.alignTo8(arraySize);
+
+          Register arrayAddr = Register.Virtual.create();
+          text.emit(OpCode.ADDIU, arrayAddr, Register.Arch.sp, -arraySize);
+
+          System.out.printf(
+              "[ExprValCodeGen] Array '%s' loaded at address: %s\n", v.name, arrayAddr);
+
+          return arrayAddr;
         }
 
         if (type.equals(BaseType.CHAR)) {
@@ -230,28 +262,32 @@ public class ExprValCodeGen extends CodeGen {
         text.emit(OpCode.JAL, funcLabel);
         text.emit(OpCode.NOP);
 
-        // Struct Return Values
+        // Handle struct return: allocate space in the caller's stack
         if (fc.type instanceof StructType structType) {
           int structSize = allocator.computeSize(structType);
           structSize = allocator.alignTo8(structSize);
 
-          Register returnAddr = Register.Virtual.create();
+          // Allocate space in the caller's stack and pass address as implicit first argument
           Register structAddr = Register.Virtual.create();
+          text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -structSize);
+          text.emit(OpCode.ADDU, structAddr, Register.Arch.sp, Register.Arch.zero);
 
-          System.out.printf(
-              "[ExprValCodeGen] Copying struct return value (Size: %d, Align: 8) from $sp\n",
-              structSize);
+          // Pass structAddr as the first argument (adjust existing argument handling)
+          argumentRegs.add(0, structAddr); // Prepend to arguments
+        }
 
-          text.emit(OpCode.ADDIU, returnAddr, Register.Arch.sp, -structSize); // Align return space
-          text.emit(OpCode.ADDIU, structAddr, Register.Arch.fp, -structSize);
+        // handle array return: allocate space in the caller's stack
+        if (fc.type instanceof ArrayType arrayType) {
+          int arraySize = allocator.computeSize(arrayType);
+          arraySize = allocator.alignTo8(arraySize);
 
-          for (int word = 0; word < structSize; word += 4) {
-            Register temp = Register.Virtual.create();
-            text.emit(OpCode.LW, temp, returnAddr, word);
-            text.emit(OpCode.SW, temp, structAddr, word);
-          }
+          // Allocate space in the caller's stack and pass address as implicit first argument
+          Register arrayAddr = Register.Virtual.create();
+          text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -arraySize);
+          text.emit(OpCode.ADDU, arrayAddr, Register.Arch.sp, Register.Arch.zero);
 
-          return structAddr;
+          // Pass arrayAddr as the first argument (adjust existing argument handling)
+          argumentRegs.add(0, arrayAddr); // Prepend to arguments
         }
 
         return Register.Arch.v0;
@@ -276,7 +312,6 @@ public class ExprValCodeGen extends CodeGen {
       case ArrayAccessExpr a -> {
         Register baseAddr = new ExprAddrCodeGen(asmProg, allocator).visit(a.array);
         Register indexReg = visit(a.index);
-
         Type elementType = ((ArrayType) a.array.type).elementType;
         int elementSize = allocator.computeSize(elementType);
 
@@ -285,30 +320,28 @@ public class ExprValCodeGen extends CodeGen {
         text.emit(OpCode.MUL, indexReg, indexReg, offsetReg);
 
         Register finalAddr = Register.Virtual.create();
-        text.emit(OpCode.ADDU, finalAddr, baseAddr, indexReg); // finalAddr = base + offset
+        text.emit(OpCode.ADDU, finalAddr, baseAddr, indexReg);
 
         if (elementType.equals(BaseType.CHAR)) {
-          text.emit(OpCode.LBU, resReg, finalAddr, 0); // Load Byte (Unsigned)
+          text.emit(OpCode.LBU, resReg, finalAddr, 0); // Load byte
         } else {
-          text.emit(OpCode.LW, resReg, finalAddr, 0); // Load Word
+          text.emit(OpCode.LW, resReg, finalAddr, 0); // Load word
         }
         return resReg;
       }
+
       case FieldAccessExpr fa -> {
         Register baseReg = new ExprAddrCodeGen(asmProg, allocator).visit(fa.structure);
         if (fa.structure.type instanceof StructType structType) {
           int offset = allocator.computeFieldOffset(structType, fa.field);
-          offset = allocator.alignTo(offset, 4);
+          offset = allocator.alignTo(offset, 4); // Ensure proper alignment
 
           if (fa.type.equals(BaseType.CHAR)) {
-            text.emit(OpCode.LB, resReg, baseReg, offset);
+            text.emit(OpCode.LBU, resReg, baseReg, offset); // Load byte for char fields
           } else {
-            text.emit(OpCode.LW, resReg, baseReg, offset);
+            text.emit(OpCode.LW, resReg, baseReg, offset); // Load word for other types
           }
           return resReg;
-        } else {
-          throw new IllegalStateException(
-              "[ExprValCodeGen] ERROR: Field access on non-struct type: " + fa.structure.type);
         }
       }
 
@@ -316,7 +349,7 @@ public class ExprValCodeGen extends CodeGen {
           throw new UnsupportedOperationException(
               "[ExprValCodeGen] Unsupported expression type: " + e.getClass().getSimpleName());
     }
-    // return resReg;
+    return resReg;
   }
 
   private void generateEqualityCheck(

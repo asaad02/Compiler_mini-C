@@ -75,6 +75,10 @@ public class ProgramCodeGen extends CodeGen {
     // Print Assembly Sections and Debug Table
     printAssemblySections();
     allocator.printDebugTable();
+    // print all the memory allocations
+    allocator.printAllMemory();
+    allocator.printPointer();
+    allocator.printStack();
     System.out.println("[ProgramCodeGen] Program generation completed successfully.");
   }
 

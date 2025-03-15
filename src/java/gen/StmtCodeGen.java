@@ -85,9 +85,17 @@ public class StmtCodeGen extends CodeGen {
       Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(a.left);
       Register rhsReg = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(a.right);
 
-      // Store updated value back to memory
-      text.emit(OpCode.SW, rhsReg, addrReg, 0);
-      return;
+      if (a.left.type instanceof StructType structType) {
+        int structSize = allocator.computeSize(structType);
+        for (int offset = 0; offset < structSize; offset += 4) {
+          Register tempReg = Register.Virtual.create();
+          text.emit(OpCode.LW, tempReg, rhsReg, offset);
+          text.emit(OpCode.SW, tempReg, addrReg, offset);
+        }
+      } else {
+        text.emit(OpCode.SW, rhsReg, addrReg, 0);
+      }
+      return; // execution stops after an assignment
     }
 
     // handle increments and decrements
@@ -160,25 +168,29 @@ public class StmtCodeGen extends CodeGen {
     System.out.println("[StmtCodeGen] Processing while loop...");
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
 
-    // Generate unique labels for loop start and end
+    // Generate unique labels for condition check, loop body, and loop exit
+    Label conditionLabel = Label.create(currentFunctionDef.name + "_loop_cond");
     Label startLabel = Label.create(currentFunctionDef.name + "_loop_start");
     Label endLabel = Label.create(currentFunctionDef.name + "_loop_end");
 
     // Push loop labels for break/continue handling
-    loopStack.push(new LoopLabels(startLabel, endLabel));
+    loopStack.push(new LoopLabels(conditionLabel, endLabel));
 
-    // Loop condition check
-    text.emit(startLabel);
-    Register condReg = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(w.condition);
-
-    text.emit(OpCode.BEQ, condReg, Register.Arch.zero, endLabel);
+    // Jump to condition check first
+    text.emit(OpCode.J, conditionLabel);
 
     // Loop body
-    visit(w.body);
-    // Jump back to start
-    text.emit(OpCode.J, startLabel);
+    text.emit(startLabel);
+    visit(w.body); // Process the loop body
 
-    // Loop exit
+    // After executing body, jump back to condition check
+    text.emit(conditionLabel);
+    Register condReg = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(w.condition);
+
+    // If condition is true, jump to loop body
+    text.emit(OpCode.BNEZ, condReg, startLabel);
+
+    // Exit label
     text.emit(endLabel);
     loopStack.pop();
     System.out.println("[StmtCodeGen] Exiting while loop.");
@@ -191,27 +203,21 @@ public class StmtCodeGen extends CodeGen {
     if (rs.expr != null) {
       Register resultReg = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(rs.expr);
 
-      if (rs.expr.type instanceof StructType) {
-        int structSize = allocator.computeSize(rs.expr.type);
-        structSize = allocator.alignTo8(structSize);
-
-        Register structAddr = new ExprAddrCodeGen(asmProg, allocator).visit(rs.expr);
+      if (rs.expr != null && rs.expr.type instanceof StructType structType) {
+        int structSize = allocator.computeSize(structType);
         Register returnAddr = Register.Virtual.create();
 
-        System.out.printf(
-            "[StmtCodeGen] Copying return struct (Size: %d, Align: 8) from %s to $sp\n",
-            structSize, structAddr);
-
-        text.emit(
-            OpCode.ADDIU, returnAddr, Register.Arch.sp, -structSize); //  allocate return space
-
-        for (int word = 0; word < structSize; word += 4) {
-          Register temp = Register.Virtual.create();
-          text.emit(OpCode.LW, temp, structAddr, word);
-          text.emit(OpCode.SW, temp, returnAddr, word);
-        }
-
+        // Allocate space for struct return and pass the address
+        text.emit(OpCode.ADDIU, returnAddr, Register.Arch.sp, -structSize);
         text.emit(OpCode.ADDU, Register.Arch.v0, returnAddr, Register.Arch.zero);
+
+        // Copy struct contents to return address
+        Register structReg = new ExprAddrCodeGen(asmProg, allocator).visit(rs.expr);
+        for (int offset = 0; offset < structSize; offset += 4) {
+          Register temp = Register.Virtual.create();
+          text.emit(OpCode.LW, temp, structReg, offset);
+          text.emit(OpCode.SW, temp, returnAddr, offset);
+        }
       } else {
         text.emit(OpCode.ADDU, Register.Arch.v0, resultReg, Register.Arch.zero);
       }
