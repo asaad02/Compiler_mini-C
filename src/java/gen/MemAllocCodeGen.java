@@ -11,19 +11,19 @@ import java.util.*;
  * structs
  */
 public class MemAllocCodeGen extends CodeGen {
-  private final Map<VarDecl, Integer> localVarOffsets = new HashMap<>();
-  private final Map<FunDef, Integer> frameSizes = new HashMap<>();
-  private final Map<String, VarDecl> globalVars = new HashMap<>();
-  private final Stack<Map<String, VarDecl>> scopeStack = new Stack<>();
-  private final Map<String, Integer> structSizes = new HashMap<>();
+  public final Map<VarDecl, Integer> localVarOffsets = new HashMap<>();
+  public final Map<FunDef, Integer> frameSizes = new HashMap<>();
+  public final Map<String, VarDecl> globalVars = new HashMap<>();
+  public final Stack<Map<String, VarDecl>> scopeStack = new Stack<>();
+  public final Map<String, Integer> structSizes = new HashMap<>();
   public final Map<String, StructTypeDecl> structDeclarations = new HashMap<>();
-  private final Set<String> globalVariables = new HashSet<>();
-  private final AssemblyProgram.Section dataSection;
+  public final Set<String> globalVariables = new HashSet<>();
+  public final AssemblyProgram.Section dataSection;
 
   // fpOffset is the offset from the frame pointer ($fp) for local variables
-  private int fpOffset = 0;
+  public int fpOffset = 0;
   // nextAvailableOffset is the next available offset for local variables
-  private int nextAvailableOffset = 0;
+  public int nextAvailableOffset = 0;
 
   public MemAllocCodeGen(AssemblyProgram asmProg) {
     this.asmProg = asmProg;
@@ -47,6 +47,9 @@ public class MemAllocCodeGen extends CodeGen {
       case StructTypeDecl std -> {
         structDeclarations.put(std.name, std);
         structSizes.put(std.name, computeStructSize(std));
+
+        // Ensure alignment of struct types
+        structSizes.put(std.name, alignTo(computeStructSize(std), 8));
       }
       default -> {}
     }
@@ -67,6 +70,7 @@ public class MemAllocCodeGen extends CodeGen {
     }
     // compute frame size
     frameSizes.put(fd, alignTo16(-fpOffset));
+    MemDebugUtils.attachDebugToMemAlloc(this);
   }
 
   private void allocateFunctionParameter(VarDecl vd, int paramIndex) {
@@ -80,8 +84,8 @@ public class MemAllocCodeGen extends CodeGen {
     int offset;
     if (vd.type instanceof StructType) {
       int structSize = computeSize(vd.type);
-      structSize = alignTo8(structSize);
-      offset = -((paramIndex + 1) * structSize); // structs are aligned
+      structSize = alignTo(structSize, 8); // Ensure correct alignment
+      offset = -(paramIndex + 1) * structSize;
     } else {
       offset = alignTo4(-(paramIndex + 1) * 4);
     }
@@ -254,7 +258,7 @@ public class MemAllocCodeGen extends CodeGen {
       maxAlignment = Math.max(maxAlignment, fieldAlign);
     }
 
-    return alignTo(offset, maxAlignment);
+    return alignTo(offset, 4); // Ensure proper 4-byte alignment
   }
 
   // Computes the byte offset of a struct field with proper alignment.
@@ -496,6 +500,123 @@ public class MemAllocCodeGen extends CodeGen {
     System.out.printf(
         "\n[MemAllocCodeGen] Function: %-12s | Frame Size: %3d bytes\n",
         fd.name, frameSizes.get(fd));
+
+    System.out.println("=====================================================");
+  }
+
+  // function to print all the frame and memory allocations for all functions in the program and
+  // global local variables
+  // all the information about the program
+  public void printAllMemory() {
+    System.out.println("\n==== Memory Allocation Table ====");
+    System.out.println("| Variable       | Offset | Size | Align | Type         |");
+    System.out.println("|---------------|--------|------|-------|--------------|");
+
+    // Print Global Variables
+    for (String varName : globalVars.keySet()) {
+      VarDecl var = globalVars.get(varName);
+      int size = computeSize(var.type);
+      int align = computeAlignment(var.type);
+      System.out.printf(
+          "| %-14s | %-6d | %-4d | %-5d | %-12s |\n", varName, 0, size, align, var.type);
+    }
+
+    // Print Function Variables
+    for (FunDef fd : frameSizes.keySet()) {
+      System.out.println("\n==== Function: " + fd.name + " ====");
+      System.out.println("| Variable       | Offset | Size | Align | Type         |");
+      System.out.println("|---------------|--------|------|-------|--------------|");
+
+      for (VarDecl param : fd.params) {
+        int offset = localVarOffsets.getOrDefault(param, -999);
+        int size = computeSize(param.type);
+        int align = computeAlignment(param.type);
+        System.out.printf(
+            "| %-14s | %-6d | %-4d | %-5d | %-12s |\n",
+            param.name, offset, size, align, param.type);
+      }
+
+      for (VarDecl localVar : fd.block.vds) {
+        int offset = localVarOffsets.getOrDefault(localVar, -999);
+        int size = computeSize(localVar.type);
+        int align = computeAlignment(localVar.type);
+        System.out.printf(
+            "| %-14s | %-6d | %-4d | %-5d | %-12s |\n",
+            localVar.name, offset, size, align, localVar.type);
+      }
+
+      System.out.printf(
+          "\n[MemAllocCodeGen] Function: %-12s | Frame Size: %3d bytes\n",
+          fd.name, frameSizes.get(fd));
+    }
+
+    System.out.println("=====================================================");
+  }
+
+  // print the pointer for each stage of memory allocation
+  public void printPointer() {
+    System.out.println("\n==== Pointer Table ====");
+    System.out.println("| Variable       | Address |");
+    System.out.println("|---------------|---------|");
+
+    // Print Global Variables
+    for (String varName : globalVars.keySet()) {
+      VarDecl var = globalVars.get(varName);
+      if (var.type instanceof PointerType) {
+        System.out.printf("| %-14s | 0x%08X |\n", varName, 0);
+      }
+    }
+
+    // Print Function Variables
+    for (FunDef fd : frameSizes.keySet()) {
+      System.out.println("\n==== Function: " + fd.name + " ====");
+      System.out.println("| Variable       | Address |");
+      System.out.println("|---------------|---------|");
+
+      for (VarDecl param : fd.params) {
+        int offset = localVarOffsets.getOrDefault(param, -999);
+        System.out.printf("| %-14s | 0x%08X |\n", param.name, offset);
+      }
+
+      for (VarDecl localVar : fd.block.vds) {
+        int offset = localVarOffsets.getOrDefault(localVar, -999);
+        System.out.printf("| %-14s | 0x%08X |\n", localVar.name, offset);
+      }
+    }
+
+    System.out.println("=====================================================");
+  }
+
+  // print all the stack
+  public void printStack() {
+    System.out.println("\n==== Stack Table ====");
+    System.out.println("| Variable       | Address |");
+    System.out.println("|---------------|---------|");
+
+    // Print Global Variables
+    for (String varName : globalVars.keySet()) {
+      VarDecl var = globalVars.get(varName);
+      if (var.type instanceof PointerType) {
+        System.out.printf("| %-14s | 0x%08X |\n", varName, 0);
+      }
+    }
+
+    // Print Function Variables
+    for (FunDef fd : frameSizes.keySet()) {
+      System.out.println("\n==== Function: " + fd.name + " ====");
+      System.out.println("| Variable       | Address |");
+      System.out.println("|---------------|---------|");
+
+      for (VarDecl param : fd.params) {
+        int offset = localVarOffsets.getOrDefault(param, -999);
+        System.out.printf("| %-14s | 0x%08X |\n", param.name, offset);
+      }
+
+      for (VarDecl localVar : fd.block.vds) {
+        int offset = localVarOffsets.getOrDefault(localVar, -999);
+        System.out.printf("| %-14s | 0x%08X |\n", localVar.name, offset);
+      }
+    }
 
     System.out.println("=====================================================");
   }

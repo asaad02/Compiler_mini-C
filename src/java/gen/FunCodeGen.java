@@ -26,11 +26,8 @@ public class FunCodeGen extends CodeGen {
 
     // create a unique function label
     String functionLabel = getUniqueFunctionName(fd);
-
-    // emit function label
     textSection.emit(Label.get(functionLabel));
 
-    // emit function label for main
     if (fd.name.equals("main")) {
       textSection.emit(new Directive("globl main"));
     }
@@ -39,33 +36,30 @@ public class FunCodeGen extends CodeGen {
 
     int frameSize = allocator.alignTo16(allocator.getFrameSize(fd) + 8);
 
-    // print table of memory allocations
-    allocator.printMemoryTable(fd);
+    allocator.printMemoryTable(fd); // Debug print memory table
 
-    // function prologue
-    textSection.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -frameSize);
-    textSection.emit(OpCode.SW, Register.Arch.ra, Register.Arch.sp, frameSize - 4);
-    textSection.emit(OpCode.SW, Register.Arch.fp, Register.Arch.sp, frameSize - 8);
-    textSection.emit(OpCode.ADDU, Register.Arch.fp, Register.Arch.sp, Register.Arch.zero);
-    textSection.emit(OpCode.PUSH_REGISTERS);
-
-    // Save function parameters in the stack frame
+    generateFunctionPrologue(textSection, frameSize);
     saveFunctionParameters(fd, textSection, frameSize);
 
     // Generate function body
     new StmtCodeGen(asmProg, allocator, fd, definedFunctions).visit(fd.block);
 
-    // print table of memory allocations
+    allocator.printMemoryTable(fd); // Debug print memory table after function body
 
-    allocator.printMemoryTable(fd);
-
-    // function epilogue
     generateFunctionEpilogue(fd, textSection, frameSize);
+  }
+
+  /** Generates function prologue */
+  private void generateFunctionPrologue(AssemblyProgram.TextSection textSection, int frameSize) {
+    textSection.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -frameSize);
+    textSection.emit(OpCode.SW, Register.Arch.ra, Register.Arch.sp, frameSize - 4);
+    textSection.emit(OpCode.SW, Register.Arch.fp, Register.Arch.sp, frameSize - 8);
+    textSection.emit(OpCode.ADDU, Register.Arch.fp, Register.Arch.sp, Register.Arch.zero);
+    textSection.emit(OpCode.PUSH_REGISTERS);
   }
 
   private void saveFunctionParameters(
       FunDef fd, AssemblyProgram.TextSection textSection, int frameSize) {
-    // start at FP + frameSize
     int paramStackOffset = frameSize;
 
     for (int i = 0; i < fd.params.size(); i++) {
@@ -74,19 +68,24 @@ public class FunCodeGen extends CodeGen {
       Type paramType = param.type;
 
       if (paramType instanceof StructType) {
+        // Structs are passed by copy, copy each word manually
         int structSize = allocator.computeSize(paramType);
         for (int word = 0; word < structSize; word += 4) {
           Register temp = Register.Virtual.create();
-          // Correctly copy from caller's stack
           textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset + word);
           textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset + word);
         }
-        paramStackOffset += allocator.alignTo4(structSize);
+        paramStackOffset += allocator.alignTo(structSize, 4);
+      } else if (paramType instanceof ArrayType) {
+        // Arrays are passed by reference (pointer), copy the pointer
+        Register temp = Register.Virtual.create();
+        textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
+        textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
+        paramStackOffset += 4; // Arrays passed as pointers
       } else {
         if (i < 4) {
           textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.fp, localOffset);
         } else {
-          // Parameter passed on stack after first 4 args
           Register temp = Register.Virtual.create();
           textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
           textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
@@ -96,7 +95,7 @@ public class FunCodeGen extends CodeGen {
     }
   }
 
-  // Generate function epilogue
+  /** Generates function epilogue */
   private void generateFunctionEpilogue(
       FunDef fd, AssemblyProgram.TextSection textSection, int frameSize) {
     System.out.println("[FunCodeGen] Generating function epilogue for: " + fd.name);
@@ -117,7 +116,6 @@ public class FunCodeGen extends CodeGen {
     }
   }
 
-  // Get the register for the argument at the given index
   private Register getArgReg(int index) {
     return switch (index) {
       case 0 -> Register.Arch.a0;
@@ -128,7 +126,6 @@ public class FunCodeGen extends CodeGen {
     };
   }
 
-  // Generate a unique function name
   private String getUniqueFunctionName(FunDef fd) {
     return fd.name.equals("main") ? "main" : fd.name + "_" + fd.params.size();
   }

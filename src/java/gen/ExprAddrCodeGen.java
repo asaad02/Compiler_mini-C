@@ -95,7 +95,14 @@ public class ExprAddrCodeGen extends CodeGen {
 
       case FieldAccessExpr fa -> {
         Register baseReg = visit(fa.structure);
-        int offset = allocator.computeFieldOffset((StructType) fa.structure.type, fa.field);
+
+        if (!(fa.structure.type instanceof StructType structType)) {
+          throw new IllegalStateException(
+              "[ExprAddrCodeGen] ERROR: Field access on non-struct type.");
+        }
+
+        int offset = allocator.computeFieldOffset(structType, fa.field);
+        offset = allocator.alignTo(offset, 4); // Ensure proper field alignment
 
         System.out.println(
             "[ExprAddrCodeGen] Resolving field access: " + fa.field + " at offset " + offset);
