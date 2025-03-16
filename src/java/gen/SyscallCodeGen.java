@@ -59,8 +59,9 @@ public class SyscallCodeGen {
     Label validInput = Label.create();
     Label endLabel = Label.create();
 
-    text.emit(OpCode.BNEZ, Register.Arch.v0, validInput); // If input is valid, skip setting default
-    text.emit(OpCode.LI, Register.Arch.v0, 0); // Default to 0 if input is invalid
+    text.emit(OpCode.BGEZ, Register.Arch.v0, validInput); // If input is valid (>= 0), jump
+    text.emit(OpCode.LI, Register.Arch.v0, 0); // Otherwise, set default to 0
+
     text.emit(OpCode.J, endLabel);
 
     text.emit(validInput);
@@ -75,15 +76,18 @@ public class SyscallCodeGen {
   private static void handleMemoryAlloc(AssemblyProgram.TextSection text, Register arg) {
     ensureArgNotNull("mcmalloc", arg);
     text.emit(OpCode.ADDU, Register.Arch.a0, arg, Register.Arch.zero);
+    text.emit(
+        OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -8); // Ensure stack is 8-byte aligned
     text.emit(OpCode.LI, Register.Arch.v0, 9); // Syscall code for memory allocation
     text.emit(OpCode.SYSCALL);
+    text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, 8); // Restore stack after syscall
 
     // Ensure memory allocation succeeded
     Label validAlloc = Label.create();
     Label endLabel = Label.create();
 
-    text.emit(OpCode.BNEZ, Register.Arch.v0, validAlloc); // If allocation is valid, skip default
-    text.emit(OpCode.LI, Register.Arch.v0, 0); // Set to NULL (0) if allocation fails
+    text.emit(OpCode.BNEZ, Register.Arch.v0, validAlloc); // If allocation is non-zero, it succeeded
+    text.emit(OpCode.LI, Register.Arch.v0, 0); // Otherwise, set return value to NULL (0)
     text.emit(OpCode.J, endLabel);
 
     text.emit(validAlloc);

@@ -2,6 +2,7 @@ package gen;
 
 import ast.*;
 import gen.asm.*;
+import java.util.List;
 
 /** Generates code to calculate the address of an expression and return the result in a register. */
 
@@ -11,10 +12,13 @@ import gen.asm.*;
  */
 public class ExprAddrCodeGen extends CodeGen {
   private final MemAllocCodeGen allocator;
+  private final List<String> definedFunctions;
 
-  public ExprAddrCodeGen(AssemblyProgram asmProg, MemAllocCodeGen allocator) {
+  public ExprAddrCodeGen(
+      AssemblyProgram asmProg, MemAllocCodeGen allocator, List<String> definedFunctions) {
     this.asmProg = asmProg;
     this.allocator = allocator;
+    this.definedFunctions = definedFunctions;
   }
 
   /** Computes the address of an expression. */
@@ -25,12 +29,15 @@ public class ExprAddrCodeGen extends CodeGen {
     switch (e) {
       case VarExpr v -> {
         System.out.println("[ExprAddrCodeGen] Resolving variable address: " + v.name);
+
+        // Retrieve the  variable declaration local or global
         VarDecl varDecl = allocator.getVarDecl(v.name);
 
         if (varDecl == null) {
           throw new IllegalStateException("[ExprAddrCodeGen] ERROR: Variable not found: " + v.name);
         }
 
+        // Check if variable is an array
         if (varDecl.type instanceof ArrayType at) {
           System.out.println("[ExprAddrCodeGen] Variable is an array: " + v.name);
           v.type = at;
@@ -38,58 +45,61 @@ public class ExprAddrCodeGen extends CodeGen {
           System.out.println("[ExprAddrCodeGen] Variable is NOT an array: " + v.name);
         }
 
-        // Get the correct scope level for the variable
+        // Determine the correct scope level
         int scopeLevel = allocator.getScopeLevel(v.name);
         System.out.println(
             "[ExprAddrCodeGen] Variable '" + v.name + "' found at scope level: " + scopeLevel);
 
+        // If the variable is local, use the local offset
         if (scopeLevel >= 0) {
-          // Retrieve the correct offset for the local variable
-          int offset = allocator.getLocalOffset(varDecl, scopeLevel);
-          System.out.println("[ExprAddrCodeGen] Using local variable at offset: " + offset);
+          int offset = allocator.getLocalOffset(varDecl);
+          System.out.printf(
+              "[ExprAddrCodeGen] Using local variable '%s' at offset: %d\n", v.name, offset);
           text.emit(OpCode.ADDIU, addrReg, Register.Arch.fp, offset);
-        } else {
-          // Access the global variable if no local variable is found
+        } else if (allocator.isGlobal(v.name)) {
+          // If the variable is global, load the global address
           System.out.println("[ExprAddrCodeGen] Accessing global variable: " + v.name);
           text.emit(OpCode.LA, addrReg, Label.get(v.name));
+        } else {
+          throw new IllegalStateException(
+              "[ExprAddrCodeGen] ERROR: Variable '" + v.name + "' not found in any scope!");
         }
 
         return addrReg;
       }
 
-      case ArrayAccessExpr ae -> {
-        System.out.println("[ExprAddrCodeGen] Resolving array access: " + ae.array);
+      case ArrayAccessExpr a -> {
+        Register baseAddr = visit(a.array);
+        Type arrayType = a.array.type;
 
-        Register baseReg = visit(ae.array);
-        Register indexReg = visit(ae.index);
-
-        // base address is retrieved
-        if (ae.array instanceof VarExpr ve) {
-          VarDecl varDecl = allocator.getVarDecl(ve.name);
-          int scopeLevel = allocator.getScopeLevel(ve.name);
-          int offset = allocator.getLocalOffset(varDecl, scopeLevel);
-          System.out.println("[ExprAddrCodeGen] Array base resolved at offset: " + offset);
+        if (!(arrayType instanceof ArrayType at)) {
+          throw new IllegalStateException("[ExprAddrCodeGen] ERROR: ArrayAccessExpr on non-array.");
         }
 
-        // element type of the array
-        if (!(ae.array.type instanceof ArrayType arrayType)) {
-          throw new IllegalStateException(
-              "[ExprAddrCodeGen] ERROR: ArrayAccessExpr on non-array type.");
+        Register offsetReg = Register.Virtual.create();
+        text.emit(OpCode.LI, offsetReg, 0);
+
+        for (int i = 0; i < a.indices.size(); i++) {
+          ExprValCodeGen valGen = new ExprValCodeGen(asmProg, allocator, definedFunctions);
+          Register indexReg = valGen.visit(a.indices.get(i));
+
+          int dimSize = at.dimensions.get(i);
+
+          Register sizeReg = Register.Virtual.create();
+          text.emit(OpCode.LI, sizeReg, dimSize);
+
+          Register tempReg = Register.Virtual.create();
+          text.emit(OpCode.MUL, tempReg, indexReg, sizeReg);
+          text.emit(OpCode.ADDU, offsetReg, offsetReg, tempReg);
         }
 
-        Type elementType = arrayType.elementType;
-        int elementSize = allocator.computeSize(elementType);
-
+        int elementSize = allocator.computeSize(at.elementType);
         Register sizeReg = Register.Virtual.create();
         text.emit(OpCode.LI, sizeReg, elementSize);
-        text.emit(OpCode.MUL, indexReg, indexReg, sizeReg);
+        text.emit(OpCode.MUL, offsetReg, offsetReg, sizeReg);
 
-        // Compute the final address
         Register finalAddr = Register.Virtual.create();
-        text.emit(OpCode.ADDU, finalAddr, baseReg, indexReg);
-
-        System.out.println("[ExprAddrCodeGen] Computed array element address.");
-
+        text.emit(OpCode.ADDU, finalAddr, baseAddr, offsetReg);
         return finalAddr;
       }
 
@@ -102,7 +112,7 @@ public class ExprAddrCodeGen extends CodeGen {
         }
 
         int offset = allocator.computeFieldOffset(structType, fa.field);
-        offset = allocator.alignTo(offset, 4); // Ensure proper field alignment
+        offset = allocator.alignTo(offset, 4); // field alignment
 
         System.out.println(
             "[ExprAddrCodeGen] Resolving field access: " + fa.field + " at offset " + offset);

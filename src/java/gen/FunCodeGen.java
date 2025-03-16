@@ -34,18 +34,14 @@ public class FunCodeGen extends CodeGen {
 
     System.out.println("[FunCodeGen] Generating function: " + functionLabel);
 
-    int frameSize = allocator.alignTo16(allocator.getFrameSize(fd) + 8);
-
-    allocator.printMemoryTable(fd); // Debug print memory table
+    int frameSize = allocator.alignTo16(allocator.getFrameSize(fd) + 16);
 
     generateFunctionPrologue(textSection, frameSize);
     saveFunctionParameters(fd, textSection, frameSize);
 
     // Generate function body
     new StmtCodeGen(asmProg, allocator, fd, definedFunctions).visit(fd.block);
-
-    allocator.printMemoryTable(fd); // Debug print memory table after function body
-
+    // Generate function epilogue
     generateFunctionEpilogue(fd, textSection, frameSize);
   }
 
@@ -56,6 +52,9 @@ public class FunCodeGen extends CodeGen {
     textSection.emit(OpCode.SW, Register.Arch.fp, Register.Arch.sp, frameSize - 8);
     textSection.emit(OpCode.ADDU, Register.Arch.fp, Register.Arch.sp, Register.Arch.zero);
     textSection.emit(OpCode.PUSH_REGISTERS);
+    for (int i = 0; i < 4; i++) {
+      textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.sp, frameSize - (12 + (i * 4)));
+    }
   }
 
   private void saveFunctionParameters(
@@ -64,7 +63,7 @@ public class FunCodeGen extends CodeGen {
 
     for (int i = 0; i < fd.params.size(); i++) {
       VarDecl param = fd.params.get(i);
-      int localOffset = allocator.getLocalOffset(param);
+      int localOffset = allocator.getLocalOffset(param.name);
       Type paramType = param.type;
 
       if (paramType instanceof StructType) {
@@ -75,13 +74,23 @@ public class FunCodeGen extends CodeGen {
           textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset + word);
           textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset + word);
         }
-        paramStackOffset += allocator.alignTo(structSize, 4);
-      } else if (paramType instanceof ArrayType) {
-        // Arrays are passed by reference (pointer), copy the pointer
-        Register temp = Register.Virtual.create();
-        textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
-        textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
-        paramStackOffset += 4; // Arrays passed as pointers
+        paramStackOffset += allocator.alignTo(structSize, 8);
+      } else if (paramType instanceof ArrayType arrayType) {
+        Register basePtr = Register.Virtual.create();
+        textSection.emit(OpCode.LW, basePtr, Register.Arch.fp, paramStackOffset);
+        textSection.emit(OpCode.SW, basePtr, Register.Arch.fp, localOffset);
+        paramStackOffset += 4;
+
+        // Store array dimensions
+        int strideOffset = 4;
+        int stride = 1;
+        for (int dim = arrayType.dimensions.size() - 1; dim >= 0; dim--) {
+          stride *= arrayType.dimensions.get(dim);
+          Register strideReg = Register.Virtual.create();
+          textSection.emit(OpCode.LI, strideReg, stride);
+          textSection.emit(OpCode.SW, strideReg, Register.Arch.fp, localOffset + strideOffset);
+          strideOffset += 4;
+        }
       } else {
         if (i < 4) {
           textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.fp, localOffset);
@@ -104,6 +113,9 @@ public class FunCodeGen extends CodeGen {
     textSection.emit(epilogueLabel);
 
     textSection.emit(OpCode.POP_REGISTERS);
+    for (int i = 0; i < 4; i++) {
+      textSection.emit(OpCode.LW, getArgReg(i), Register.Arch.fp, -12 - (i * 4));
+    }
     textSection.emit(OpCode.LW, Register.Arch.ra, Register.Arch.sp, frameSize - 4);
     textSection.emit(OpCode.LW, Register.Arch.fp, Register.Arch.sp, frameSize - 8);
     textSection.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, frameSize);

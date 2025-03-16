@@ -82,7 +82,7 @@ public class StmtCodeGen extends CodeGen {
     if (es.expr instanceof Assign a) {
       System.out.println("[StmtCodeGen] Resolving assignment: " + a.left);
 
-      Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(a.left);
+      Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a.left);
       Register rhsReg = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(a.right);
 
       if (a.left.type instanceof StructType structType) {
@@ -91,6 +91,14 @@ public class StmtCodeGen extends CodeGen {
           Register tempReg = Register.Virtual.create();
           text.emit(OpCode.LW, tempReg, rhsReg, offset);
           text.emit(OpCode.SW, tempReg, addrReg, offset);
+        }
+      } else if (a.left.type instanceof ArrayType at) {
+        Register rhsAddr = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a.right);
+        int arraySize = allocator.computeSize(at);
+        for (int offset = 0; offset < arraySize; offset += 4) {
+          Register temp = Register.Virtual.create();
+          text.emit(OpCode.LW, temp, rhsAddr, offset);
+          text.emit(OpCode.SW, temp, addrReg, offset);
         }
       } else {
         text.emit(OpCode.SW, rhsReg, addrReg, 0);
@@ -106,7 +114,7 @@ public class StmtCodeGen extends CodeGen {
               "[StmtCodeGen] Handling standalone " + (bo.op == Op.ADD ? "increment" : "decrement"));
 
           // Resolve variable address
-          Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(v);
+          Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(v);
           Register tempReg = Register.Virtual.create();
 
           // Load current value
@@ -153,13 +161,12 @@ public class StmtCodeGen extends CodeGen {
     visit(i.thenBranch);
     text.emit(OpCode.J, endLabel);
 
-    // Else branch (only emit if there's an else branch)
+    // Emit else label properly
     if (elseLabel != null) {
-      text.emit(elseLabel);
+      text.emit(elseLabel); 
       visit(i.elseBranch);
     }
 
-    // End of if statement
     text.emit(endLabel);
   }
 
@@ -176,21 +183,20 @@ public class StmtCodeGen extends CodeGen {
     // Push loop labels for break/continue handling
     loopStack.push(new LoopLabels(conditionLabel, endLabel));
 
-    // Jump to condition check first
-    text.emit(OpCode.J, conditionLabel);
-
-    // Loop body
-    text.emit(startLabel);
-    visit(w.body); // Process the loop body
-
-    // After executing body, jump back to condition check
+    // While loop condition check first
     text.emit(conditionLabel);
     Register condReg = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(w.condition);
 
-    // If condition is true, jump to loop body
-    text.emit(OpCode.BNEZ, condReg, startLabel);
+    // If condition is false, exit loop
+    text.emit(OpCode.BEQZ, condReg, endLabel);
 
-    // Exit label
+    // Loop body
+    text.emit(startLabel);
+    visit(w.body);
+
+    // Jump back to condition check
+    text.emit(OpCode.J, conditionLabel);
+
     text.emit(endLabel);
     loopStack.pop();
     System.out.println("[StmtCodeGen] Exiting while loop.");
@@ -212,10 +218,28 @@ public class StmtCodeGen extends CodeGen {
         text.emit(OpCode.ADDU, Register.Arch.v0, returnAddr, Register.Arch.zero);
 
         // Copy struct contents to return address
-        Register structReg = new ExprAddrCodeGen(asmProg, allocator).visit(rs.expr);
+        Register structReg =
+            new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(rs.expr);
         for (int offset = 0; offset < structSize; offset += 4) {
           Register temp = Register.Virtual.create();
           text.emit(OpCode.LW, temp, structReg, offset);
+          text.emit(OpCode.SW, temp, returnAddr, offset);
+        }
+      } else if (rs.expr != null && rs.expr.type instanceof ArrayType at) {
+        int arraySize = allocator.computeSize(at);
+        Register returnAddr = Register.Virtual.create();
+
+        // Allocate space for array return and pass the address
+        arraySize = allocator.alignTo8(arraySize); 
+        text.emit(OpCode.ADDIU, returnAddr, Register.Arch.sp, -arraySize);
+        text.emit(OpCode.ADDU, Register.Arch.v0, returnAddr, Register.Arch.zero);
+
+        // Copy array contents to return address
+        Register arrayReg =
+            new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(rs.expr);
+        for (int offset = 0; offset < arraySize; offset += 4) {
+          Register temp = Register.Virtual.create();
+          text.emit(OpCode.LW, temp, arrayReg, offset);
           text.emit(OpCode.SW, temp, returnAddr, offset);
         }
       } else {
