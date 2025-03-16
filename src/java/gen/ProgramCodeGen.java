@@ -36,12 +36,10 @@ public class ProgramCodeGen extends CodeGen {
           throw new IllegalStateException(
               "[ProgramCodeGen] ERROR: Struct declaration has null name!");
         }
-        System.out.println(">>> [ProgramCodeGen] Registering struct: " + std.structType.name);
+        System.out.println("[ProgramCodeGen] Registering struct: " + std.structType.name);
         allocator.registerStructDeclaration(std);
       }
     }
-    // Print Struct Memory Debug Info After Registering Structs
-    allocator.printStructDebugInfo();
 
     for (Decl d : p.decls) {
       if (d instanceof VarDecl vd) {
@@ -60,7 +58,7 @@ public class ProgramCodeGen extends CodeGen {
     // pass to Generate function code but not main
     for (Decl d : p.decls) {
       if (d instanceof FunDef fd && !fd.name.equals("main")) {
-        System.out.println(">>> [ProgramCodeGen] Generating code for function: " + fd.name);
+        System.out.println("[ProgramCodeGen] Generating code for function: " + fd.name);
         new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
       }
     }
@@ -73,12 +71,8 @@ public class ProgramCodeGen extends CodeGen {
     new FunCodeGen(asmProg, allocator, definedFunctions).visit(mainFunction);
 
     // Print Assembly Sections and Debug Table
-    printAssemblySections();
-    allocator.printDebugTable();
-    // print all the memory allocations
-    allocator.printAllMemory();
-    allocator.printPointer();
-    allocator.printStack();
+    // printAssemblySections();
+    // allocator.printAllMemory();
     System.out.println("[ProgramCodeGen] Program generation completed successfully.");
   }
 

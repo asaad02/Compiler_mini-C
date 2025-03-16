@@ -143,39 +143,84 @@ public class ExprValCodeGen extends CodeGen {
       }
 
       case Assign a -> {
-        Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(a.left);
+        Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a.left);
         Register rhsReg = visit(a.right);
         Type type = a.left.type;
 
-        if (type instanceof StructType) {
-          int structSize = allocator.computeSize(type);
-          structSize = allocator.alignTo8(structSize); // Ensure proper alignment
-          for (int offset = 0; offset < structSize; offset += 4) {
-            Register temp = Register.Virtual.create();
-            text.emit(OpCode.LW, temp, rhsReg, offset); // Load struct data
-            text.emit(OpCode.SW, temp, addrReg, offset); // Store struct data
-          }
-        } // if array type
+        if (type instanceof StructType structType) {
+          int structSize = allocator.computeSize(structType);
+          structSize = allocator.alignTo8(structSize);
+
+          Register temp = Register.Virtual.create();
+          Register counter = Register.Virtual.create();
+          Register sizeReg = Register.Virtual.create();
+          Register rhsAddr = Register.Virtual.create();
+          Register destAddr = Register.Virtual.create();
+          Label copyLoop = Label.create();
+          Label endCopy = Label.create();
+
+          text.emit(OpCode.LI, counter, 0);
+          text.emit(OpCode.LI, sizeReg, structSize);
+          text.emit(OpCode.ADDU, rhsAddr, rhsReg, Register.Arch.zero);
+          text.emit(OpCode.ADDU, destAddr, addrReg, Register.Arch.zero);
+
+          text.emit(copyLoop);
+          Register tempReg = Register.Virtual.create();
+          text.emit(OpCode.SLT, tempReg, counter, sizeReg);
+          text.emit(OpCode.BEQZ, tempReg, endCopy);
+
+          Register loadAddr = Register.Virtual.create();
+          Register storeAddr = Register.Virtual.create();
+          text.emit(OpCode.ADDU, loadAddr, rhsAddr, counter);
+          text.emit(OpCode.LW, temp, loadAddr, 0);
+          text.emit(OpCode.ADDU, storeAddr, destAddr, counter);
+          text.emit(OpCode.SW, temp, storeAddr, 0);
+
+          text.emit(OpCode.ADDI, counter, counter, 4);
+          text.emit(OpCode.J, copyLoop);
+          text.emit(endCopy);
+        }
+
+        // Array type handling
         else if (type instanceof ArrayType) {
-          Register rhsAddr = new ExprAddrCodeGen(asmProg, allocator).visit(a.right);
+          Register rhsAddr =
+              new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a.right);
           Register rhsSize = Register.Virtual.create();
-          text.emit(OpCode.LI, rhsSize, allocator.computeSize(type));
-          for (int offset = 0; offset < allocator.computeSize(type); offset += 4) {
-            Register temp = Register.Virtual.create();
-            text.emit(OpCode.LW, temp, rhsAddr, offset); // Load array data
-            text.emit(OpCode.SW, temp, addrReg, offset); // Store array data
-          }
+          Label copyLoop = Label.create();
+          Label endCopy = Label.create();
+          Register counter = Register.Virtual.create();
+          Register sizeReg = Register.Virtual.create();
+          Register temp = Register.Virtual.create();
+          Register loadAddr = Register.Virtual.create();
+          Register storeAddr = Register.Virtual.create();
+
+          text.emit(OpCode.LI, counter, 0);
+          text.emit(OpCode.LI, sizeReg, allocator.computeSize(type));
+          text.emit(copyLoop);
+
+          Register cmpReg = Register.Virtual.create();
+          text.emit(OpCode.SLT, cmpReg, counter, sizeReg);
+          text.emit(OpCode.BEQZ, cmpReg, endCopy);
+
+          text.emit(OpCode.ADDU, loadAddr, rhsAddr, counter);
+          text.emit(OpCode.LW, temp, loadAddr, 0);
+          text.emit(OpCode.ADDU, storeAddr, addrReg, counter);
+          text.emit(OpCode.SW, temp, storeAddr, 0);
+
+          text.emit(OpCode.ADDI, counter, counter, 4);
+          text.emit(OpCode.J, copyLoop);
+          text.emit(endCopy);
         } else if (type.equals(BaseType.CHAR)) {
           text.emit(OpCode.SB, rhsReg, addrReg, 0);
         } else {
-          text.emit(OpCode.SW, rhsReg, addrReg, 0); // Store Word
+          text.emit(OpCode.SW, rhsReg, addrReg, 0);
         }
         return rhsReg;
       }
 
       case VarExpr v -> {
-        Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(v);
         VarDecl varDecl = allocator.getVarDecl(v.name);
+        Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(v);
 
         if (varDecl == null || varDecl.type == null) {
           throw new IllegalStateException(
@@ -231,25 +276,30 @@ public class ExprValCodeGen extends CodeGen {
         }
 
         List<Register> argumentRegs = new ArrayList<>();
+        int totalStackSize = 0;
 
         for (Expr arg : fc.args) {
           Type argType = arg.type;
-          if (argType instanceof StructType) {
-            int structSize = allocator.computeSize(argType);
-            structSize = allocator.alignTo8(structSize);
-            Register addrReg = new ExprAddrCodeGen(asmProg, allocator).visit(arg);
 
-            for (int word = 0; word < structSize; word += 4) {
-              Register temp = Register.Virtual.create();
-              text.emit(OpCode.LW, temp, addrReg, word);
-              text.emit(OpCode.SW, temp, Register.Arch.sp, word);
+          if (argType instanceof StructType || argType instanceof ArrayType) {
+            int argSize = allocator.computeSize(argType);
+            argSize = allocator.alignTo8(argSize);
+            totalStackSize += argSize;
+
+            Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(arg);
+            Register tempReg = Register.Virtual.create();
+
+            for (int offset = 0; offset < argSize; offset += 4) {
+              text.emit(OpCode.LW, tempReg, addrReg, offset);
+              text.emit(OpCode.SW, tempReg, Register.Arch.sp, -totalStackSize + offset);
             }
           } else {
             argumentRegs.add(visit(arg));
           }
         }
 
-        // Pass arguments in registers and stack
+        text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -totalStackSize);
+
         for (int i = 0; i < argumentRegs.size(); i++) {
           if (i < 4) {
             text.emit(OpCode.ADDU, getArgReg(i), argumentRegs.get(i), Register.Arch.zero);
@@ -260,35 +310,8 @@ public class ExprValCodeGen extends CodeGen {
         }
 
         text.emit(OpCode.JAL, funcLabel);
+        text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, totalStackSize);
         text.emit(OpCode.NOP);
-
-        // Handle struct return: allocate space in the caller's stack
-        if (fc.type instanceof StructType structType) {
-          int structSize = allocator.computeSize(structType);
-          structSize = allocator.alignTo8(structSize);
-
-          // Allocate space in the caller's stack and pass address as implicit first argument
-          Register structAddr = Register.Virtual.create();
-          text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -structSize);
-          text.emit(OpCode.ADDU, structAddr, Register.Arch.sp, Register.Arch.zero);
-
-          // Pass structAddr as the first argument (adjust existing argument handling)
-          argumentRegs.add(0, structAddr); // Prepend to arguments
-        }
-
-        // handle array return: allocate space in the caller's stack
-        if (fc.type instanceof ArrayType arrayType) {
-          int arraySize = allocator.computeSize(arrayType);
-          arraySize = allocator.alignTo8(arraySize);
-
-          // Allocate space in the caller's stack and pass address as implicit first argument
-          Register arrayAddr = Register.Virtual.create();
-          text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -arraySize);
-          text.emit(OpCode.ADDU, arrayAddr, Register.Arch.sp, Register.Arch.zero);
-
-          // Pass arrayAddr as the first argument (adjust existing argument handling)
-          argumentRegs.add(0, arrayAddr); // Prepend to arguments
-        }
 
         return Register.Arch.v0;
       }
@@ -300,7 +323,7 @@ public class ExprValCodeGen extends CodeGen {
       }
 
       case AddressOfExpr ao -> {
-        return new ExprAddrCodeGen(asmProg, allocator).visit(ao.expr);
+        return new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(ao.expr);
       }
 
       case TypecastExpr tc -> {
@@ -310,28 +333,54 @@ public class ExprValCodeGen extends CodeGen {
       }
 
       case ArrayAccessExpr a -> {
-        Register baseAddr = new ExprAddrCodeGen(asmProg, allocator).visit(a.array);
-        Register indexReg = visit(a.index);
-        Type elementType = ((ArrayType) a.array.type).elementType;
+        Register baseAddr =
+            new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a.array);
+
+        if (!(a.array.type instanceof ArrayType arrayType)) {
+          throw new IllegalStateException(
+              "[ExprValCodeGen] ERROR: ArrayAccessExpr on non-array type.");
+        }
+
+        Type elementType = arrayType.elementType;
         int elementSize = allocator.computeSize(elementType);
 
         Register offsetReg = Register.Virtual.create();
-        text.emit(OpCode.LI, offsetReg, elementSize);
-        text.emit(OpCode.MUL, indexReg, indexReg, offsetReg);
+        text.emit(OpCode.LI, offsetReg, 0); // Initialize offset to zero
 
+        for (int i = 0; i < a.indices.size(); i++) {
+          Register indexReg = visit(a.indices.get(i)); // Compute each index value
+
+          Register sizeReg = Register.Virtual.create();
+          int dimSize = arrayType.dimensions.get(i); // Get size of the current dimension
+          text.emit(OpCode.LI, sizeReg, dimSize);
+
+          // Compute offset contribution for this dimension
+          text.emit(OpCode.MUL, indexReg, indexReg, sizeReg);
+          text.emit(OpCode.ADDU, offsetReg, offsetReg, indexReg);
+        }
+
+        // Multiply final offset by element size
+        Register sizeReg = Register.Virtual.create();
+        text.emit(OpCode.LI, sizeReg, elementSize);
+        text.emit(OpCode.MUL, offsetReg, offsetReg, sizeReg);
+
+        // Compute the final address
         Register finalAddr = Register.Virtual.create();
-        text.emit(OpCode.ADDU, finalAddr, baseAddr, indexReg);
+        text.emit(OpCode.ADDU, finalAddr, baseAddr, offsetReg);
+
+        System.out.println("[ExprValCodeGen] Computed array element address.");
 
         if (elementType.equals(BaseType.CHAR)) {
-          text.emit(OpCode.LBU, resReg, finalAddr, 0); // Load byte
+          text.emit(OpCode.LBU, resReg, finalAddr, 0); // Load byte for char
         } else {
-          text.emit(OpCode.LW, resReg, finalAddr, 0); // Load word
+          text.emit(OpCode.LW, resReg, finalAddr, 0); // Load word for other types
         }
         return resReg;
       }
 
       case FieldAccessExpr fa -> {
-        Register baseReg = new ExprAddrCodeGen(asmProg, allocator).visit(fa.structure);
+        Register baseReg =
+            new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(fa.structure);
         if (fa.structure.type instanceof StructType structType) {
           int offset = allocator.computeFieldOffset(structType, fa.field);
           offset = allocator.alignTo(offset, 4); // Ensure proper alignment

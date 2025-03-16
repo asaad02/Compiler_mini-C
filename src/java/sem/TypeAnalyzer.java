@@ -198,7 +198,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             && arrayAccessExpr.array instanceof VarExpr varExpr
             && varExpr.vd.type instanceof ArrayType arrayType
             && a.right instanceof StrLiteral strLiteral
-            && arrayType.size < strLiteral.value.length() + 1) {
+            && arrayType.getDimensionSize(numErrors) < strLiteral.value.length() + 1) {
           arrayAccessExpr.type = arrayType.elementType; // Assign
           // if the left-hand side of the assignment is not an lvalue, return an error
           if (!arrayType.elementType.equals(BaseType.CHAR)) {
@@ -206,7 +206,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             yield BaseType.UNKNOWN;
           }
           // if both array not the same size
-          if (arrayType.size != strLiteral.value.length() + 1) {
+          if (arrayType.getDimensionSize(numErrors) != strLiteral.value.length() + 1) {
             error("Array size mismatch.");
             yield BaseType.UNKNOWN;
           }
@@ -246,7 +246,8 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                   }
 
                   // check if the row sizes match
-                  if (leftInner.size != rightInner.size) {
+                  if (leftInner.getDimensionSize(numErrors)
+                      != rightInner.getDimensionSize(numErrors)) {
                     error("2D Array row size mismatch.");
                     yield BaseType.UNKNOWN;
                   }
@@ -255,7 +256,8 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                   yield BaseType.UNKNOWN;
                 }
                 // 3nsure the top-level array sizes match
-                if (leftArray.size != rightArray.size) {
+                if (leftArray.getDimensionSize(numErrors)
+                    != rightArray.getDimensionSize(numErrors)) {
                   error("Array size mismatch.");
                   yield BaseType.UNKNOWN;
                 }
@@ -397,7 +399,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 
       case ChrLiteral c -> c.type = BaseType.CHAR;
       // string literal
-      case StrLiteral s -> s.type = new ArrayType(BaseType.CHAR, s.value.length() + 1);
+      case StrLiteral s -> {
+        s.type = new ArrayType(BaseType.CHAR, List.of(s.value.length() + 1), s.value.length() + 1);
+        yield s.type;
+      }
 
       case Continue c -> {
         if (loopDepth == 0) {
@@ -478,7 +483,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                     yield BaseType.UNKNOWN;
                   }
                   // Check inner array sizes
-                  if (expectedInner.size != actualInner.size) {
+                  if (expectedInner.getDimensionSize(i) != actualInner.getDimensionSize(i)) {
                     error("Function argument 2D array row size mismatch.");
                     yield BaseType.UNKNOWN;
                   }
@@ -487,7 +492,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                   yield BaseType.UNKNOWN;
                 }
                 // Check top level sizes
-                if (expectedArray.size != actualArray.size) {
+                if (expectedArray.getDimensionSize(i) != actualArray.getDimensionSize(i)) {
                   error("Function argument array size mismatch.");
                   yield BaseType.UNKNOWN;
                 }
@@ -503,18 +508,36 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       }
       case ArrayAccessExpr a -> {
         Type arrayType = visit(a.array);
-        Type indexType = visit(a.index);
 
-        if (!indexType.equals(BaseType.INT)) {
-          error("Array index must be of type int.");
-          yield BaseType.UNKNOWN;
-        }
-        if (!(arrayType instanceof ArrayType arrType)) {
+        if (!(arrayType instanceof ArrayType at)) {
           error("Attempted array access on non-array type.");
           yield BaseType.UNKNOWN;
         }
 
-        a.type = ((ArrayType) arrayType).elementType;
+        for (Expr indexExpr : a.indices) {
+          Type indexType = visit(indexExpr);
+          if (!indexType.equals(BaseType.INT)) {
+            error("Array index must be of type int.");
+            yield BaseType.UNKNOWN;
+          }
+        }
+
+        if (a.indices.size() > at.dimensions.size()) {
+          yield BaseType.UNKNOWN;
+        }
+
+        List<Integer> newDimensions = new ArrayList<>(at.dimensions);
+        for (int i = 0; i < a.indices.size(); i++) {
+          if (newDimensions.isEmpty()) {
+            yield BaseType.UNKNOWN;
+          }
+          newDimensions.remove(0);
+        }
+
+        a.type =
+            newDimensions.isEmpty()
+                ? at.elementType
+                : new ArrayType(at.elementType, newDimensions, at.size);
         yield a.type;
       }
 
@@ -651,21 +674,5 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
     return std.fields.stream()
         .anyMatch(
             field -> field.type instanceof StructType st && st.name.equals(std.structType.name));
-  }
-
-  // check structural equivalence of types
-  private boolean typesAreEquivalent(Type expected, Type actual) {
-    if (expected == actual) return true;
-
-    if (expected instanceof PointerType expectedPtr && actual instanceof PointerType actualPtr) {
-      return typesAreEquivalent(expectedPtr.baseType, actualPtr.baseType);
-    } else if (expected instanceof StructType expectedSt && actual instanceof StructType actualSt) {
-      return expectedSt.name.equals(actualSt.name);
-    } else if (expected instanceof ArrayType expectedArr && actual instanceof ArrayType actualArr) {
-      return expectedArr.size == actualArr.size
-          && typesAreEquivalent(expectedArr.elementType, actualArr.elementType);
-    } else {
-      return expected.equals(actual);
-    }
   }
 }
