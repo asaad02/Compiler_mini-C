@@ -18,6 +18,7 @@ public class Parser extends CompilerPass {
   private Token token;
 
   private Queue<Token> buffer = new LinkedList<>();
+  List<Integer> dimensions = new ArrayList<>();
 
   private final Tokeniser tokeniser;
 
@@ -327,8 +328,12 @@ public class Parser extends CompilerPass {
     while (accept(Category.LSBR)) {
       nextToken();
       int size = Integer.parseInt(expect(Category.INT_LITERAL).data);
+      List<Integer> dimensions123 = new ArrayList<>();
+      dimensions123.add(size);
       expect(Category.RSBR);
-      type = new ArrayType(type, size);
+      // new array with list of int literals ,passsize to the list
+
+      type = new ArrayType(type, dimensions123, size);
     }
     expect(Category.SC);
     return new VarDecl(type, varName);
@@ -384,9 +389,14 @@ public class Parser extends CompilerPass {
         // check if it's an array '[' for the parameter
         while (accept(Category.LSBR) && !accept(Category.EOF)) {
           nextToken();
+          List<Integer> dimensions = new ArrayList<>();
+          // list of int literals
+          // size is a list of int literals
+          // size ::= INT_LITERAL
           int size = Integer.parseInt(expect(Category.INT_LITERAL).data);
+          dimensions.add(size);
           expect(Category.RSBR);
-          paramType = new ArrayType(paramType, size);
+          paramType = new ArrayType(paramType, dimensions, size);
         }
         params.add(new VarDecl(paramType, paramName));
         // check if there's a comma for more parameters
@@ -804,9 +814,11 @@ public class Parser extends CompilerPass {
       // array access or field access
       else if (accept(Category.LSBR)) {
         nextToken();
+        List<Expr> dimensionsExper1 = new ArrayList<>();
         Expr index = parseExpr();
+        dimensionsExper1.add(index);
         expect(Category.RSBR);
-        return new ArrayAccessExpr(new VarExpr(id.data), index);
+        return new ArrayAccessExpr(new VarExpr(id.data), dimensionsExper1, index);
       }
       // here the error for sort list
       else if (accept(Category.DOT)) {
@@ -865,9 +877,11 @@ public class Parser extends CompilerPass {
     } // check if the token is a left square brace ["["]
     else if (accept(Category.LSBR)) {
       nextToken();
+      List<Expr> dimensionsExper2 = new ArrayList<>();
       Expr index = parseExpr();
+      dimensionsExper2.add(index);
       expect(Category.RSBR);
-      return new ArrayAccessExpr(parsePrimaryExpr(), index);
+      return new ArrayAccessExpr(parsePrimaryExpr(), dimensionsExper2, index);
     } else if (accept(Category.DOT)) {
       nextToken();
       // Parse the field identifier
@@ -902,9 +916,11 @@ public class Parser extends CompilerPass {
     while (true) {
       if (accept(Category.LSBR)) {
         nextToken();
+        List<Expr> dimensionsExper3 = new ArrayList<>();
         Expr index = parseExpr();
         expect(Category.RSBR);
-        expr = new ArrayAccessExpr(expr, index);
+        dimensionsExper3.add(index);
+        expr = new ArrayAccessExpr(expr, dimensionsExper3, index);
       } else if (accept(Category.DOT)) {
         nextToken();
         String field = expect(Category.IDENTIFIER).data;
