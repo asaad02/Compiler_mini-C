@@ -543,11 +543,15 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 
       case FieldAccessExpr fa -> {
         Type structType = visit(fa.structure);
+
+        // Ensure struct pointers are correctly dereferenced
         if (structType instanceof PointerType pt) {
           structType = pt.baseType;
+          System.out.println("[TypeAnalyzer] Dereferencing pointer to struct: " + structType);
         }
+
         if (!(structType instanceof StructType st)) {
-          error("Field access on non-struct type.");
+          error("Field access on non-struct type. Received type: " + structType);
           yield BaseType.UNKNOWN;
         }
 
@@ -564,8 +568,12 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
 
         fa.type = fieldType;
+        fa.structure.type = structType;
+
+        System.out.println("[TypeAnalyzer] FieldAccessExpr assigned type: " + fa.type);
         yield fieldType;
       }
+
       // typecast expression
       case TypecastExpr tc -> {
         Type exprType = visit(tc.expr);
@@ -594,6 +602,14 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           // if the value at operator is applied to a pointer
           case PointerType pt -> {
             yield pt.baseType;
+          }
+          case ArrayType at -> {
+            yield at.elementType;
+          }
+
+          case BaseType bt -> {
+            error("Value at operator on non-pointer type.");
+            yield BaseType.UNKNOWN;
           }
           // if the value at operator is applied to a non-pointer type, return an error
           default -> {
