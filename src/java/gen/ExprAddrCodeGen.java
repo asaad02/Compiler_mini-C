@@ -79,18 +79,29 @@ public class ExprAddrCodeGen extends CodeGen {
         Register offsetReg = Register.Virtual.create();
         text.emit(OpCode.LI, offsetReg, 0);
 
-        for (int i = 0; i < a.indices.size(); i++) {
+        int stride = 1;
+        for (int i = a.indices.size() - 1; i >= 0; i--) {
           ExprValCodeGen valGen = new ExprValCodeGen(asmProg, allocator, definedFunctions);
           Register indexReg = valGen.visit(a.indices.get(i));
 
-          int dimSize = at.dimensions.get(i);
-
-          Register sizeReg = Register.Virtual.create();
-          text.emit(OpCode.LI, sizeReg, dimSize);
+          Register strideReg = Register.Virtual.create();
+          text.emit(OpCode.LI, strideReg, stride);
 
           Register tempReg = Register.Virtual.create();
-          text.emit(OpCode.MUL, tempReg, indexReg, sizeReg);
+          text.emit(OpCode.MUL, tempReg, indexReg, strideReg);
           text.emit(OpCode.ADDU, offsetReg, offsetReg, tempReg);
+
+          // update stride for next dimension
+          int prevStride = stride; // Store current stride
+          stride *= at.dimensions.get(i); // Update stride for next loop iteration
+
+          System.out.printf(
+              "[ExprAddrCodeGen] Computed offset for arr[%d] at index %s: %s\n",
+              i, indexReg.toString(), offsetReg.toString());
+
+          System.out.printf(
+              "[ExprAddrCodeGen] Stride used for arr[%d] at index %s: %d (Prev: %d)\n",
+              i, indexReg.toString(), prevStride, stride);
         }
 
         int elementSize = allocator.computeSize(at.elementType);
@@ -100,6 +111,11 @@ public class ExprAddrCodeGen extends CodeGen {
 
         Register finalAddr = Register.Virtual.create();
         text.emit(OpCode.ADDU, finalAddr, baseAddr, offsetReg);
+
+        System.out.printf(
+            "[ExprAddrCodeGen] Computed final address for arr at offset %s\n",
+            offsetReg.toString());
+
         return finalAddr;
       }
 

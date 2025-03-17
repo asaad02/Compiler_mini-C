@@ -182,7 +182,7 @@ public class ExprValCodeGen extends CodeGen {
         }
 
         // Array type handling
-        else if (type instanceof ArrayType) {
+        else if (type instanceof ArrayType arrayType) {
           Register rhsAddr =
               new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a.right);
           Register rhsSize = Register.Virtual.create();
@@ -348,14 +348,20 @@ public class ExprValCodeGen extends CodeGen {
         text.emit(OpCode.LI, offsetReg, 0); // Initialize offset to zero
 
         for (int i = 0; i < a.indices.size(); i++) {
-          Register indexReg = visit(a.indices.get(i)); // Compute each index value
+          Register indexReg = visit(a.indices.get(i)); // Compute index value
 
-          Register sizeReg = Register.Virtual.create();
-          int dimSize = arrayType.dimensions.get(i); // Get size of the current dimension
-          text.emit(OpCode.LI, sizeReg, dimSize);
+          // Compute correct stride for each dimension
+          Register strideReg = Register.Virtual.create();
+          int stride = 1;
+          for (int j = i + 1; j < a.indices.size(); j++) {
+            stride *= arrayType.dimensions.get(j);
+          }
+          text.emit(OpCode.LI, strideReg, stride);
 
-          // Compute offset contribution for this dimension
-          text.emit(OpCode.MUL, indexReg, indexReg, sizeReg);
+          // Multiply index by stride
+          text.emit(OpCode.MUL, indexReg, indexReg, strideReg);
+
+          // Accumulate into final offset
           text.emit(OpCode.ADDU, offsetReg, offsetReg, indexReg);
         }
 
