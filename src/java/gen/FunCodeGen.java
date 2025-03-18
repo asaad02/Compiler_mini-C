@@ -75,17 +75,22 @@ public class FunCodeGen extends CodeGen {
           textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset + word);
         }
         paramStackOffset += allocator.alignTo(structSize, 8);
-      } else if (paramType instanceof ArrayType arrayType) {
-        Register basePtr = Register.Virtual.create();
-        textSection.emit(OpCode.LW, basePtr, Register.Arch.fp, paramStackOffset);
-        textSection.emit(OpCode.SW, basePtr, Register.Arch.fp, localOffset);
-        paramStackOffset += 4;
-
+      } else if (paramType instanceof ArrayType) {
+        // For array parameters store the argument register value
+        if (i < 4) {
+          textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.fp, localOffset);
+        } else {
+          Register temp = Register.Virtual.create();
+          textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
+          textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
+          paramStackOffset += 4;
+        }
         // Store array dimensions
         int strideOffset = 4;
         int stride = 1;
-        for (int dim = arrayType.dimensions.size() - 1; dim >= 0; dim--) {
-          stride *= arrayType.dimensions.get(dim);
+        ArrayType at = (ArrayType) paramType;
+        for (int dim = at.dimensions.size() - 1; dim >= 0; dim--) {
+          stride *= at.dimensions.get(dim);
           Register strideReg = Register.Virtual.create();
           textSection.emit(OpCode.LI, strideReg, stride);
           textSection.emit(OpCode.SW, strideReg, Register.Arch.fp, localOffset + strideOffset);

@@ -179,37 +179,10 @@ public class ExprValCodeGen extends CodeGen {
           text.emit(OpCode.ADDI, counter, counter, 4);
           text.emit(OpCode.J, copyLoop);
           text.emit(endCopy);
-        }
-
-        // Array type handling
-        else if (type instanceof ArrayType arrayType) {
+        } else if (type instanceof ArrayType) {
           Register rhsAddr =
               new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a.right);
-          Register rhsSize = Register.Virtual.create();
-          Label copyLoop = Label.create();
-          Label endCopy = Label.create();
-          Register counter = Register.Virtual.create();
-          Register sizeReg = Register.Virtual.create();
-          Register temp = Register.Virtual.create();
-          Register loadAddr = Register.Virtual.create();
-          Register storeAddr = Register.Virtual.create();
-
-          text.emit(OpCode.LI, counter, 0);
-          text.emit(OpCode.LI, sizeReg, allocator.computeSize(type));
-          text.emit(copyLoop);
-
-          Register cmpReg = Register.Virtual.create();
-          text.emit(OpCode.SLT, cmpReg, counter, sizeReg);
-          text.emit(OpCode.BEQZ, cmpReg, endCopy);
-
-          text.emit(OpCode.ADDU, loadAddr, rhsAddr, counter);
-          text.emit(OpCode.LW, temp, loadAddr, 0);
-          text.emit(OpCode.ADDU, storeAddr, addrReg, counter);
-          text.emit(OpCode.SW, temp, storeAddr, 0);
-
-          text.emit(OpCode.ADDI, counter, counter, 4);
-          text.emit(OpCode.J, copyLoop);
-          text.emit(endCopy);
+          text.emit(OpCode.SW, rhsAddr, addrReg, 0);
         } else if (type.equals(BaseType.CHAR)) {
           text.emit(OpCode.SB, rhsReg, addrReg, 0);
         } else {
@@ -220,6 +193,7 @@ public class ExprValCodeGen extends CodeGen {
 
       case VarExpr v -> {
         VarDecl varDecl = allocator.getVarDecl(v.name);
+        // get the address from ExprAddrCodeGen  handles parameters correctly
         Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(v);
 
         if (varDecl == null || varDecl.type == null) {
@@ -239,17 +213,9 @@ public class ExprValCodeGen extends CodeGen {
               "[ExprValCodeGen] Struct '%s' loaded at address: %s\n", v.name, structAddr);
 
           return structAddr;
-        } else if (type instanceof ArrayType arrayType) {
-          int arraySize = allocator.computeSize(arrayType);
-          arraySize = allocator.alignTo8(arraySize);
-
-          Register arrayAddr = Register.Virtual.create();
-          text.emit(OpCode.ADDIU, arrayAddr, Register.Arch.sp, -arraySize);
-
-          System.out.printf(
-              "[ExprValCodeGen] Array '%s' loaded at address: %s\n", v.name, arrayAddr);
-
-          return arrayAddr;
+        } else if (type instanceof ArrayType) {
+          // For array return the pointer computed by ExprAddrCodeGen.
+          return addrReg;
         }
 
         if (type.equals(BaseType.CHAR)) {
@@ -280,8 +246,7 @@ public class ExprValCodeGen extends CodeGen {
 
         for (Expr arg : fc.args) {
           Type argType = arg.type;
-
-          if (argType instanceof StructType || argType instanceof ArrayType) {
+          if (argType instanceof StructType) {
             int argSize = allocator.computeSize(argType);
             argSize = allocator.alignTo8(argSize);
             totalStackSize += argSize;
@@ -293,6 +258,10 @@ public class ExprValCodeGen extends CodeGen {
               text.emit(OpCode.LW, tempReg, addrReg, offset);
               text.emit(OpCode.SW, tempReg, Register.Arch.sp, -totalStackSize + offset);
             }
+          } else if (argType instanceof ArrayType) {
+            totalStackSize += 4;
+            // For array arguments pass the pointer decay to pointer.
+            argumentRegs.add(new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(arg));
           } else {
             argumentRegs.add(visit(arg));
           }

@@ -56,6 +56,12 @@ public class ExprAddrCodeGen extends CodeGen {
           System.out.printf(
               "[ExprAddrCodeGen] Using local variable '%s' at offset: %d\n", v.name, offset);
           text.emit(OpCode.ADDIU, addrReg, Register.Arch.fp, offset);
+          // For array parameters small offsets load the stored pointer
+          if (varDecl.type instanceof ArrayType && Math.abs(offset) <= 16) {
+            Register temp = Register.Virtual.create();
+            text.emit(OpCode.LW, temp, addrReg, 0);
+            return temp;
+          }
         } else if (allocator.isGlobal(v.name)) {
           // If the variable is global, load the global address
           System.out.println("[ExprAddrCodeGen] Accessing global variable: " + v.name);
@@ -91,10 +97,8 @@ public class ExprAddrCodeGen extends CodeGen {
           text.emit(OpCode.MUL, tempReg, indexReg, strideReg);
           text.emit(OpCode.ADDU, offsetReg, offsetReg, tempReg);
 
-          // update stride for next dimension
-          int prevStride = stride; // Store current stride
-          stride *= at.dimensions.get(i); // Update stride for next loop iteration
-
+          int prevStride = stride;
+          stride *= at.dimensions.get(i);
           System.out.printf(
               "[ExprAddrCodeGen] Computed offset for arr[%d] at index %s: %s\n",
               i, indexReg.toString(), offsetReg.toString());
