@@ -4,11 +4,11 @@ char c ;
 
 void printVars(int x) {
     print_s((char*)"\nGlobal g should be 10: ");
-    print_i(g);  // Ensure global g is accessed
+    print_i(g);  //  global g is accessed
     print_s((char*)"\nLocal x should be 5: "); 
     print_i(x);  // Local x
     print_s((char*)"\nGlobal c should be 'A': ");
-    print_c(c);  // Ensure global c is accessed
+    print_c(c);  //  global c is accessed
 }
 
 
