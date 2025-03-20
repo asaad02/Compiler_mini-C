@@ -14,7 +14,7 @@ TEST_PARSER_DIR="$SRC_DIR/tests/test/test_parser"
 TEST_LEXER_DIR="$SRC_DIR/tests/test/test_lexing"
 TEST_AST_DIR="$SRC_DIR/tests/test/test_ast"
 TEST_SEMANTIC_DIR="$SRC_DIR/tests/test/old_test"
-TEST_CODEGEN_DIR="$SRC_DIR/tests/test/test_codegen"
+TEST_CODEGEN_DIR="$SRC_DIR/tests/test/old_test"
 CODEGEN_OUTPUT_DIR="./description/part3"
 MARS_JAR="./description/part3/Mars4_5.jar"
 
