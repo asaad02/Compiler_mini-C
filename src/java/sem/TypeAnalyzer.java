@@ -570,7 +570,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         fa.type = fieldType;
         fa.structure.type = structType;
 
-        System.out.println("[TypeAnalyzer] FieldAccessExpr assigned type: " + fa.type);
+        // System.out.println("[TypeAnalyzer] FieldAccessExpr assigned type: " + fa.type);
         yield fieldType;
       }
 
