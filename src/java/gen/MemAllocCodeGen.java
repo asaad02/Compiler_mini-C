@@ -74,7 +74,7 @@ public class MemAllocCodeGen extends CodeGen {
     }
   }
 
-  private void allocateFunctionParameter(VarDecl vd, int paramIndex) {
+  void allocateFunctionParameter(VarDecl vd, int paramIndex) {
     if (scopeStack.isEmpty()) {
       throw new IllegalStateException(
           "[MemAllocCodeGen] ERROR: No active scope for function parameters.");

@@ -51,6 +51,8 @@ public class ProgramCodeGen extends CodeGen {
         if (fd.name.equals("main")) {
           mainFunction = fd;
           System.out.println("[ProgramCodeGen] Found main function: " + fd.name);
+          System.out.println("[ProgramCodeGen] Generating code for main()");
+          new FunCodeGen(asmProg, allocator, definedFunctions).visit(mainFunction);
         }
       }
     }
@@ -62,13 +64,6 @@ public class ProgramCodeGen extends CodeGen {
         new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
       }
     }
-
-    if (mainFunction == null) {
-      throw new IllegalStateException("[ProgramCodeGen] ERROR: No 'main' function found!");
-    }
-
-    System.out.println("[ProgramCodeGen] Generating code for main()");
-    new FunCodeGen(asmProg, allocator, definedFunctions).visit(mainFunction);
 
     // Print Assembly Sections and Debug Table
     // printAssemblySections();
