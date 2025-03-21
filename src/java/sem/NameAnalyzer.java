@@ -209,10 +209,10 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         }
 
         // return the type of the function call
-        System.out.println("Function call type: " + fs.type);
+        // System.out.println("Function call type: " + fs.type);
         // name
-        System.out.println("Function call name: " + fs.name);
-        fc.type = fs.type;
+        // System.out.println("Function call name: " + fs.name);
+        // fc.type = fs.type;
       }
 
       // Block scope
