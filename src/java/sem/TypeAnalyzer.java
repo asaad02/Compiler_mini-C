@@ -220,11 +220,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               error("Variable cannot be of type void.");
               yield BaseType.UNKNOWN;
             }
-            // if the left-hand side is not equal to the right-hand side, return an error
-            if (left.equals(BaseType.INT) && right.equals(BaseType.CHAR)) {
-              error("Implicit conversion from 'char' to 'int' is not allowed.");
-              yield BaseType.UNKNOWN;
-            }
             // if from int to char
             if (left.equals(BaseType.CHAR) && right.equals(BaseType.INT)) {
               error("Implicit conversion from 'int' to 'char' is not allowed.");
@@ -379,9 +374,19 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         } else {
           // visit the return expression
           Type returnType = visit(r.expr);
-          /*
-          if (!currentFunctionReturnType.equals(returnType)
-              && !(currentFunctionReturnType instanceof PointerType)) {
+
+          if (currentFunctionReturnType instanceof StructType expectedStruct
+              && returnType instanceof StructType actualStruct) {
+            if (!expectedStruct.name.equals(actualStruct.name)) {
+              error(
+                  "Return statement type mismatch: expected "
+                      + expectedStruct.name
+                      + " but got "
+                      + actualStruct.name);
+              yield BaseType.UNKNOWN;
+            }
+
+          } else if (!currentFunctionReturnType.equals(returnType)) {
             error(
                 "Return statement type mismatch: expected "
                     + currentFunctionReturnType
@@ -389,8 +394,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                     + returnType);
             yield BaseType.UNKNOWN;
           }
-            */
-
           yield returnType;
         }
       }
