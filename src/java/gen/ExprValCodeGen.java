@@ -207,10 +207,31 @@ public class ExprValCodeGen extends CodeGen {
           structSize = allocator.alignTo8(structSize);
 
           Register structAddr = Register.Virtual.create();
-          text.emit(OpCode.ADDIU, structAddr, Register.Arch.sp, -structSize);
+          Register counter = Register.Virtual.create();
+          Register temp = Register.Virtual.create();
+          Register loadAddr = Register.Virtual.create();
+          Register storeAddr = Register.Virtual.create();
+          Register sizeReg = Register.Virtual.create();
+          Label copyLoop = Label.create();
+          Label endCopy = Label.create();
 
-          System.out.printf(
-              "[ExprValCodeGen] Struct '%s' loaded at address: %s\n", v.name, structAddr);
+          text.emit(OpCode.ADDIU, structAddr, Register.Arch.sp, -structSize); // Reserve space
+          text.emit(OpCode.LI, counter, 0);
+          text.emit(OpCode.LI, sizeReg, structSize);
+
+          text.emit(copyLoop);
+          Register cmpReg = Register.Virtual.create();
+          text.emit(OpCode.SLT, cmpReg, counter, sizeReg);
+          text.emit(OpCode.BEQZ, cmpReg, endCopy);
+
+          text.emit(OpCode.ADDU, loadAddr, addrReg, counter);
+          text.emit(OpCode.LW, temp, loadAddr, 0);
+          text.emit(OpCode.ADDU, storeAddr, structAddr, counter);
+          text.emit(OpCode.SW, temp, storeAddr, 0);
+
+          text.emit(OpCode.ADDI, counter, counter, 4);
+          text.emit(OpCode.J, copyLoop);
+          text.emit(endCopy);
 
           return structAddr;
         } else if (type instanceof ArrayType) {
@@ -246,29 +267,32 @@ public class ExprValCodeGen extends CodeGen {
 
         for (Expr arg : fc.args) {
           Type argType = arg.type;
+          Register tempReg = visit(arg);
+
           if (argType instanceof StructType) {
             int argSize = allocator.computeSize(argType);
             argSize = allocator.alignTo8(argSize);
             totalStackSize += argSize;
 
             Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(arg);
-            Register tempReg = Register.Virtual.create();
+            Register tempReg1 = Register.Virtual.create();
 
             for (int offset = 0; offset < argSize; offset += 4) {
-              text.emit(OpCode.LW, tempReg, addrReg, offset);
-              text.emit(OpCode.SW, tempReg, Register.Arch.sp, -totalStackSize + offset);
+              text.emit(OpCode.LW, tempReg1, addrReg, offset);
+              text.emit(OpCode.SW, tempReg1, Register.Arch.sp, -totalStackSize + offset);
             }
+
           } else if (argType instanceof ArrayType) {
             totalStackSize += 4;
-            // For array arguments pass the pointer decay to pointer.
             argumentRegs.add(new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(arg));
           } else {
-            argumentRegs.add(visit(arg));
+            argumentRegs.add(tempReg);
           }
         }
 
         text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -totalStackSize);
 
+        // Pass First 4 Arguments in Registers ($a0 - $a3)
         for (int i = 0; i < argumentRegs.size(); i++) {
           if (i < 4) {
             text.emit(OpCode.ADDU, getArgReg(i), argumentRegs.get(i), Register.Arch.zero);
@@ -278,11 +302,19 @@ public class ExprValCodeGen extends CodeGen {
           }
         }
 
+        // Call Function
         text.emit(OpCode.JAL, funcLabel);
-        text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, totalStackSize);
-        text.emit(OpCode.NOP);
 
-        return Register.Arch.v0;
+        // Cleanup Stack
+        text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, totalStackSize);
+
+        // Retrieve Return Value from `$v0`
+        Register returnReg = Register.Virtual.create();
+        text.emit(OpCode.ADDU, returnReg, Register.Arch.v0, Register.Arch.zero);
+
+        // Return Register
+
+        return returnReg;
       }
 
       case ValueAtExpr va -> {
