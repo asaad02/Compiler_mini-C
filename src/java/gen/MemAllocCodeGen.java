@@ -52,7 +52,7 @@ public class MemAllocCodeGen extends CodeGen {
   }
 
   // allocateFunction
-  private void allocateFunction(FunDef fd) {
+  void allocateFunction(FunDef fd) {
     fpOffset = 0;
     enterScope();
 
@@ -85,9 +85,6 @@ public class MemAllocCodeGen extends CodeGen {
       offset = -(paramIndex + 1) * alignTo(computeSize(vd.type), 8);
     } else if (vd.type instanceof ArrayType at) {
       offset = alignTo4(-(paramIndex + 1) * 4);
-      for (int i = 0; i < at.dimensions.size(); i++) {
-        offset -= 4;
-      }
     } else {
       offset = alignTo4(-(paramIndex + 1) * 4);
     }
@@ -224,12 +221,17 @@ public class MemAllocCodeGen extends CodeGen {
   }
 
   public void enterScope() {
+    System.out.println("[MemAllocCodeGen] ENTER scope level: " + scopeStack.size());
     scopeStack.push(new HashMap<>());
   }
 
   public void exitScope() {
     if (!scopeStack.isEmpty()) {
       scopeStack.pop();
+      System.out.println("[MemAllocCodeGen] EXIT scope  now level: " + scopeStack.size());
+    } else {
+      throw new IllegalStateException(
+          "[MemAllocCodeGen] ERROR: Attempted to exit non-existent scope!");
     }
   }
 

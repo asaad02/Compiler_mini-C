@@ -41,6 +41,14 @@ public class ProgramCodeGen extends CodeGen {
       }
     }
 
+    //  pass to allocate all declared global functions
+    for (Decl d : p.decls) {
+      if (d instanceof FunDef fd) {
+        System.out.println("[ProgramCodeGen] Allocating function: " + fd.name);
+        allocator.allocateFunction(fd);
+      }
+    }
+
     for (Decl d : p.decls) {
       if (d instanceof VarDecl vd) {
         allocator.allocateGlobalVariable(vd);
