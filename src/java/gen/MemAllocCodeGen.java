@@ -73,7 +73,6 @@ public class MemAllocCodeGen extends CodeGen {
       System.out.printf(
           "[MemAllocCodeGen] Param: %s | Offset: %d\n", param.name, getLocalOffset(param));
     }
-    exitScope(); // exit local variable scope
   }
 
   void allocateFunctionParameter(VarDecl vd, int paramIndex) {

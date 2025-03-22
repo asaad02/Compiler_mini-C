@@ -43,8 +43,6 @@ public class FunCodeGen extends CodeGen {
     new StmtCodeGen(asmProg, allocator, fd, definedFunctions).visit(fd.block);
     // Generate function epilogue
     generateFunctionEpilogue(fd, textSection, frameSize);
-
-    allocator.exitScope();
   }
 
   /** Generates function prologue */
