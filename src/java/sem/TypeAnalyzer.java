@@ -487,10 +487,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                     && actualArray.elementType instanceof ArrayType actualInner) {
 
                   // Check inner array types
-                  if (!expectedInner.elementType.equals(actualInner.elementType)) {
-                    error("Function argument 2D array type mismatch.");
-                    yield BaseType.UNKNOWN;
-                  }
+                  // if (!expectedInner.elementType.equals(actualInner.elementType)) {
+                  // error("Function argument 2D array type mismatch.");
+                  // yield BaseType.UNKNOWN;
+                  // }
                   // Check inner array sizes
                   if (expectedInner.getDimensionSize(i) != actualInner.getDimensionSize(i)) {
                     error("Function argument 2D array row size mismatch.");
