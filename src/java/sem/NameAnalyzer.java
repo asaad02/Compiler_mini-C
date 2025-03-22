@@ -67,7 +67,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         }
 
         if (currentScope.lookupFunction(fd.name) != null) {
-          // error("Function " + fd.name + " is already declared.");
+          error("Function " + fd.name + " is already declared.");
           return;
         }
         // System.out.println("declaring function: " + fd.name);
@@ -92,7 +92,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         } else {
           // ensure no duplicate function definition
           if (existingSymbol.def != null) {
-            // error("Function " + fd.name + " is already defined.");
+            error("Function " + fd.name + " is already defined.");
             return;
           }
           /*
@@ -150,8 +150,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
           // Ensure parameter is not already declared in the function local scope
           if (declaredParams.contains(param.name)) {
-            // error("Function parameter '" + param.name + "' is already declared in this
-            // function.");
+            error("Function parameter '" + param.name + "' is already declared in this function.");
             return;
           }
           declaredParams.add(param.name);
@@ -192,13 +191,13 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
         // argument count mismatch
         if (expectedParams != -1 && expectedParams != providedArgs) {
-          // error(
-          // "Function "
-          // + fc.name
-          // + " called with incorrect number of arguments. Expected: "
-          // + expectedParams
-          // + ", Provided: "
-          // + providedArgs);
+          error(
+              "Function "
+                  + fc.name
+                  + " called with incorrect number of arguments. Expected: "
+                  + expectedParams
+                  + ", Provided: "
+                  + providedArgs);
           return;
         }
 
@@ -213,7 +212,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         // System.out.println("Function call type: " + fs.type);
         // name
         // System.out.println("Function call name: " + fs.name);
-        // fc.type = fs.type;
+        fc.type = fs.type;
       }
 
       // Block scope
@@ -246,7 +245,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
             && currentScope.lookupVariable(vd.name) != null) {
           VarSymbol vs = currentScope.lookupVariable(vd.name);
           if (vs.vd.type.equals(vd.type)) {
-            // error("Variable " + vd.name + " is already declared with a same type.");
+            error("Variable " + vd.name + " is already declared with a same type.");
             return;
           }
         }
@@ -283,7 +282,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
         // ensure the struct itself is not already declared
         if (currentScope.lookupCurrent(std.structType.name) != null) {
-          // error("Struct " + std.structType.name + " is already declared.");
+          error("Struct " + std.structType.name + " is already declared.");
           return;
         }
         // register the struct before function processing
@@ -292,7 +291,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         Set<String> fieldNames = new HashSet<>();
         for (VarDecl field : std.fields) {
           if (fieldNames.contains(field.name)) {
-            // error("Duplicate field '" + field.name + "' in struct " + std.structType.name);
+            error("Duplicate field '" + field.name + "' in struct " + std.structType.name);
             return;
           }
           fieldNames.add(field.name);
