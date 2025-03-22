@@ -70,7 +70,7 @@ public class StmtCodeGen extends CodeGen {
       visit(stmt);
     }
 
-    allocator.exitScope();
+    // allocator.exitScope();
     System.out.println("[StmtCodeGen] Exiting block.");
   }
 

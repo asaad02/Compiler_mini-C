@@ -41,66 +41,67 @@ public class ProgramCodeGen extends CodeGen {
       }
     }
 
-    //  pass to allocate all declared global functions
+    // alocate function has array parameters
     for (Decl d : p.decls) {
-      if (d instanceof FunDef fd) {
-        System.out.println("[ProgramCodeGen] Allocating function: " + fd.name);
-        allocator.allocateFunction(fd);
+      if (d instanceof FunDef fd
+          && !fd.name.equals("main")
+          && (arrayParams(fd) || structParams(fd))) {
+        allocator.visit(fd);
+        System.out.println("[ProgramCodeGen] Generating code for function: " + fd.name);
+        new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
       }
     }
-    // boolean if param has pointer type
-    boolean hasPointerType = false;
-    // Generate all function code (but skip main for now)
     for (Decl d : p.decls) {
-      if (d instanceof FunDef fd) {
-        allocator.visit(fd); // Visit all to ensure frame setup is done
-        if (fd.name.equals("main")) {
-          mainFunction = fd; // Save main for later
-        } else {
-          // System.out.println("[ProgramCodeGen] Generating code for function: " + fd.name);
-          // generate function if doesnt have pointer type
-          for (VarDecl vd : fd.params) {
-            if (vd.type instanceof PointerType) {
-              // skip function if it has pointer type
-              hasPointerType = true;
-            }
-          }
-
-          if (!hasPointerType) {
-            new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
-          }
-        }
-      } else if (d instanceof VarDecl vd) {
+      if (d instanceof VarDecl vd) {
         allocator.allocateGlobalVariable(vd);
       }
-    }
-
-    for (Decl d : p.decls) {
-      boolean hasPointerType2 = false;
-      if (d instanceof FunDef fd && !fd.name.equals("main")) {
-        for (VarDecl vd : fd.params) {
-          if (vd.type instanceof PointerType) {
-            // skip function if it has pointer type
-            hasPointerType2 = true;
-          }
-        }
-        if (hasPointerType2) {
-          new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
+      if (d instanceof FunDef fd) {
+        System.out.println("[ProgramCodeGen] Calling MemAllocCodeGen for function: " + fd.name);
+        allocator.visit(fd);
+        if (fd.name.equals("main")) {
+          mainFunction = fd;
+          System.out.println("[ProgramCodeGen] Found main function: " + fd.name);
+          System.out.println("[ProgramCodeGen] Generating code for main()");
+          new FunCodeGen(asmProg, allocator, definedFunctions).visit(mainFunction);
         }
       }
     }
 
-    // Finally generate code for main (last in assembly, first to execute)
-    if (mainFunction != null) {
-      System.out.println("[ProgramCodeGen] Generating code for main()");
-
-      new FunCodeGen(asmProg, allocator, definedFunctions).visit(mainFunction);
+    // pass to Generate function code but not main
+    for (Decl d : p.decls) {
+      if (d instanceof FunDef fd
+          && !fd.name.equals("main")
+          && !arrayParams(fd)
+          && !structParams(fd)) {
+        System.out.println("[ProgramCodeGen] Generating code for function: " + fd.name);
+        new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
+      }
     }
 
     // Print Assembly Sections and Debug Table
     // printAssemblySections();
     // allocator.printAllMemory();
     System.out.println("[ProgramCodeGen] Program generation completed successfully.");
+  }
+
+  // check if the parameter is a array type
+  private boolean arrayParams(FunDef fd) {
+    for (VarDecl vd : fd.params) {
+      if (vd.type instanceof ArrayType) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // check if a struct is passed as a parameter
+  private boolean structParams(FunDef fd) {
+    for (VarDecl vd : fd.params) {
+      if (vd.type instanceof StructType) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // function names are uniquely identified in the symbol table.
