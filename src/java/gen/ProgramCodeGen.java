@@ -48,29 +48,53 @@ public class ProgramCodeGen extends CodeGen {
         allocator.allocateFunction(fd);
       }
     }
-
+    // boolean if param has pointer type
+    boolean hasPointerType = false;
+    // Generate all function code (but skip main for now)
     for (Decl d : p.decls) {
-      if (d instanceof VarDecl vd) {
+      if (d instanceof FunDef fd) {
+        allocator.visit(fd); // Visit all to ensure frame setup is done
+        if (fd.name.equals("main")) {
+          mainFunction = fd; // Save main for later
+        } else {
+          // System.out.println("[ProgramCodeGen] Generating code for function: " + fd.name);
+          // generate function if doesnt have pointer type
+          for (VarDecl vd : fd.params) {
+            if (vd.type instanceof PointerType) {
+              // skip function if it has pointer type
+              hasPointerType = true;
+            }
+          }
+
+          if (!hasPointerType) {
+            new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
+          }
+        }
+      } else if (d instanceof VarDecl vd) {
         allocator.allocateGlobalVariable(vd);
       }
-      if (d instanceof FunDef fd) {
-        System.out.println("[ProgramCodeGen] Calling MemAllocCodeGen for function: " + fd.name);
-        allocator.visit(fd);
-        if (fd.name.equals("main")) {
-          mainFunction = fd;
-          System.out.println("[ProgramCodeGen] Found main function: " + fd.name);
-          System.out.println("[ProgramCodeGen] Generating code for main()");
-          new FunCodeGen(asmProg, allocator, definedFunctions).visit(mainFunction);
+    }
+
+    for (Decl d : p.decls) {
+      boolean hasPointerType2 = false;
+      if (d instanceof FunDef fd && !fd.name.equals("main")) {
+        for (VarDecl vd : fd.params) {
+          if (vd.type instanceof PointerType) {
+            // skip function if it has pointer type
+            hasPointerType2 = true;
+          }
+        }
+        if (hasPointerType2) {
+          new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
         }
       }
     }
 
-    // pass to Generate function code but not main
-    for (Decl d : p.decls) {
-      if (d instanceof FunDef fd && !fd.name.equals("main")) {
-        System.out.println("[ProgramCodeGen] Generating code for function: " + fd.name);
-        new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
-      }
+    // Finally generate code for main (last in assembly, first to execute)
+    if (mainFunction != null) {
+      System.out.println("[ProgramCodeGen] Generating code for main()");
+
+      new FunCodeGen(asmProg, allocator, definedFunctions).visit(mainFunction);
     }
 
     // Print Assembly Sections and Debug Table

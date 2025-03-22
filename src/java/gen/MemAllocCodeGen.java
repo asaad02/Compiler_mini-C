@@ -54,24 +54,26 @@ public class MemAllocCodeGen extends CodeGen {
   // allocateFunction
   void allocateFunction(FunDef fd) {
     fpOffset = 0;
-    enterScope();
 
+    // Scope 1: Parameter scope
+    enterScope();
     for (int i = 0; i < fd.params.size(); i++) {
       allocateFunctionParameter(fd.params.get(i), i);
     }
 
+    // Scope 2: Local variable scope
     enterScope();
     for (VarDecl localVar : fd.block.vds) {
       allocateVariable(localVar);
     }
 
     frameSizes.put(fd, alignTo16(-fpOffset));
-
     System.out.println("[MemAllocCodeGen] Allocated function: " + fd.name);
     for (VarDecl param : fd.params) {
       System.out.printf(
           "[MemAllocCodeGen] Param: %s | Offset: %d\n", param.name, getLocalOffset(param));
     }
+    exitScope(); // exit local variable scope
   }
 
   void allocateFunctionParameter(VarDecl vd, int paramIndex) {
@@ -283,7 +285,6 @@ public class MemAllocCodeGen extends CodeGen {
     if (globalVars.containsKey(name)) {
       return globalVars.get(name);
     }
-
     throw new IllegalStateException("[MemAllocCodeGen] ERROR: Variable not found: " + name);
   }
 
