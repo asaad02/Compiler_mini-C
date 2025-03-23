@@ -92,7 +92,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
         } else {
           // ensure no duplicate function definition
           if (existingSymbol.def != null) {
-            // error("Function " + fd.name + " is already defined.");
+            error("Function " + fd.name + " is already defined.");
             return;
           }
           /*
@@ -175,7 +175,7 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
 
         // function must be declared or defined before use
         if (fs == null) {
-          // error("Function " + fc.name + " must be declared before use.");
+          error("Function " + fc.name + " must be declared before use.");
           return;
         }
 
