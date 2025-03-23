@@ -41,6 +41,16 @@ public class ProgramCodeGen extends CodeGen {
       }
     }
 
+    // alocate function has array parameters
+    for (Decl d : p.decls) {
+      if (d instanceof FunDef fd
+          && !fd.name.equals("main")
+          && (arrayParams(fd) || structParams(fd))) {
+        allocator.visit(fd);
+        System.out.println("[ProgramCodeGen] Generating code for function: " + fd.name);
+        new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
+      }
+    }
     for (Decl d : p.decls) {
       if (d instanceof VarDecl vd) {
         allocator.allocateGlobalVariable(vd);
@@ -59,7 +69,10 @@ public class ProgramCodeGen extends CodeGen {
 
     // pass to Generate function code but not main
     for (Decl d : p.decls) {
-      if (d instanceof FunDef fd && !fd.name.equals("main")) {
+      if (d instanceof FunDef fd
+          && !fd.name.equals("main")
+          && !arrayParams(fd)
+          && !structParams(fd)) {
         System.out.println("[ProgramCodeGen] Generating code for function: " + fd.name);
         new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
       }
@@ -69,6 +82,26 @@ public class ProgramCodeGen extends CodeGen {
     // printAssemblySections();
     // allocator.printAllMemory();
     System.out.println("[ProgramCodeGen] Program generation completed successfully.");
+  }
+
+  // check if the parameter is a array type
+  private boolean arrayParams(FunDef fd) {
+    for (VarDecl vd : fd.params) {
+      if (vd.type instanceof ArrayType) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // check if a struct is passed as a parameter
+  private boolean structParams(FunDef fd) {
+    for (VarDecl vd : fd.params) {
+      if (vd.type instanceof StructType) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // function names are uniquely identified in the symbol table.
