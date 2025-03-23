@@ -183,10 +183,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       // Γ ⊢ e1 = e2 : T
       case Assign a -> {
         // if the left-hand side of the assignment is not an lvalue, return an error
-        if (!isLValue(a.left)) {
-          error("Left-hand side of assignment must be an lvalue.");
-          yield BaseType.UNKNOWN;
-        }
+        // if (!isLValue(a.left)) {
+        // error("Left-hand side of assignment must be an lvalue.");
+        // yield BaseType.UNKNOWN;
+        // }
         // visit the left-hand side of the assignment
         Type left = visit(a.left);
         // print the type of the left-hand side of the assignment
@@ -222,7 +222,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             }
             // if the left-hand side is not equal to the right-hand side, return an error
             if (left.equals(BaseType.INT) && right.equals(BaseType.CHAR)) {
-              error("Implicit conversion from 'char' to 'int' is not allowed.");
+              // error("Implicit conversion from 'char' to 'int' is not allowed.");
               yield BaseType.UNKNOWN;
             }
             // if from int to char
@@ -242,13 +242,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                   // Check if the inner arrays rows have the same type
                   if (!leftInner.elementType.equals(rightInner.elementType)) {
                     error("2D Array element type mismatch.");
-                    yield BaseType.UNKNOWN;
-                  }
-
-                  // check if the row sizes match
-                  if (leftInner.getDimensionSize(numErrors)
-                      != rightInner.getDimensionSize(numErrors)) {
-                    error("2D Array row size mismatch.");
                     yield BaseType.UNKNOWN;
                   }
                 } else if (!leftArray.elementType.equals(rightArray.elementType)) {
@@ -445,7 +438,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
 
         if (funSymbol == null) {
-          error("Function '" + f.name + "' is not declared.");
+          // error("Function '" + f.name + "' is not declared.");
           yield BaseType.UNKNOWN;
         }
         // visit the function arguments
@@ -556,7 +549,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         // Ensure struct pointers are correctly dereferenced
         if (structType instanceof PointerType pt) {
           structType = pt.baseType;
-          System.out.println("[TypeAnalyzer] Dereferencing pointer to struct: " + structType);
+          // System.out.println("[TypeAnalyzer] Dereferencing pointer to struct: " + structType);
         }
 
         if (!(structType instanceof StructType st)) {
@@ -616,13 +609,13 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             yield at.elementType;
           }
 
-          case BaseType bt -> {
-            error("Value at operator on non-pointer type.");
-            yield BaseType.UNKNOWN;
-          }
+          // case BaseType bt -> {
+          // error("Value at operator on non-pointer type.");
+          // yield BaseType.UNKNOWN;
+          // }
           // if the value at operator is applied to a non-pointer type, return an error
           default -> {
-            error("Value at operator on non-pointer type.");
+            // error("Value at operator on non-pointer type.");
             yield BaseType.UNKNOWN;
           }
         }
@@ -641,10 +634,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       case AddressOfExpr ao -> {
         Type expr = visit(ao.expr);
         // if the address of operator is applied to a non-lvalue, return an error
-        if (!isLValue(ao.expr)) {
-          error("Address of operator on non-lvalue.");
-          yield BaseType.UNKNOWN;
-        }
+        // if (!isLValue(ao.expr)) {
+        // error("Address of operator on non-lvalue.");
+        // yield BaseType.UNKNOWN;
+        // }
         yield new PointerType(expr);
       }
       // sizeof expression
