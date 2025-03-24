@@ -77,14 +77,12 @@ public class FunCodeGen extends CodeGen {
         paramStackOffset += allocator.alignTo(structSize, 8);
       } else if (paramType instanceof ArrayType) {
         // For array parameters store the argument register value
-        if (i < 4) {
-          textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.fp, localOffset);
-        } else {
-          Register temp = Register.Virtual.create();
-          textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
-          textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
-          paramStackOffset += 4;
-        }
+
+        Register temp = Register.Virtual.create();
+        textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
+        textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
+        paramStackOffset += 4;
+
         // Store array dimensions
         int strideOffset = 4;
         int stride = 1;
@@ -97,14 +95,10 @@ public class FunCodeGen extends CodeGen {
           strideOffset += 4;
         }
       } else {
-        if (i < 4) {
-          textSection.emit(OpCode.SW, getArgReg(i), Register.Arch.fp, localOffset);
-        } else {
-          Register temp = Register.Virtual.create();
-          textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
-          textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
-          paramStackOffset += 4;
-        }
+        Register temp = Register.Virtual.create();
+        textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
+        textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
+        paramStackOffset += 4;
       }
     }
   }
