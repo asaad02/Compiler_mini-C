@@ -289,17 +289,9 @@ public class ExprValCodeGen extends CodeGen {
             argumentRegs.add(tempReg);
           }
         }
-
         text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -totalStackSize);
-
-        // Pass First 4 Arguments in Registers ($a0 - $a3)
         for (int i = 0; i < argumentRegs.size(); i++) {
-          if (i < 4) {
-            text.emit(OpCode.ADDU, getArgReg(i), argumentRegs.get(i), Register.Arch.zero);
-          } else {
-            int stackPos = (i - 4) * 4;
-            text.emit(OpCode.SW, argumentRegs.get(i), Register.Arch.sp, stackPos);
-          }
+          text.emit(OpCode.SW, argumentRegs.get(i), Register.Arch.sp, i * 4);
         }
 
         // Call Function
@@ -390,7 +382,6 @@ public class ExprValCodeGen extends CodeGen {
             new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(fa.structure);
         if (fa.structure.type instanceof StructType structType) {
           int offset = allocator.computeFieldOffset(structType, fa.field);
-          offset = allocator.alignTo(offset, 4); // Ensure proper alignment
 
           if (fa.type.equals(BaseType.CHAR)) {
             text.emit(OpCode.LBU, resReg, baseReg, offset); // Load byte for char fields

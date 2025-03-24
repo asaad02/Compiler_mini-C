@@ -212,7 +212,8 @@ public class StmtCodeGen extends CodeGen {
 
       if (rs.expr.type instanceof StructType structType) {
         int structSize = allocator.computeSize(structType);
-        Register returnAddr = Register.Virtual.create();
+
+        Register returnAddr = Register.Arch.a0; // or load from $fp + offset if full compliance
 
         // Allocate memory for struct return
         text.emit(OpCode.ADDIU, returnAddr, Register.Arch.sp, -structSize);
