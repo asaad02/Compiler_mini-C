@@ -44,6 +44,8 @@ run_ant_build() {
     exit 1
   fi
   echo -e "${GREEN}Ant build completed successfully.${NC}"
+  rm -f "$CODEGEN_OUTPUT_DIR"/*.ast
+        rm -f "$CODEGEN_OUTPUT_DIR"/*regalloc.asm
 }
 
 # Function to run tests in a directory
@@ -62,7 +64,7 @@ run_tests() {
         "sem") java -cp "$BUILD_DIR" Main2 -sem "$file" ;;
         "gen")
           output_file="$CODEGEN_OUTPUT_DIR/$(basename "$file" .c).ast"
-          java -cp "$BUILD_DIR" Main3 -gen "$file" "$output_file"
+          java -cp "$BUILD_DIR" Main4 -gen  naive "$file" "$output_file"
           ;;
       esac
 
@@ -93,6 +95,7 @@ run_mars_simulation() {
   done
             # after running remove all ast files with ending .ast
         rm -f "$CODEGEN_OUTPUT_DIR"/*.ast
+        rm -f "$CODEGEN_OUTPUT_DIR"/*regalloc.asm
 }
 
 # Function to display a completion message
