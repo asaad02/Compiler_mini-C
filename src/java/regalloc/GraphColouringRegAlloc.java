@@ -31,7 +31,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
   private static int spillLabelCounter = 0;
 
   private final Map<Register.Virtual, Label> spillLabelMap = new HashMap<>();
-
   private final Set<Label> alreadyEmittedSpillLabels = new HashSet<>();
 
   private GraphColouringRegAlloc() {}
@@ -64,7 +63,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
 
     for (Map.Entry<Register.Virtual, Label> e : spillLabelMap.entrySet()) {
       Label lbl = e.getValue();
-
       if (!alreadyEmittedSpillLabels.contains(lbl)) {
         outProg.dataSection.emit(new Directive("align 2"));
         outProg.dataSection.emit(lbl);
@@ -72,7 +70,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         alreadyEmittedSpillLabels.add(lbl);
       }
     }
-
     return outProg;
   }
 
@@ -112,7 +109,9 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         instructions.add(insn);
       }
     }
-    for (Instruction ins : instructions) cfg.nodes.add(new CFGNode(ins));
+    for (Instruction ins : instructions) {
+      cfg.nodes.add(new CFGNode(ins));
+    }
     for (int i = 0; i < cfg.nodes.size(); i++) {
       CFGNode node = cfg.nodes.get(i);
       Instruction insn = node.insn;
@@ -130,8 +129,12 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         case JUMP_REGISTER -> {
           isUncond = true;
           if (insn instanceof Instruction.JumpRegister jr && !jr.address.equals(Register.Arch.ra)) {
-            for (int j = 0; j < cfg.nodes.size(); j++)
-              if (j != i) node.successors.add(cfg.nodes.get(j));
+            for (int j = 0; j < cfg.nodes.size(); j++) {
+              if (j != i) {
+
+                node.successors.add(cfg.nodes.get(j));
+              }
+            }
           }
         }
         case BINARY_BRANCH -> {
@@ -176,7 +179,9 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         outMinusDef.removeAll(def(node.insn));
         newIn.addAll(outMinusDef);
         node.liveIn = newIn;
-        if (!oldIn.equals(node.liveIn) || !oldOut.equals(node.liveOut)) changed = true;
+        if (!oldIn.equals(node.liveIn) || !oldOut.equals(node.liveOut)) {
+          changed = true;
+        }
       }
     } while (changed);
   }
@@ -208,7 +213,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         }
       }
     }
-
     for (CFGNode node : cfg.nodes) {
       List<Register.Virtual> outList = new ArrayList<>(node.liveOut);
       for (int i = 0; i < outList.size(); i++) {
@@ -248,7 +252,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
       progress = false;
       for (Register.Virtual v : ig.edges.keySet()) {
         if (removed.contains(v) || cr.spilled.contains(v)) continue;
-
         long deg =
             ig.edges.get(v).stream()
                 .filter(x -> !removed.contains(x) && !cr.spilled.contains(x))
@@ -264,7 +267,12 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         Optional<Register.Virtual> candidate =
             ig.edges.keySet().stream()
                 .filter(x -> !removed.contains(x) && !cr.spilled.contains(x))
-                .findAny();
+                .max(
+                    Comparator.comparingLong(
+                        v ->
+                            ig.edges.get(v).stream()
+                                .filter(x -> !removed.contains(x) && !cr.spilled.contains(x))
+                                .count()));
         if (candidate.isPresent()) {
           cr.spilled.add(candidate.get());
           progress = true;
@@ -294,7 +302,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         cr.colorMap.put(v, chosen);
       }
     }
-
     return cr;
   }
 
@@ -302,7 +309,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
       AssemblyProgram.TextSection oldSec, ColorResult cr) {
     System.out.println("Rewriting section with allocated registers...");
     AssemblyProgram.TextSection newSec = new AssemblyProgram.TextSection();
-
     for (AssemblyItem item : oldSec.items) {
       if (item instanceof Instruction insn) {
         if (insn == Instruction.Nullary.pushRegisters) {
@@ -323,17 +329,12 @@ public class GraphColouringRegAlloc implements AssemblyPass {
       AssemblyProgram.TextSection newSec, Instruction insn, ColorResult cr) {
     System.out.println("Expanding pushRegisters pseudo-instruction...");
     newSec.emit("Original instruction: pushRegisters");
-
     Set<Register.Virtual> allVregs = new HashSet<>(cr.colorMap.keySet());
     allVregs.addAll(cr.spilled);
-
     List<Register.Virtual> sorted = new ArrayList<>(allVregs);
     sorted.sort(Comparator.comparing(r -> r.name));
-
     for (Register.Virtual vr : sorted) {
-
       loadVregInto(newSec, vr, Register.Arch.t0, cr);
-
       newSec.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -4);
       newSec.emit(OpCode.SW, Register.Arch.t0, Register.Arch.sp, 0);
     }
@@ -343,19 +344,14 @@ public class GraphColouringRegAlloc implements AssemblyPass {
       AssemblyProgram.TextSection newSec, Instruction insn, ColorResult cr) {
     System.out.println("Expanding popRegisters pseudo-instruction...");
     newSec.emit("Original instruction: popRegisters");
-
     Set<Register.Virtual> allVregs = new HashSet<>(cr.colorMap.keySet());
     allVregs.addAll(cr.spilled);
-
     List<Register.Virtual> sorted = new ArrayList<>(allVregs);
     sorted.sort(Comparator.comparing(r -> r.name));
     Collections.reverse(sorted);
-
     for (Register.Virtual vr : sorted) {
-
       newSec.emit(OpCode.LW, Register.Arch.t0, Register.Arch.sp, 0);
       newSec.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, 4);
-
       storeRegToVreg(newSec, Register.Arch.t0, vr, cr);
     }
   }
@@ -364,6 +360,8 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     System.out.println("Rewriting instruction: " + insn);
     Map<Register, Register> regMap = new HashMap<>();
     Stack<Register> ephem = new Stack<>();
+    ephem.push(Register.Arch.t3);
+    ephem.push(Register.Arch.t2);
     ephem.push(Register.Arch.t1);
     ephem.push(Register.Arch.t0);
 
@@ -420,10 +418,8 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     if (cr.spilled.contains(vr)) {
       loadSpill(sec, vr, dest);
     } else {
-
       Register c = cr.colorMap.get(vr);
       if (c == null) {
-
         throw new RuntimeException("No color for " + vr);
       } else {
         if (dest != c) {
