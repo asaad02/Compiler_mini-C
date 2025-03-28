@@ -51,8 +51,7 @@ public class GraphColouringRegAlloc implements AssemblyPass {
 
       System.out.println("Performing liveness analysis...");
       doLiveness(cfg);
-
-      System.out.println("Building interference graph...");
+      postProcessLiveness(cfg);
       InterferenceGraph ig = buildInterferenceGraph(cfg);
 
       System.out.println("Applying Chaitin's graph colouring...");
@@ -77,6 +76,15 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     return outProg;
   }
 
+  private void postProcessLiveness(CFG cfg) {
+    for (CFGNode node : cfg.nodes) {
+      Register def = node.insn.def();
+      if (def instanceof Register.Virtual vr && !node.liveOut.contains(vr)) {
+        node.liveOut.add(vr);
+      }
+    }
+  }
+
   private static class CFG {
     List<CFGNode> nodes = new ArrayList<>();
     Map<Label, Integer> labelToIndex = new HashMap<>();
@@ -97,7 +105,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     System.out.println("Constructing CFG from section...");
     CFG cfg = new CFG();
     List<Instruction> instructions = new ArrayList<>();
-
     for (AssemblyItem item : section.items) {
       if (item instanceof Label lbl) {
         cfg.labelToIndex.put(lbl, instructions.size());
@@ -105,47 +112,32 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         instructions.add(insn);
       }
     }
-
-    for (Instruction ins : instructions) {
-      cfg.nodes.add(new CFGNode(ins));
-    }
-
+    for (Instruction ins : instructions) cfg.nodes.add(new CFGNode(ins));
     for (int i = 0; i < cfg.nodes.size(); i++) {
       CFGNode node = cfg.nodes.get(i);
       Instruction insn = node.insn;
       boolean isUncond = false;
-
       switch (insn.opcode.kind()) {
         case JUMP -> {
           isUncond = true;
           if (insn instanceof Instruction.Jump j) {
             Integer target = cfg.labelToIndex.get(j.label);
-            if (target != null) {
-              node.successors.add(cfg.nodes.get(target));
-            }
-            if (j.opcode.equals(OpCode.JAL) && i + 1 < cfg.nodes.size()) {
+            if (target != null) node.successors.add(cfg.nodes.get(target));
+            if (j.opcode.equals(OpCode.JAL) && i + 1 < cfg.nodes.size())
               node.successors.add(cfg.nodes.get(i + 1));
-            }
           }
         }
         case JUMP_REGISTER -> {
           isUncond = true;
-          if (insn instanceof Instruction.JumpRegister jr) {
-            if (!jr.address.equals(Register.Arch.ra)) {
-              for (int j = 0; j < cfg.nodes.size(); j++) {
-                if (j != i) {
-                  node.successors.add(cfg.nodes.get(j));
-                }
-              }
-            }
+          if (insn instanceof Instruction.JumpRegister jr && !jr.address.equals(Register.Arch.ra)) {
+            for (int j = 0; j < cfg.nodes.size(); j++)
+              if (j != i) node.successors.add(cfg.nodes.get(j));
           }
         }
         case BINARY_BRANCH -> {
           if (insn instanceof Instruction.BinaryBranch bb) {
             Integer target = cfg.labelToIndex.get(bb.label);
-            if (target != null) {
-              node.successors.add(cfg.nodes.get(target));
-            }
+            if (target != null) node.successors.add(cfg.nodes.get(target));
           }
         }
         case UNARY_BRANCH -> {
@@ -156,14 +148,11 @@ public class GraphColouringRegAlloc implements AssemblyPass {
             }
           }
         }
-        default -> {}
       }
-
       if (!isUncond && i + 1 < cfg.nodes.size()) {
         node.successors.add(cfg.nodes.get(i + 1));
       }
     }
-
     return cfg;
   }
 
@@ -182,16 +171,12 @@ public class GraphColouringRegAlloc implements AssemblyPass {
           newOut.addAll(succ.liveIn);
         }
         node.liveOut = newOut;
-
         Set<Register.Virtual> newIn = new HashSet<>(uses(node.insn));
         Set<Register.Virtual> outMinusDef = new HashSet<>(node.liveOut);
         outMinusDef.removeAll(def(node.insn));
         newIn.addAll(outMinusDef);
         node.liveIn = newIn;
-
-        if (!oldIn.equals(node.liveIn) || !oldOut.equals(node.liveOut)) {
-          changed = true;
-        }
+        if (!oldIn.equals(node.liveIn) || !oldOut.equals(node.liveOut)) changed = true;
       }
     } while (changed);
   }
@@ -215,10 +200,7 @@ public class GraphColouringRegAlloc implements AssemblyPass {
   }
 
   private InterferenceGraph buildInterferenceGraph(CFG cfg) {
-    System.out.println("Constructing interference graph...");
     InterferenceGraph ig = new InterferenceGraph();
-
-    // Add every virtual register that appears to the graph.
     for (CFGNode node : cfg.nodes) {
       for (Register r : node.insn.registers()) {
         if (r instanceof Register.Virtual vr) {
@@ -246,7 +228,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         }
       }
     }
-
     return ig;
   }
 
@@ -381,23 +362,24 @@ public class GraphColouringRegAlloc implements AssemblyPass {
 
   private void rewriteInstr(AssemblyProgram.TextSection newSec, Instruction insn, ColorResult cr) {
     System.out.println("Rewriting instruction: " + insn);
-
     Map<Register, Register> regMap = new HashMap<>();
-
     Stack<Register> ephem = new Stack<>();
     ephem.push(Register.Arch.t1);
     ephem.push(Register.Arch.t0);
 
-    // Handle register uses
+    Map<Register.Virtual, Register> spillCache = new HashMap<>();
+
     for (Register rUse : insn.uses()) {
       if (rUse instanceof Register.Virtual vr) {
         if (cr.spilled.contains(vr)) {
-          if (ephem.isEmpty()) {
-            throw new RuntimeException("No ephemeral registers left for spill load of " + vr);
+          if (!spillCache.containsKey(vr)) {
+            if (ephem.isEmpty())
+              throw new RuntimeException("No ephemeral registers left for spill load of " + vr);
+            Register tmp = ephem.pop();
+            loadSpill(newSec, vr, tmp);
+            spillCache.put(vr, tmp);
           }
-          Register tmp = ephem.pop();
-          loadSpill(newSec, vr, tmp);
-          regMap.put(vr, tmp);
+          regMap.put(vr, spillCache.get(vr));
         } else if (cr.colorMap.containsKey(vr)) {
           regMap.put(vr, cr.colorMap.get(vr));
         } else {
@@ -410,12 +392,13 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     if (insn.def() instanceof Register.Virtual dv) {
       defV = dv;
       if (cr.spilled.contains(dv)) {
-
-        if (ephem.isEmpty()) {
-          throw new RuntimeException("No ephemeral registers left for spill store of " + dv);
+        if (!spillCache.containsKey(dv)) {
+          if (ephem.isEmpty())
+            throw new RuntimeException("No ephemeral registers left for spill store of " + dv);
+          Register tmp = ephem.pop();
+          spillCache.put(dv, tmp);
         }
-        Register tmp = ephem.pop();
-        regMap.put(dv, tmp);
+        regMap.put(dv, spillCache.get(dv));
       } else if (cr.colorMap.containsKey(dv)) {
         regMap.put(dv, cr.colorMap.get(dv));
       } else {
