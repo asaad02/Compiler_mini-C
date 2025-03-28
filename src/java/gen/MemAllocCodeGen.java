@@ -136,7 +136,7 @@ public class MemAllocCodeGen extends CodeGen {
     if (!globalVars.containsKey(vd.name)) {
       throw new IllegalStateException("[MemAlloc] ERROR: Global variable not found: " + vd.name);
     }
-    return globalVarOffsets.getOrDefault(vd.name, -1);
+    return globalOffset;
   }
 
   // Computes memory size for different types
@@ -194,10 +194,9 @@ public class MemAllocCodeGen extends CodeGen {
   }
 
   public int computeFieldOffset(StructType structType, String fieldName) {
-    Map<String, Integer> fieldOffsets =
-        structFieldOffsets.computeIfAbsent(structType.name, k -> new HashMap<>());
-    if (fieldOffsets.containsKey(fieldName)) {
-      return fieldOffsets.get(fieldName);
+    structFieldOffsets.computeIfAbsent(structType.name, k -> new HashMap<>());
+    if (structFieldOffsets.get(structType.name).containsKey(fieldName)) {
+      return structFieldOffsets.get(structType.name).get(fieldName);
     }
 
     StructTypeDecl structDecl = structDeclarations.get(structType.name);
@@ -208,11 +207,11 @@ public class MemAllocCodeGen extends CodeGen {
     int offset = 0;
     for (VarDecl field : structDecl.fields) {
       offset = alignTo(offset, computeAlignment(field.type));
-      fieldOffsets.put(field.name, offset);
+      structFieldOffsets.get(structType.name).put(field.name, offset);
       offset += computeSize(field.type);
     }
 
-    return fieldOffsets.getOrDefault(fieldName, -1);
+    return structFieldOffsets.get(structType.name).getOrDefault(fieldName, -1);
   }
 
   public int getArrayDimensionSize(ArrayType arrayType, int i) {
@@ -338,10 +337,12 @@ public class MemAllocCodeGen extends CodeGen {
   }
 
   public int getScopeLevel(String varName) {
+    int level = 0;
     for (int i = scopeStack.size() - 1; i >= 0; i--) {
       if (scopeStack.get(i).containsKey(varName)) {
-        return scopeStack.size() - 1 - i; // level 0 = innermost scope
+        return level;
       }
+      level++;
     }
     return -1;
   }
@@ -377,10 +378,6 @@ public class MemAllocCodeGen extends CodeGen {
       }
     }
     throw new IllegalStateException("[MemAllocCodeGen] ERROR: Variable not found: " + varName);
-  }
-
-  private int align(int value, int alignment) {
-    return (value + alignment - 1) & ~(alignment - 1);
   }
 
   // call printAllMemoryDebug
