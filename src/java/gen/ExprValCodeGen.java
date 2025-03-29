@@ -289,10 +289,17 @@ public class ExprValCodeGen extends CodeGen {
             argumentRegs.add(tempReg);
           }
         }
-        totalStackSize = allocator.alignTo(totalStackSize, 4);
+
         text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -totalStackSize);
+
+        // Pass First 4 Arguments in Registers ($a0 - $a3)
         for (int i = 0; i < argumentRegs.size(); i++) {
-          text.emit(OpCode.SW, argumentRegs.get(i), Register.Arch.sp, i * 4);
+          if (i < 4) {
+            text.emit(OpCode.ADDU, getArgReg(i), argumentRegs.get(i), Register.Arch.zero);
+          } else {
+            int stackPos = (i - 4) * 4;
+            text.emit(OpCode.SW, argumentRegs.get(i), Register.Arch.sp, stackPos);
+          }
         }
 
         // Call Function
