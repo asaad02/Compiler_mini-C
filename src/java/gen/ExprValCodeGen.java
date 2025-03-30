@@ -8,9 +8,9 @@ import java.util.List;
 /** Generates code to evaluate an expression and return the result in a register. */
 
 /**
- * Generates assembly code for evaluating expressions such as Integer, character, and string
- * literals and Binary and logical operations and Variable access and assignments and Function calls
- * and memory operations
+ * Generates assembly code for evaluating expressions such as integer, character, and string
+ * literals; binary and logical operations; variable accesses and assignments; function calls; and
+ * memory operations.
  */
 public class ExprValCodeGen extends CodeGen {
   private final MemAllocCodeGen allocator;
@@ -24,7 +24,7 @@ public class ExprValCodeGen extends CodeGen {
     this.definedFunctions = definedFunctions;
   }
 
-  // generates assembly code for evaluating an expression.
+  // Generates assembly code for evaluating an expression.
   public Register visit(Expr e) {
     System.out.println("[ExprValCodeGen] Processing expression: " + e.getClass().getSimpleName());
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
@@ -38,7 +38,7 @@ public class ExprValCodeGen extends CodeGen {
 
       case StrLiteral s -> {
         Label strLabel = Label.get("str_" + strCounter++);
-        // correct alignment
+        // Correct alignment.
         asmProg.dataSection.emit(new Directive("align 2"));
         String escapeChar = s.value.replace("\n", "\\n").replace("\t", "\\t").replace("\"", "\\\"");
         asmProg.dataSection.emit(strLabel);
@@ -63,12 +63,10 @@ public class ExprValCodeGen extends CodeGen {
           case ADD, SUB, MUL, DIV, MOD, EQ, NE, LT, GT, LE, GE -> {
             Register leftReg = visit(b.left);
             Register rightReg = visit(b.right);
-
             switch (b.op) {
               case ADD -> text.emit(OpCode.ADD, resReg, leftReg, rightReg);
               case SUB -> text.emit(OpCode.SUB, resReg, leftReg, rightReg);
               case MUL -> text.emit(OpCode.MUL, resReg, leftReg, rightReg);
-
               case DIV -> {
                 text.emit(OpCode.DIV, leftReg, rightReg);
                 text.emit(OpCode.MFLO, resReg);
@@ -77,64 +75,47 @@ public class ExprValCodeGen extends CodeGen {
                 text.emit(OpCode.DIV, leftReg, rightReg);
                 text.emit(OpCode.MFHI, resReg);
               }
-
               case EQ, NE -> generateEqualityCheck(text, leftReg, rightReg, resReg, b.op);
               case LT -> text.emit(OpCode.SLT, resReg, leftReg, rightReg);
               case GT -> text.emit(OpCode.SLT, resReg, rightReg, leftReg);
-
-              case LE -> { // Less than or equal (left <= right)
+              case LE -> { // left <= right
                 Register tempReg = Register.Virtual.create();
-                text.emit(OpCode.SLT, tempReg, rightReg, leftReg); // right < left
-                text.emit(OpCode.XORI, resReg, tempReg, 1); // Flip result (1 if left <= right)
+                text.emit(OpCode.SLT, tempReg, rightReg, leftReg);
+                text.emit(OpCode.XORI, resReg, tempReg, 1);
               }
-              case GE -> { // Greater than or equal (left >= right)
+              case GE -> { // left >= right
                 Register tempReg = Register.Virtual.create();
-                text.emit(OpCode.SLT, tempReg, leftReg, rightReg); // left < right
-                text.emit(OpCode.XORI, resReg, tempReg, 1); // Flip result (1 if left >= right)
+                text.emit(OpCode.SLT, tempReg, leftReg, rightReg);
+                text.emit(OpCode.XORI, resReg, tempReg, 1);
               }
             }
           }
-
           case AND -> {
             Label falseLabel = Label.create();
             Label endLabel = Label.create();
             Register leftReg = visit(b.left);
-
-            // Short-circuit if left operand is zero
             text.emit(OpCode.BEQZ, leftReg, falseLabel);
-
-            // evaluate right operand if needed
             Register rightReg = visit(b.right);
             text.emit(OpCode.BEQZ, rightReg, falseLabel);
-            text.emit(OpCode.LI, resReg, 1); // If both nonzero, return 1
+            text.emit(OpCode.LI, resReg, 1);
             text.emit(OpCode.J, endLabel);
-
-            // Short-circuit case If left was 0, return 0
             text.emit(falseLabel);
             text.emit(OpCode.LI, resReg, 0);
             text.emit(endLabel);
           }
-
           case OR -> {
             Label trueLabel = Label.create();
             Label endLabel = Label.create();
             Register leftReg = visit(b.left);
-
-            // Short-circuit if left operand is 1
             text.emit(OpCode.BNEZ, leftReg, trueLabel);
-
-            // Now evaluate right operand only if needed
             Register rightReg = visit(b.right);
             text.emit(OpCode.BNEZ, rightReg, trueLabel);
-            text.emit(OpCode.LI, resReg, 0); // If both are 0, return 0
+            text.emit(OpCode.LI, resReg, 0);
             text.emit(OpCode.J, endLabel);
-
-            // Short-circuit case If left was 1, return 1
             text.emit(trueLabel);
             text.emit(OpCode.LI, resReg, 1);
             text.emit(endLabel);
           }
-
           default ->
               throw new UnsupportedOperationException(
                   "[ExprValCodeGen] Unsupported binary operator: " + b.op);
@@ -143,14 +124,25 @@ public class ExprValCodeGen extends CodeGen {
       }
 
       case Assign a -> {
+        // Evaluate left-hand side address.
         Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a.left);
         Register rhsReg = visit(a.right);
         Type type = a.left.type;
 
+        // If the LHS is a variable and is promoted, do a register-to-register move.
+        if (a.left instanceof VarExpr) {
+          VarDecl varDecl = allocator.getVarDecl(((VarExpr) a.left).name);
+          if (allocator.promotedRegisters.containsKey(varDecl)) {
+            // Here we simply move the computed value into the promoted register.
+            text.emit(OpCode.ADDU, addrReg, rhsReg, Register.Arch.zero);
+            return rhsReg;
+          }
+        }
+
+        // Otherwise, use the standard assignment code.
         if (type instanceof StructType structType) {
           int structSize = allocator.computeSize(structType);
           structSize = allocator.alignTo8(structSize);
-
           Register temp = Register.Virtual.create();
           Register counter = Register.Virtual.create();
           Register sizeReg = Register.Virtual.create();
@@ -193,19 +185,20 @@ public class ExprValCodeGen extends CodeGen {
 
       case VarExpr v -> {
         VarDecl varDecl = allocator.getVarDecl(v.name);
-        // get the address from ExprAddrCodeGen  handles parameters correctly
-        Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(v);
-
         if (varDecl == null || varDecl.type == null) {
           throw new IllegalStateException(
               "[ExprValCodeGen] ERROR: Variable type not found: " + v.name);
         }
-
+        // Get the address from ExprAddrCodeGen which already checks for promotion.
+        Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(v);
+        // If the variable was promoted, addrReg already holds its value.
+        if (allocator.promotedRegisters.containsKey(varDecl)) {
+          return addrReg;
+        }
         Type type = varDecl.type;
         if (type instanceof StructType structType) {
           int structSize = allocator.computeSize(structType);
           structSize = allocator.alignTo8(structSize);
-
           Register structAddr = Register.Virtual.create();
           Register counter = Register.Virtual.create();
           Register temp = Register.Virtual.create();
@@ -214,31 +207,25 @@ public class ExprValCodeGen extends CodeGen {
           Register sizeReg = Register.Virtual.create();
           Label copyLoop = Label.create();
           Label endCopy = Label.create();
-
-          text.emit(OpCode.ADDIU, structAddr, Register.Arch.sp, -structSize); // Reserve space
+          text.emit(OpCode.ADDIU, structAddr, Register.Arch.sp, -structSize);
           text.emit(OpCode.LI, counter, 0);
           text.emit(OpCode.LI, sizeReg, structSize);
-
           text.emit(copyLoop);
           Register cmpReg = Register.Virtual.create();
           text.emit(OpCode.SLT, cmpReg, counter, sizeReg);
           text.emit(OpCode.BEQZ, cmpReg, endCopy);
-
           text.emit(OpCode.ADDU, loadAddr, addrReg, counter);
           text.emit(OpCode.LW, temp, loadAddr, 0);
           text.emit(OpCode.ADDU, storeAddr, structAddr, counter);
           text.emit(OpCode.SW, temp, storeAddr, 0);
-
           text.emit(OpCode.ADDI, counter, counter, 4);
           text.emit(OpCode.J, copyLoop);
           text.emit(endCopy);
-
           return structAddr;
         } else if (type instanceof ArrayType) {
           // For array return the pointer computed by ExprAddrCodeGen.
           return addrReg;
         }
-
         if (type.equals(BaseType.CHAR)) {
           text.emit(OpCode.LBU, resReg, addrReg, 0);
         } else {
@@ -253,35 +240,27 @@ public class ExprValCodeGen extends CodeGen {
           SyscallCodeGen.generateSyscall(text, fc.name, argReg);
           return Register.Arch.v0;
         }
-
         String mangledFunctionName = getMangledFunctionName(fc.name, fc.args);
         Label funcLabel = Label.get(mangledFunctionName);
-
         if (!definedFunctions.contains(mangledFunctionName)) {
           throw new IllegalStateException(
               "[ExprValCodeGen] ERROR: Function not found: " + mangledFunctionName);
         }
-
         List<Register> argumentRegs = new ArrayList<>();
         int totalStackSize = 0;
-
         for (Expr arg : fc.args) {
           Type argType = arg.type;
           Register tempReg = visit(arg);
-
           if (argType instanceof StructType) {
             int argSize = allocator.computeSize(argType);
             argSize = allocator.alignTo8(argSize);
             totalStackSize += argSize;
-
             Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(arg);
             Register tempReg1 = Register.Virtual.create();
-
             for (int offset = 0; offset < argSize; offset += 4) {
               text.emit(OpCode.LW, tempReg1, addrReg, offset);
               text.emit(OpCode.SW, tempReg1, Register.Arch.sp, -totalStackSize + offset);
             }
-
           } else if (argType instanceof ArrayType) {
             totalStackSize += 4;
             argumentRegs.add(new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(arg));
@@ -293,19 +272,12 @@ public class ExprValCodeGen extends CodeGen {
         for (int i = 0; i < argumentRegs.size(); i++) {
           text.emit(OpCode.SW, argumentRegs.get(i), Register.Arch.sp, i * 4);
         }
-
-        // Call Function
+        // Call function.
         text.emit(OpCode.JAL, funcLabel);
-
-        // Cleanup Stack
+        // Cleanup stack.
         text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, totalStackSize);
-
-        // Retrieve Return Value from `$v0`
         Register returnReg = Register.Virtual.create();
         text.emit(OpCode.ADDU, returnReg, Register.Arch.v0, Register.Arch.zero);
-
-        // Return Register
-
         return returnReg;
       }
 
@@ -328,51 +300,35 @@ public class ExprValCodeGen extends CodeGen {
       case ArrayAccessExpr a -> {
         Register baseAddr =
             new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a.array);
-
         if (!(a.array.type instanceof ArrayType arrayType)) {
           throw new IllegalStateException(
               "[ExprValCodeGen] ERROR: ArrayAccessExpr on non-array type.");
         }
-
         Type elementType = arrayType.elementType;
         int elementSize = allocator.computeSize(elementType);
-
         Register offsetReg = Register.Virtual.create();
-        text.emit(OpCode.LI, offsetReg, 0); // Initialize offset to zero
-
+        text.emit(OpCode.LI, offsetReg, 0);
         for (int i = 0; i < a.indices.size(); i++) {
-          Register indexReg = visit(a.indices.get(i)); // Compute index value
-
-          // Compute correct stride for each dimension
+          Register indexReg = visit(a.indices.get(i));
           Register strideReg = Register.Virtual.create();
           int stride = 1;
           for (int j = i + 1; j < a.indices.size(); j++) {
             stride *= arrayType.dimensions.get(j);
           }
           text.emit(OpCode.LI, strideReg, stride);
-
-          // Multiply index by stride
           text.emit(OpCode.MUL, indexReg, indexReg, strideReg);
-
-          // Accumulate into final offset
           text.emit(OpCode.ADDU, offsetReg, offsetReg, indexReg);
         }
-
-        // Multiply final offset by element size
         Register sizeReg = Register.Virtual.create();
         text.emit(OpCode.LI, sizeReg, elementSize);
         text.emit(OpCode.MUL, offsetReg, offsetReg, sizeReg);
-
-        // Compute the final address
         Register finalAddr = Register.Virtual.create();
         text.emit(OpCode.ADDU, finalAddr, baseAddr, offsetReg);
-
         System.out.println("[ExprValCodeGen] Computed array element address.");
-
         if (elementType.equals(BaseType.CHAR)) {
-          text.emit(OpCode.LBU, resReg, finalAddr, 0); // Load byte for char
+          text.emit(OpCode.LBU, resReg, finalAddr, 0);
         } else {
-          text.emit(OpCode.LW, resReg, finalAddr, 0); // Load word for other types
+          text.emit(OpCode.LW, resReg, finalAddr, 0);
         }
         return resReg;
       }
@@ -382,11 +338,10 @@ public class ExprValCodeGen extends CodeGen {
             new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(fa.structure);
         if (fa.structure.type instanceof StructType structType) {
           int offset = allocator.computeFieldOffset(structType, fa.field);
-
           if (fa.type.equals(BaseType.CHAR)) {
-            text.emit(OpCode.LBU, resReg, baseReg, offset); // Load byte for char fields
+            text.emit(OpCode.LBU, resReg, baseReg, offset);
           } else {
-            text.emit(OpCode.LW, resReg, baseReg, offset); // Load word for other types
+            text.emit(OpCode.LW, resReg, baseReg, offset);
           }
           return resReg;
         }
