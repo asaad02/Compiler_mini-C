@@ -7,8 +7,8 @@ import java.util.List;
 /** Generates code to calculate the address of an expression and return the result in a register. */
 
 /**
- * Generates code to compute memory addresses for expressions and Variables global and local Array
- * elements - Struct fields.
+ * Generates code to compute memory addresses for expressions and variables: - For global and local
+ * array elements and struct fields.
  */
 public class ExprAddrCodeGen extends CodeGen {
   private final MemAllocCodeGen allocator;
@@ -35,6 +35,12 @@ public class ExprAddrCodeGen extends CodeGen {
 
         if (varDecl == null) {
           throw new IllegalStateException("[ExprAddrCodeGen] ERROR: Variable not found: " + v.name);
+        }
+
+        // If the variable was promoted, use its register directly.
+        if (allocator.promotedRegisters.containsKey(varDecl)) {
+          System.out.println("[ExprAddrCodeGen] Using promoted register for variable: " + v.name);
+          return allocator.promotedRegisters.get(varDecl);
         }
 
         // Check if variable is an array
