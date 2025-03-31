@@ -80,7 +80,6 @@ public class SyscallCodeGen {
         OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -8); // Ensure stack is 8-byte aligned
     text.emit(OpCode.LI, Register.Arch.v0, 9); // Syscall code for memory allocation
     text.emit(OpCode.SYSCALL);
-
     text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, 8); // Restore stack after syscall
 
     // Ensure memory allocation succeeded
