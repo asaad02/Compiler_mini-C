@@ -108,7 +108,9 @@ main() {
   display_header
   check_build_file
   run_ant_build
-
+            # after running remove all ast files with ending .ast
+        rm -f "$CODEGEN_OUTPUT_DIR"/*.ast
+        rm -f "$CODEGEN_OUTPUT_DIR"/*regalloc.asm
   # Run various test phases
   #run_tests "$TEST_PARSER_DIR" "parser"
   #run_tests "$TEST_LEXER_DIR" "lexer"

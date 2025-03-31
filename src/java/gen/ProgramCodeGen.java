@@ -21,7 +21,7 @@ public class ProgramCodeGen extends CodeGen {
 
     MemAllocCodeGen allocator = new MemAllocCodeGen(asmProg);
 
-    // Pass to collect function names.
+    // pass to collect function names
     for (Decl d : p.decls) {
       if (d instanceof FunDef fd) {
         String uniqueFunctionName = getUniqueFunctionName(fd);
@@ -29,7 +29,7 @@ public class ProgramCodeGen extends CodeGen {
       }
     }
 
-    // Register struct declarations properly.
+    // register struct declarations properly
     for (Decl d : p.decls) {
       if (d instanceof StructTypeDecl std) {
         if (std.structType.name == null) {
@@ -41,14 +41,7 @@ public class ProgramCodeGen extends CodeGen {
       }
     }
 
-    // Run a preliminary pass to promote eligible variables for each function.
-    for (Decl d : p.decls) {
-      if (d instanceof FunDef fd) {
-        promoteVariables(fd);
-      }
-    }
-
-    // Allocate for functions with array or struct parameters.
+    // alocate function has array parameters
     for (Decl d : p.decls) {
       if (d instanceof FunDef fd
           && !fd.name.equals("main")
@@ -58,7 +51,6 @@ public class ProgramCodeGen extends CodeGen {
         new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
       }
     }
-    // Allocate globals and then process each function.
     for (Decl d : p.decls) {
       if (d instanceof VarDecl vd) {
         allocator.allocateGlobalVariable(vd);
@@ -75,7 +67,7 @@ public class ProgramCodeGen extends CodeGen {
       }
     }
 
-    // Generate code for remaining functions.
+    // pass to Generate function code but not main
     for (Decl d : p.decls) {
       if (d instanceof FunDef fd
           && !fd.name.equals("main")
@@ -86,33 +78,13 @@ public class ProgramCodeGen extends CodeGen {
       }
     }
 
+    // Print Assembly Sections and Debug Table
     // printAssemblySections();
+    // allocator.printAllMemory();
     System.out.println("[ProgramCodeGen] Program generation completed successfully.");
   }
 
-  private void promoteVariables(FunDef fd) {
-    // Process local variable declarations in the function's block.
-    for (VarDecl vd : fd.block.vds) {
-      if (!(vd.type instanceof ArrayType)
-          && !(vd.type instanceof StructType)
-          && !(vd.type instanceof PointerType)) {
-        for (Stmt e : fd.block.stmts) {
-          if (e instanceof ExprStmt es && es.expr instanceof VarExpr ve) {
-            if (ve.name.equals(vd.name)) {
-              System.out.println(
-                  "[Promotion] Variable '" + vd.name + "' is used with address-of operator.");
-              return;
-            }
-          }
-        }
-        vd.promoteToRegister = true;
-        System.out.println(
-            "[Promotion] Marking variable '" + vd.name + "' for register promotion.");
-      }
-    }
-  }
-
-  // check if the parameter is an array type
+  // check if the parameter is a array type
   private boolean arrayParams(FunDef fd) {
     for (VarDecl vd : fd.params) {
       if (vd.type instanceof ArrayType) {

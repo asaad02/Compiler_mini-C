@@ -54,18 +54,6 @@ public class SyscallCodeGen {
   private static void handleReadInteger(AssemblyProgram.TextSection text) {
     text.emit(OpCode.LI, Register.Arch.v0, 5); // Syscall code for read integer
     text.emit(OpCode.SYSCALL);
-
-    // Ensure valid input
-    Label validInput = Label.create();
-    Label endLabel = Label.create();
-
-    text.emit(OpCode.BGEZ, Register.Arch.v0, validInput); // If input is valid (>= 0), jump
-    text.emit(OpCode.LI, Register.Arch.v0, 0); // Otherwise, set default to 0
-
-    text.emit(OpCode.J, endLabel);
-
-    text.emit(validInput);
-    text.emit(endLabel);
   }
 
   private static void handleReadChar(AssemblyProgram.TextSection text) {
@@ -80,19 +68,6 @@ public class SyscallCodeGen {
         OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -8); // Ensure stack is 8-byte aligned
     text.emit(OpCode.LI, Register.Arch.v0, 9); // Syscall code for memory allocation
     text.emit(OpCode.SYSCALL);
-
-    text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, 8); // Restore stack after syscall
-
-    // Ensure memory allocation succeeded
-    Label validAlloc = Label.create();
-    Label endLabel = Label.create();
-
-    text.emit(OpCode.BNEZ, Register.Arch.v0, validAlloc); // If allocation is non-zero, it succeeded
-    text.emit(OpCode.LI, Register.Arch.v0, 0); // Otherwise, set return value to NULL (0)
-    text.emit(OpCode.J, endLabel);
-
-    text.emit(validAlloc);
-    text.emit(endLabel);
   }
 
   private static void ensureArgNotNull(String syscall, Register arg) {

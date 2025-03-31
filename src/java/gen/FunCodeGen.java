@@ -79,18 +79,6 @@ public class FunCodeGen extends CodeGen {
         textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
         textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
         paramStackOffset += 4;
-
-        // Store array dimensions
-        int strideOffset = 4;
-        int stride = 1;
-        ArrayType at = (ArrayType) paramType;
-        for (int dim = at.dimensions.size() - 1; dim >= 0; dim--) {
-          stride *= at.dimensions.get(dim);
-          Register strideReg = Register.Virtual.create();
-          textSection.emit(OpCode.LI, strideReg, stride);
-          textSection.emit(OpCode.SW, strideReg, Register.Arch.fp, localOffset + strideOffset);
-          strideOffset += 4;
-        }
       } else {
         Register temp = Register.Virtual.create();
         textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
@@ -109,6 +97,7 @@ public class FunCodeGen extends CodeGen {
     textSection.emit(epilogueLabel);
 
     textSection.emit(OpCode.POP_REGISTERS);
+
     textSection.emit(OpCode.LW, Register.Arch.ra, Register.Arch.sp, frameSize - 4);
     textSection.emit(OpCode.LW, Register.Arch.fp, Register.Arch.sp, frameSize - 8);
     textSection.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, frameSize);

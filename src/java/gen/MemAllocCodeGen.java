@@ -20,9 +20,6 @@ public class MemAllocCodeGen extends CodeGen {
   public final Set<String> globalVariables = new HashSet<>();
   private final Map<String, Map<String, Integer>> structFieldOffsets = new HashMap<>();
 
-  // promoted variables assign a virtual register.
-  public final Map<VarDecl, Register.Virtual> promotedRegisters = new HashMap<>();
-
   public final AssemblyProgram.Section dataSection;
 
   private int globalOffset = 0;
@@ -76,7 +73,6 @@ public class MemAllocCodeGen extends CodeGen {
       System.out.printf(
           "[MemAllocCodeGen] Param: %s | Offset: %d\n", param.name, getLocalOffset(param));
     }
-    exitScope();
   }
 
   void allocateFunctionParameter(VarDecl vd, int paramIndex) {
@@ -102,27 +98,11 @@ public class MemAllocCodeGen extends CodeGen {
         vd.name, offset, computeSize(vd.type), computeAlignment(vd.type));
   }
 
-  public void allocateVariable(VarDecl vd) {
-    if (scopeStack.isEmpty()) {
-      allocateGlobalVariable(vd);
-    } else {
-      if (vd.promoteToRegister) {
-        Register.Virtual reg = Register.Virtual.create();
-        promotedRegisters.put(vd, reg);
-        // Register the variable in the current scope for lookup.
-        scopeStack.peek().put(vd.name, vd);
-        System.out.println(
-            "[MemAllocCodeGen] Promoted variable '" + vd.name + "' allocated to register " + reg);
-      } else {
-        allocateLocalVariable(vd);
-      }
-    }
-  }
-
   private void allocateLocalVariable(VarDecl vd) {
     if (scopeStack.peek().containsKey(vd.name)) {
       throw new IllegalStateException("[MemAlloc] ERROR: Variable redeclared: " + vd.name);
     }
+
     int alignedSize = alignTo4(computeSize(vd.type));
     fpOffset -= alignedSize;
     localVarOffsets.put(vd, fpOffset);
@@ -136,6 +116,7 @@ public class MemAllocCodeGen extends CodeGen {
     if (globalVars.containsKey(vd.name)) {
       throw new IllegalStateException("[MemAlloc] ERROR: Global variable redeclared: " + vd.name);
     }
+
     globalVars.put(vd.name, vd);
     globalOffset = alignTo(globalOffset, computeAlignment(vd.type)); // Ensure proper alignment
     globalVarOffsets.put(vd.name, globalOffset); // Track per-variable offsets
@@ -155,7 +136,7 @@ public class MemAllocCodeGen extends CodeGen {
     if (!globalVars.containsKey(vd.name)) {
       throw new IllegalStateException("[MemAlloc] ERROR: Global variable not found: " + vd.name);
     }
-    return globalVarOffsets.getOrDefault(vd.name, -1);
+    return globalOffset;
   }
 
   // Computes memory size for different types
@@ -201,32 +182,36 @@ public class MemAllocCodeGen extends CodeGen {
   public int computeStructSize(StructTypeDecl structDecl) {
     int offset = 0;
     int maxAlignment = 1;
+
     for (VarDecl field : structDecl.fields) {
       int fieldAlign = computeAlignment(field.type);
       offset = alignTo(offset, fieldAlign);
       maxAlignment = Math.max(maxAlignment, fieldAlign);
       offset += computeSize(field.type);
     }
+
     return alignTo(offset, maxAlignment);
   }
 
   public int computeFieldOffset(StructType structType, String fieldName) {
-    Map<String, Integer> fieldOffsets =
-        structFieldOffsets.computeIfAbsent(structType.name, k -> new HashMap<>());
-    if (fieldOffsets.containsKey(fieldName)) {
-      return fieldOffsets.get(fieldName);
+    structFieldOffsets.computeIfAbsent(structType.name, k -> new HashMap<>());
+    if (structFieldOffsets.get(structType.name).containsKey(fieldName)) {
+      return structFieldOffsets.get(structType.name).get(fieldName);
     }
+
     StructTypeDecl structDecl = structDeclarations.get(structType.name);
     if (structDecl == null) {
       throw new IllegalStateException("[MemAlloc] ERROR: Struct not found: " + structType.name);
     }
+
     int offset = 0;
     for (VarDecl field : structDecl.fields) {
       offset = alignTo(offset, computeAlignment(field.type));
-      fieldOffsets.put(field.name, offset);
+      structFieldOffsets.get(structType.name).put(field.name, offset);
       offset += computeSize(field.type);
     }
-    return fieldOffsets.getOrDefault(fieldName, -1);
+
+    return structFieldOffsets.get(structType.name).getOrDefault(fieldName, -1);
   }
 
   public int getArrayDimensionSize(ArrayType arrayType, int i) {
@@ -243,49 +228,50 @@ public class MemAllocCodeGen extends CodeGen {
 
   public void exitScope() {
     if (!scopeStack.isEmpty()) {
-      Map<String, VarDecl> poppedScope = scopeStack.pop();
-      for (VarDecl vd : poppedScope.values()) {
-        if (promotedRegisters.containsKey(vd)) {
-          promotedRegisters.remove(vd);
-        }
-      }
-      System.out.println("[MemAllocCodeGen] EXIT scope now level: " + scopeStack.size());
+      scopeStack.pop();
+      System.out.println("[MemAllocCodeGen] EXIT scope  now level: " + scopeStack.size());
     } else {
       throw new IllegalStateException(
           "[MemAllocCodeGen] ERROR: Attempted to exit non-existent scope!");
     }
   }
 
+  // allocateVariable
+  public void allocateVariable(VarDecl vd) {
+    if (scopeStack.isEmpty()) {
+      allocateGlobalVariable(vd);
+    } else {
+      allocateLocalVariable(vd);
+    }
+  }
+
   public int getLocalOffset(VarDecl varDecl, int scopeLevel) {
+    // Variable not found
     if (scopeLevel < 0) return -1;
     return localVarOffsets.getOrDefault(varDecl, -1);
   }
 
   public int getLocalOffset(VarDecl varDecl) {
-    if (promotedRegisters.containsKey(varDecl)) {
-      throw new IllegalStateException(
-          "[MemAllocCodeGen] ERROR: Variable '"
-              + varDecl.name
-              + "' is promoted to register "
-              + promotedRegisters.get(varDecl)
-              + " and has no stack offset.");
-    }
     int scopeLevel = getScopeLevel(varDecl.name);
     if (scopeLevel < 0) {
       throw new IllegalStateException(
           "[ExprAddrCodeGen] ERROR: Variable not found: " + varDecl.name);
     }
+
     if (localVarOffsets.containsKey(varDecl)) {
       return localVarOffsets.get(varDecl);
     }
+
     throw new IllegalStateException(
         "[ExprAddrCodeGen] ERROR: Offset not found for: " + varDecl.name);
   }
 
+  // allign to 8 bytes
   public int alignTo8(int value) {
     return (value + 7) & ~7;
   }
 
+  // retrieves a variable declaration considering scoping and shadowing.
   public VarDecl getVarDecl(String name) {
     for (int i = scopeStack.size() - 1; i >= 0; i--) {
       Map<String, VarDecl> scope = scopeStack.get(i);
@@ -293,16 +279,20 @@ public class MemAllocCodeGen extends CodeGen {
         return scope.get(name);
       }
     }
+
+    // Only return global if no local variable exists
     if (globalVars.containsKey(name)) {
       return globalVars.get(name);
     }
     throw new IllegalStateException("[MemAllocCodeGen] ERROR: Variable not found: " + name);
   }
 
+  // Returns the total stack frame size for a function.
   public int getFrameSize(FunDef fd) {
     return frameSizes.getOrDefault(fd, 0);
   }
 
+  // Checks if a variable is global.
   public boolean isGlobal(String name) {
     return globalVars.containsKey(name);
   }
@@ -312,16 +302,20 @@ public class MemAllocCodeGen extends CodeGen {
       throw new IllegalStateException(
           "[MemAllocCodeGen] ERROR: Attempting to retrieve a struct with a NULL name!");
     }
+
     StructTypeDecl structDecl = structDeclarations.get(structName);
+
     if (structDecl == null) {
       System.err.println("[MemAllocCodeGen] ERROR: Struct not found: " + structName);
       System.err.println("Available Structs: " + structDeclarations.keySet());
       throw new IllegalStateException("[MemAllocCodeGen] ERROR: Struct not found: " + structName);
     }
+
     if (structDecl.structType == null || structDecl.structType.name == null) {
       throw new IllegalStateException(
           "[MemAllocCodeGen] ERROR: StructType in StructTypeDecl is NULL for: " + structName);
     }
+
     return structDecl;
   }
 
@@ -330,24 +324,30 @@ public class MemAllocCodeGen extends CodeGen {
       throw new IllegalStateException(
           "[MemAllocCodeGen] ERROR: Attempting to register a NULL struct!");
     }
+
     System.out.println("[MemAllocCodeGen] Registering struct: " + structDecl.structType.name);
+
     if (structDeclarations.containsKey(structDecl.structType.name)) {
       throw new IllegalStateException(
           "[MemAllocCodeGen] ERROR: Struct already declared: " + structDecl.structType.name);
     }
+
     structDeclarations.put(structDecl.structType.name, structDecl);
     structSizes.put(structDecl.structType.name, computeStructSize(structDecl));
   }
 
   public int getScopeLevel(String varName) {
+    int level = 0;
     for (int i = scopeStack.size() - 1; i >= 0; i--) {
       if (scopeStack.get(i).containsKey(varName)) {
-        return scopeStack.size() - 1 - i; // level 0 = innermost scope
+        return level;
       }
+      level++;
     }
     return -1;
   }
 
+  // computeFrameSize
   public int computeFrameSize(FunDef fd) {
     int frameSize = 0;
     for (VarDecl param : fd.params) {
@@ -359,6 +359,7 @@ public class MemAllocCodeGen extends CodeGen {
     return frameSize;
   }
 
+  // getFunctionDefinition
   public FunDef getFunctionDefinition(String name) {
     for (FunDef fd : frameSizes.keySet()) {
       if (fd.name.equals(name)) {
@@ -368,6 +369,7 @@ public class MemAllocCodeGen extends CodeGen {
     throw new IllegalStateException("[MemAllocCodeGen] ERROR: Function not found: " + name);
   }
 
+  // getLocalOffset string
   public int getLocalOffset(String varName) {
     for (int i = scopeStack.size() - 1; i >= 0; i--) {
       Map<String, VarDecl> scope = scopeStack.get(i);
@@ -378,10 +380,7 @@ public class MemAllocCodeGen extends CodeGen {
     throw new IllegalStateException("[MemAllocCodeGen] ERROR: Variable not found: " + varName);
   }
 
-  private int align(int value, int alignment) {
-    return (value + alignment - 1) & ~(alignment - 1);
-  }
-
+  // call printAllMemoryDebug
   public void printAllMemory() {
     MemDebugUtils.printAllMemoryDebug(this);
   }

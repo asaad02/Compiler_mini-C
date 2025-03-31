@@ -71,13 +71,9 @@ run_tests() {
 
 count_memory_accesses() {
   local file=$1
-  awk '
-    BEGIN { count=0 }
-    /^[[:space:]]*#/ || /^$/ { next }
-    /^[[:space:]]*(lw|sw)\b/ { count++ }
-    END { print count }
-  ' "$file"
+  grep -Ei '^[[:space:]]*(lw|sw)[[:space:]]' "$file" | wc -l
 }
+
 
 run_regalloc() {
   echo -e "${YELLOW}Running Register Allocation (-regalloc colour)...${NC}"
@@ -168,7 +164,7 @@ main() {
   run_mars_simulation
   display_results
 
-  rm -f "$CODEGEN_OUTPUT_DIR"/*.asm "$CODEGEN_OUTPUT_DIR"/*.regalloc.asm
+  #rm -f "$CODEGEN_OUTPUT_DIR"/*.asm "$CODEGEN_OUTPUT_DIR"/*.regalloc.asm
 }
 
 main
