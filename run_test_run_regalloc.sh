@@ -10,7 +10,7 @@ NC="\033[0m" # No Color
 # Directories
 BUILD_DIR="bin"
 SRC_DIR="."
-TEST_CODEGEN_DIR="$SRC_DIR/tests/test/test_codegen"
+TEST_CODEGEN_DIR="$SRC_DIR/tests/test/old_test"
 CODEGEN_OUTPUT_DIR="./description/part3"
 MARS_JAR="./description/part3/Mars4_5.jar"
 
@@ -73,6 +73,8 @@ count_memory_accesses() {
   local file=$1
   grep -Ei '^[[:space:]]*(lw|sw)[[:space:]]' "$file" | wc -l
 }
+
+
 
 
 run_regalloc() {
@@ -163,6 +165,11 @@ main() {
   run_regalloc
   run_mars_simulation
   display_results
+
+    echo -e "${YELLOW}Compiling TestGraphColouringRegAlloc.java...${NC}"
+    echo -e "${YELLOW}Running TestGraphColouringRegAlloc...${NC}"
+    java -cp "$BUILD_DIR:lib/*:." TestGraphColouringRegAlloc
+
 
   #rm -f "$CODEGEN_OUTPUT_DIR"/*.asm "$CODEGEN_OUTPUT_DIR"/*.regalloc.asm
 }
