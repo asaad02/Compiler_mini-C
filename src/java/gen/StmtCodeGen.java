@@ -216,11 +216,12 @@ public class StmtCodeGen extends CodeGen {
         Register returnAddr = Register.Arch.a0; // or load from $fp + offset if full compliance
 
         // Allocate memory for struct return
-        text.emit(OpCode.ADDIU, returnAddr, Register.Arch.sp, -structSize);
+        int alignedSize = allocator.alignTo8(structSize);
+        text.emit(OpCode.ADDIU, returnAddr, Register.Arch.sp, -alignedSize);
         text.emit(OpCode.ADDU, Register.Arch.v0, returnAddr, Register.Arch.zero);
 
         Register srcReg = addrGen.visit(rs.expr);
-        for (int offset = 0; offset < structSize; offset += 4) {
+        for (int offset = 0; offset < alignedSize; offset += 4) {
           Register temp = Register.Virtual.create();
           text.emit(OpCode.LW, temp, srcReg, offset);
           text.emit(OpCode.SW, temp, returnAddr, offset);

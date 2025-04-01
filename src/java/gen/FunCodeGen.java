@@ -68,7 +68,7 @@ public class FunCodeGen extends CodeGen {
 
       if (paramType instanceof StructType) {
         // Structs are passed by copy, copy each word manually
-        int structSize = allocator.computeSize(paramType);
+        int structSize = allocator.alignTo(allocator.computeSize(paramType), 8);
         for (int word = 0; word < structSize; word += 4) {
           Register temp = Register.Virtual.create();
           textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset + word);
@@ -83,17 +83,6 @@ public class FunCodeGen extends CodeGen {
         textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
         paramStackOffset += 4;
 
-        // Store array dimensions
-        int strideOffset = 4;
-        int stride = 1;
-        ArrayType at = (ArrayType) paramType;
-        for (int dim = at.dimensions.size() - 1; dim >= 0; dim--) {
-          stride *= at.dimensions.get(dim);
-          Register strideReg = Register.Virtual.create();
-          textSection.emit(OpCode.LI, strideReg, stride);
-          textSection.emit(OpCode.SW, strideReg, Register.Arch.fp, localOffset + strideOffset);
-          strideOffset += 4;
-        }
       } else {
         Register temp = Register.Virtual.create();
         textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
