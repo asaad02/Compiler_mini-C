@@ -136,7 +136,7 @@ public class MemAllocCodeGen extends CodeGen {
     if (!globalVars.containsKey(vd.name)) {
       throw new IllegalStateException("[MemAlloc] ERROR: Global variable not found: " + vd.name);
     }
-    return globalOffset;
+    return globalVarOffsets.get(vd.name);
   }
 
   // Computes memory size for different types
