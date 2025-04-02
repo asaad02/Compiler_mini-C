@@ -82,6 +82,9 @@ public class GraphColouringRegAlloc implements AssemblyPass {
       System.out.println("  Step7: Rewriting instructions...");
       AssemblyProgram.TextSection newSec = rewriteSection(oldSection, colorRes, dead);
 
+      System.out.println("  Step7.5: Final optimization pass...");
+      finalOptimizationPass(newSec);
+
       System.out.println("  Step8: Checking jr $ra presence...");
       ensureJrRa(newSec);
 
@@ -123,8 +126,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
   private CFG buildCFG(AssemblyProgram.TextSection sec) {
     CFG cfg = new CFG();
     List<Instruction> instructions = new ArrayList<>();
-
-    int index = 0;
     for (AssemblyItem item : sec.items) {
       if (item instanceof Label lbl) {
         cfg.labelToIndex.put(lbl, instructions.size());
@@ -155,7 +156,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         case JUMP_REGISTER -> {
           unconditional = true;
           if (insn instanceof Instruction.JumpRegister jr && !jr.address.equals(Register.Arch.ra)) {
-            // link to all for safety
             for (int k = 0; k < cfg.nodes.size(); k++) {
               if (k != i) node.successors.add(cfg.nodes.get(k));
             }
@@ -175,7 +175,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         }
         default -> {}
       }
-
       if (!unconditional && i + 1 < cfg.nodes.size()) {
         node.successors.add(cfg.nodes.get(i + 1));
       }
@@ -192,7 +191,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         Set<Register.Virtual> oldIn = new HashSet<>(n.liveIn);
         Set<Register.Virtual> oldOut = new HashSet<>(n.liveOut);
 
-        // out = union of succ.in
         Set<Register.Virtual> newOut = new HashSet<>();
         for (CFGNode s : n.successors) {
           newOut.addAll(s.liveIn);
@@ -261,9 +259,18 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     cfg.nodes.removeIf(n -> dead.contains(n.insn));
   }
 
+  private static class InterferenceGraph {
+    final Map<Register.Virtual, Set<Register.Virtual>> edges = new HashMap<>();
+
+    void addEdge(Register.Virtual v1, Register.Virtual v2) {
+      edges.computeIfAbsent(v1, k -> new HashSet<>()).add(v2);
+      edges.computeIfAbsent(v2, k -> new HashSet<>()).add(v1);
+    }
+  }
+
   private InterferenceGraph buildInterferenceGraph(CFG cfg) {
     InterferenceGraph ig = new InterferenceGraph();
-    // initialize
+
     for (CFGNode n : cfg.nodes) {
       for (Register r : n.insn.registers()) {
         if (r.isVirtual()) {
@@ -273,12 +280,10 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     }
 
     for (CFGNode n : cfg.nodes) {
-      List<Register.Virtual> outlist = new ArrayList<>(n.liveOut);
-      for (int i = 0; i < outlist.size(); i++) {
-        for (int j = i + 1; j < outlist.size(); j++) {
-          Register.Virtual v1 = outlist.get(i);
-          Register.Virtual v2 = outlist.get(j);
-          ig.addEdge(v1, v2);
+      List<Register.Virtual> outList = new ArrayList<>(n.liveOut);
+      for (int i = 0; i < outList.size(); i++) {
+        for (int j = i + 1; j < outList.size(); j++) {
+          ig.addEdge(outList.get(i), outList.get(j));
         }
       }
 
@@ -307,20 +312,18 @@ public class GraphColouringRegAlloc implements AssemblyPass {
   }
 
   private static class ColorResult {
-    public final Map<Register.Virtual, Register> colorMap = new HashMap<>();
-    public final Set<Register.Virtual> spilled = new HashSet<>();
+    final Map<Register.Virtual, Register> colorMap = new HashMap<>();
+    final Set<Register.Virtual> spilled = new HashSet<>();
   }
 
   private ColorResult doColor(InterferenceGraph ig, Map<Register.Virtual, Integer> freq) {
     ColorResult cr = new ColorResult();
-
     Set<Register.Virtual> removed = new HashSet<>();
     Stack<Register.Virtual> stack = new Stack<>();
     boolean progress = true;
     int K = ALL_COLORABLE.size();
     while (progress) {
       progress = false;
-
       for (Register.Virtual v : ig.edges.keySet()) {
         if (removed.contains(v) || cr.spilled.contains(v)) continue;
         long deg =
@@ -331,11 +334,10 @@ public class GraphColouringRegAlloc implements AssemblyPass {
           stack.push(v);
           removed.add(v);
           progress = true;
-          break;
+          break; // restart scanning
         }
       }
       if (!progress) {
-
         Optional<Register.Virtual> cand =
             ig.edges.keySet().stream()
                 .filter(v -> !removed.contains(v) && !cr.spilled.contains(v))
@@ -360,8 +362,8 @@ public class GraphColouringRegAlloc implements AssemblyPass {
       Register.Virtual v = stack.pop();
       Set<Register> usedColors = new HashSet<>();
       for (Register.Virtual neigh : ig.edges.get(v)) {
-        Register c = cr.colorMap.get(neigh);
-        if (c != null) usedColors.add(c);
+        Register color = cr.colorMap.get(neigh);
+        if (color != null) usedColors.add(color);
       }
       Register chosen = null;
       for (Register r : ALL_COLORABLE) {
@@ -396,10 +398,13 @@ public class GraphColouringRegAlloc implements AssemblyPass {
           rewriteOneInstruction(outSec, insn, cr);
         }
       } else {
+        // For labels, directives, or comments, just emit them.
         if (item instanceof Instruction insn) {
           outSec.emit(insn);
         } else if (item instanceof AssemblyTextItem ati) {
           outSec.emit(ati);
+        } else {
+          throw new RuntimeException("Unknown item type: " + item);
         }
       }
     }
@@ -408,7 +413,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
 
   private void expandPushRegisters(AssemblyProgram.TextSection sec, ColorResult cr) {
     System.out.println("  [Rewrite] Expanding pushRegisters");
-    // gather all VR
     Set<Register.Virtual> allVr = new HashSet<>(cr.colorMap.keySet());
     allVr.addAll(cr.spilled);
     if (allVr.isEmpty()) return;
@@ -417,7 +421,7 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     sorted.sort(Comparator.comparing(v -> v.name));
     for (Register.Virtual vr : sorted) {
       loadVregInto(sec, vr, Register.Arch.t0, cr);
-      sec.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -4); // push
+      sec.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -4);
       sec.emit(OpCode.SW, Register.Arch.t0, Register.Arch.sp, 0);
     }
   }
@@ -440,9 +444,7 @@ public class GraphColouringRegAlloc implements AssemblyPass {
 
   private void rewriteOneInstruction(
       AssemblyProgram.TextSection sec, Instruction insn, ColorResult cr) {
-    // ephemeral regs for spilled VR
     Stack<Register> ephemeral = new Stack<>();
-
     ephemeral.push(SPILL_TEMP_2);
     ephemeral.push(SPILL_TEMP_1);
 
@@ -502,9 +504,7 @@ public class GraphColouringRegAlloc implements AssemblyPass {
   private boolean isRedundantAddu(Instruction i) {
     if (i instanceof Instruction.TernaryArithmetic ta) {
       if (ta.opcode == OpCode.ADDU) {
-
         if (ta.dst.equals(ta.src1) && ta.src2.equals(Register.Arch.zero)) return true;
-
         if (ta.dst.equals(ta.src2) && ta.src1.equals(Register.Arch.zero)) return true;
       }
     }
@@ -549,9 +549,7 @@ public class GraphColouringRegAlloc implements AssemblyPass {
 
   private void storeSpill(AssemblyProgram.TextSection sec, Register.Virtual vr, Register src) {
     Label slot = getSpillLabel(vr);
-    // la $t1, slot
     sec.emit(OpCode.LA, SPILL_TEMP_2, slot);
-    // sw $src,0($t1)
     sec.emit(OpCode.SW, src, SPILL_TEMP_2, 0);
   }
 
@@ -568,6 +566,35 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     if (!found) {
       sec.emit(OpCode.JR, Register.Arch.ra);
     }
+  }
+
+  private void finalOptimizationPass(AssemblyProgram.TextSection sec) {
+    List<AssemblyItem> optimized = new ArrayList<>();
+    Map<Register, Register> copyMap = new HashMap<>();
+    for (AssemblyItem item : sec.items) {
+      if (item instanceof Instruction.TernaryArithmetic ta && ta.opcode == OpCode.ADDU) {
+        if (ta.dst.equals(ta.src1) && ta.src2.equals(Register.Arch.zero)) {
+          copyMap.put(ta.dst, ta.src1);
+          continue;
+        } else if (ta.dst.equals(ta.src2) && ta.src1.equals(Register.Arch.zero)) {
+          copyMap.put(ta.dst, ta.src2);
+          continue;
+        }
+      }
+      if (item instanceof Instruction insn) {
+        Map<Register, Register> mapping = new HashMap<>();
+        for (Register r : insn.registers()) {
+          if (copyMap.containsKey(r)) {
+            mapping.put(r, copyMap.get(r));
+          }
+        }
+        optimized.add(insn.rebuild(mapping));
+      } else {
+        optimized.add(item);
+      }
+    }
+    sec.items.clear();
+    sec.items.addAll(optimized);
   }
 
   private void debugPrintLiveness(String title, CFG cfg) {
