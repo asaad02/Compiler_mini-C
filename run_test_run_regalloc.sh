@@ -10,7 +10,7 @@ NC="\033[0m" # No Color
 # Directories
 BUILD_DIR="bin"
 SRC_DIR="."
-TEST_CODEGEN_DIR="$SRC_DIR/tests/test/old_test"
+TEST_CODEGEN_DIR="$SRC_DIR/tests/test/test_codegen"
 CODEGEN_OUTPUT_DIR="./description/part3"
 MARS_JAR="./description/part3/Mars4_5.jar"
 
@@ -74,9 +74,6 @@ count_memory_accesses() {
   grep -Ei '^[[:space:]]*(lw|sw)[[:space:]]' "$file" | wc -l
 }
 
-
-
-
 run_regalloc() {
   echo -e "${YELLOW}Running Register Allocation (-regalloc colour)...${NC}"
 
@@ -130,6 +127,18 @@ run_mars_simulation() {
   done
 }
 
+print_memory_accesses() {
+  echo -e "${CYAN}======== Memory Access Summary ========${NC}"
+  for file in "$CODEGEN_OUTPUT_DIR"/*.regalloc.asm; do
+    if [ -f "$file" ]; then
+      local count
+      count=$(count_memory_accesses "$file")
+      echo -e "${YELLOW}$(basename "$file"): $count memory accesses${NC}"
+    fi
+  done
+  echo -e "${CYAN}=========================================${NC}"
+}
+
 display_results() {
   echo -e "${CYAN}================= TEST RESULTS =================${NC}"
   echo -e "${GREEN}Passed Tests: ${#PASSED_TESTS[@]}${NC}"
@@ -165,13 +174,14 @@ main() {
   run_regalloc
   run_mars_simulation
   display_results
+  print_memory_accesses
 
-    echo -e "${YELLOW}Compiling TestGraphColouringRegAlloc.java...${NC}"
-    echo -e "${YELLOW}Running TestGraphColouringRegAlloc...${NC}"
-    java -cp "$BUILD_DIR:lib/*:." TestGraphColouringRegAlloc
+  echo -e "${YELLOW}Compiling TestGraphColouringRegAlloc.java...${NC}"
+  echo -e "${YELLOW}Running TestGraphColouringRegAlloc...${NC}"
+  java -cp "$BUILD_DIR:lib/*:." TestGraphColouringRegAlloc
 
-
-  #rm -f "$CODEGEN_OUTPUT_DIR"/*.asm "$CODEGEN_OUTPUT_DIR"/*.regalloc.asm
+  # Optionally clean up
+  rm -f "$CODEGEN_OUTPUT_DIR"/*.asm "$CODEGEN_OUTPUT_DIR"/*.regalloc.asm
 }
 
 main
