@@ -24,7 +24,9 @@ public class GraphColouringRegAlloc implements AssemblyPass {
           Register.Arch.s2,
           Register.Arch.s3,
           Register.Arch.s4,
-          Register.Arch.s5);
+          Register.Arch.s5,
+          Register.Arch.s6,
+          Register.Arch.s7);
 
   private static final Register SPILL_TEMP_1 = Register.Arch.s6;
   private static final Register SPILL_TEMP_2 = Register.Arch.s7;
