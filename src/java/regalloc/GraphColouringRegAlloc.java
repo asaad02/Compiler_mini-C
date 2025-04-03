@@ -9,6 +9,8 @@ public class GraphColouringRegAlloc implements AssemblyPass {
 
   private static final List<Register> ALLOCATABLE =
       List.of(
+          Register.Arch.t0,
+          Register.Arch.t1,
           Register.Arch.t2,
           Register.Arch.t3,
           Register.Arch.t4,
