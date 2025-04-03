@@ -9,8 +9,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
 
   private static final List<Register> ALLOCATABLE =
       List.of(
-          Register.Arch.t0,
-          Register.Arch.t1,
           Register.Arch.t2,
           Register.Arch.t3,
           Register.Arch.t4,
@@ -179,15 +177,13 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     } while (changed);
     System.out.println("[doLiveness] Converged after " + iterations + " iterations.");
     for (CFGNode node : cfg.nodes) {
-      if (node.insn.def() instanceof Register.Virtual vr) {
-        if (!node.liveOut.contains(vr)) {
-          node.liveOut.add(vr);
-          System.out.println(
-              "    [doLiveness] Added dead definition "
-                  + vr
-                  + " to liveOut for instruction: "
-                  + node.insn);
-        }
+      if (node.insn.def() instanceof Register.Virtual vr && !node.liveOut.contains(vr)) {
+        node.liveOut.add(vr);
+        System.out.println(
+            "    [doLiveness] Added dead definition "
+                + vr
+                + " to liveOut for instruction: "
+                + node.insn);
       }
     }
   }
