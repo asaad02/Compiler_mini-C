@@ -24,13 +24,10 @@ public class GraphColouringRegAlloc implements AssemblyPass {
           Register.Arch.s2,
           Register.Arch.s3,
           Register.Arch.s4,
-          Register.Arch.s5,
-          Register.Arch.s6,
-          Register.Arch.s7);
+          Register.Arch.s5);
 
   private static final Register SPILL_TEMP_1 = Register.Arch.s6;
   private static final Register SPILL_TEMP_2 = Register.Arch.s7;
-  private static final Register SPILL_TEMP_3 = Register.Arch.t3;
 
   private static int spillLabelCounter = 0;
 
@@ -69,9 +66,8 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     spillLabelMap.forEach(
         (vr, spillLbl) -> {
           if (!alignedSpillLabels.contains(spillLbl)) {
-            outProg.dataSection.emit(new Directive("align 2"));
             outProg.dataSection.emit(spillLbl);
-            outProg.dataSection.emit(new Directive("space 4"));
+            outProg.dataSection.emit(new Directive("space " + 4));
             alignedSpillLabels.add(spillLbl);
           }
         });
@@ -126,14 +122,14 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         }
         case JUMP_REGISTER -> {
           unconditional = true;
-          System.out.println("      [CFG] Node " + i + " is JUMP_REGISTER");
+          System.out.println("[CFG] Node " + i + " is JUMP_REGISTER");
         }
         case BINARY_BRANCH -> {
           if (insn instanceof Instruction.BinaryBranch bbr) {
             Integer targetIndex = cfg.labelToIndex.get(bbr.label);
             if (targetIndex != null) {
               node.successors.add(cfg.nodes.get(targetIndex));
-              System.out.println("      [CFG] Node " + i + " BINARY_BRANCH to " + bbr.label);
+              System.out.println("[CFG] Node " + i + " BINARY_BRANCH to " + bbr.label);
             }
           }
         }
@@ -142,7 +138,7 @@ public class GraphColouringRegAlloc implements AssemblyPass {
             Integer targetIndex = cfg.labelToIndex.get(ubr.label);
             if (targetIndex != null) {
               node.successors.add(cfg.nodes.get(targetIndex));
-              System.out.println("      [CFG] Node " + i + " UNARY_BRANCH to " + ubr.label);
+              System.out.println("[CFG] Node " + i + " UNARY_BRANCH to " + ubr.label);
             }
           }
         }
@@ -179,7 +175,19 @@ public class GraphColouringRegAlloc implements AssemblyPass {
         }
       }
     } while (changed);
-    System.out.println("    [doLiveness] Converged after " + iterations + " iterations.");
+    System.out.println("[doLiveness] Converged after " + iterations + " iterations.");
+    for (CFGNode node : cfg.nodes) {
+      if (node.insn.def() instanceof Register.Virtual vr) {
+        if (!node.liveOut.contains(vr)) {
+          node.liveOut.add(vr);
+          System.out.println(
+              "    [doLiveness] Added dead definition "
+                  + vr
+                  + " to liveOut for instruction: "
+                  + node.insn);
+        }
+      }
+    }
   }
 
   private Set<Register.Virtual> uses(Instruction insn) {
@@ -315,10 +323,10 @@ public class GraphColouringRegAlloc implements AssemblyPass {
       }
       if (chosen == null) {
         cr.spilled.add(v);
-        System.out.println("      [Assign] Could not color " + v + "; marking as spilled.");
+        System.out.println("[Assign] Could not color " + v + "; marking as spilled.");
       } else {
         cr.colorMap.put(v, chosen);
-        System.out.println("      [Assign] " + v + " assigned " + chosen);
+        System.out.println("[Assign] " + v + " assigned " + chosen);
       }
     }
     return cr;
@@ -348,7 +356,7 @@ public class GraphColouringRegAlloc implements AssemblyPass {
   }
 
   private void expandPush(AssemblyProgram.TextSection out, Set<Register.Virtual> spilled) {
-    System.out.println("      [expandPush] Expanding pushRegisters for spilled vregs: " + spilled);
+    System.out.println("[expandPush] Expanding pushRegisters for spilled vregs: " + spilled);
     List<Register.Virtual> sorted = new ArrayList<>(spilled);
     sorted.sort(Comparator.comparing(v -> v.name));
     sorted.forEach(
@@ -358,12 +366,12 @@ public class GraphColouringRegAlloc implements AssemblyPass {
           out.emit(OpCode.LW, Register.Arch.t0, Register.Arch.t0, 0);
           out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -4);
           out.emit(OpCode.SW, Register.Arch.t0, Register.Arch.sp, 0);
-          System.out.println("        Pushed spilled " + vr);
+          System.out.println("Pushed spilled " + vr);
         });
   }
 
   private void expandPop(AssemblyProgram.TextSection out, Set<Register.Virtual> spilled) {
-    System.out.println("      [expandPop] Expanding popRegisters for spilled vregs: " + spilled);
+    System.out.println("[expandPop] Expanding popRegisters for spilled vregs: " + spilled);
     List<Register.Virtual> sorted = new ArrayList<>(spilled);
     sorted.sort(Comparator.comparing(v -> v.name));
     Collections.reverse(sorted);
@@ -374,13 +382,13 @@ public class GraphColouringRegAlloc implements AssemblyPass {
           out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, 4);
           out.emit(OpCode.LA, Register.Arch.t1, spillLbl);
           out.emit(OpCode.SW, Register.Arch.t0, Register.Arch.t1, 0);
-          System.out.println("        Popped spilled " + vr);
+          System.out.println("Popped spilled " + vr);
         });
   }
 
   private void rewriteInstruction(
       AssemblyProgram.TextSection out, Instruction insn, ColorResult cr) {
-    List<Register> ephemerals = new ArrayList<>(List.of(SPILL_TEMP_1, SPILL_TEMP_2, SPILL_TEMP_3));
+    List<Register> ephemerals = new ArrayList<>(List.of(SPILL_TEMP_1, SPILL_TEMP_2));
     Map<Register, Register> regMap = new HashMap<>();
     insn.registers()
         .forEach(
@@ -436,14 +444,14 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     Label slot = getSpillLabel(vr);
     out.emit(OpCode.LA, dest, slot);
     out.emit(OpCode.LW, dest, dest, 0);
-    System.out.println("        Loaded spill for " + vr + " into " + dest);
+    System.out.println("Loaded spill for " + vr + " into " + dest);
   }
 
   private void storeSpill(AssemblyProgram.TextSection out, Register.Virtual vr, Register src) {
     Label slot = getSpillLabel(vr);
     out.emit(OpCode.LA, Register.Arch.t1, slot);
     out.emit(OpCode.SW, src, Register.Arch.t1, 0);
-    System.out.println("        Stored spill for " + vr + " from " + src);
+    System.out.println("Stored spill for " + vr + " from " + src);
   }
 
   private Label getSpillLabel(Register.Virtual vr) {
