@@ -30,6 +30,7 @@ public class GraphColouringRegAlloc implements AssemblyPass {
 
   private static final Register SPILL_TEMP_1 = Register.Arch.s6;
   private static final Register SPILL_TEMP_2 = Register.Arch.s7;
+  private static final Register SPILL_TEMP_3 = Register.Arch.s5;
 
   private static int spillLabelCounter = 0;
 
@@ -68,8 +69,9 @@ public class GraphColouringRegAlloc implements AssemblyPass {
     spillLabelMap.forEach(
         (vr, spillLbl) -> {
           if (!alignedSpillLabels.contains(spillLbl)) {
+            outProg.dataSection.emit(new Directive("align 2"));
             outProg.dataSection.emit(spillLbl);
-            outProg.dataSection.emit(new Directive("space " + 4));
+            outProg.dataSection.emit(new Directive("space 4"));
             alignedSpillLabels.add(spillLbl);
           }
         });
@@ -114,34 +116,32 @@ public class GraphColouringRegAlloc implements AssemblyPass {
       switch (insn.opcode.kind()) {
         case JUMP -> {
           unconditional = true;
-          if (insn instanceof Instruction.Jump jump) {
-            Integer targetIndex = cfg.labelToIndex.get(jump.label);
-            if (targetIndex != null) {
-              node.successors.add(cfg.nodes.get(targetIndex));
-              System.out.println("      [CFG] Node " + i + " JUMP to " + jump.label);
+          if (insn instanceof Instruction.Jump j) {
+            Integer t = cfg.labelToIndex.get(j.label);
+            if (t != null) node.successors.add(cfg.nodes.get(t));
+            if (j.opcode == OpCode.JAL && i + 1 < cfg.nodes.size()) {
+              node.successors.add(cfg.nodes.get(i + 1));
             }
           }
         }
         case JUMP_REGISTER -> {
           unconditional = true;
-          System.out.println("[CFG] Node " + i + " is JUMP_REGISTER");
-        }
-        case BINARY_BRANCH -> {
-          if (insn instanceof Instruction.BinaryBranch bbr) {
-            Integer targetIndex = cfg.labelToIndex.get(bbr.label);
-            if (targetIndex != null) {
-              node.successors.add(cfg.nodes.get(targetIndex));
-              System.out.println("[CFG] Node " + i + " BINARY_BRANCH to " + bbr.label);
+          if (insn instanceof Instruction.JumpRegister jr && !jr.address.equals(Register.Arch.ra)) {
+            for (int k = 0; k < cfg.nodes.size(); k++) {
+              if (k != i) node.successors.add(cfg.nodes.get(k));
             }
           }
         }
+        case BINARY_BRANCH -> {
+          if (insn instanceof Instruction.BinaryBranch bb) {
+            Integer t = cfg.labelToIndex.get(bb.label);
+            if (t != null) node.successors.add(cfg.nodes.get(t));
+          }
+        }
         case UNARY_BRANCH -> {
-          if (insn instanceof Instruction.UnaryBranch ubr) {
-            Integer targetIndex = cfg.labelToIndex.get(ubr.label);
-            if (targetIndex != null) {
-              node.successors.add(cfg.nodes.get(targetIndex));
-              System.out.println("[CFG] Node " + i + " UNARY_BRANCH to " + ubr.label);
-            }
+          if (insn instanceof Instruction.UnaryBranch ub) {
+            Integer t = cfg.labelToIndex.get(ub.label);
+            if (t != null) node.successors.add(cfg.nodes.get(t));
           }
         }
         default -> {}
@@ -388,7 +388,7 @@ public class GraphColouringRegAlloc implements AssemblyPass {
 
   private void rewriteInstruction(
       AssemblyProgram.TextSection out, Instruction insn, ColorResult cr) {
-    List<Register> ephemerals = new ArrayList<>(List.of(SPILL_TEMP_1, SPILL_TEMP_2));
+    List<Register> ephemerals = new ArrayList<>(List.of(SPILL_TEMP_1, SPILL_TEMP_2, SPILL_TEMP_3));
     Map<Register, Register> regMap = new HashMap<>();
     insn.registers()
         .forEach(
