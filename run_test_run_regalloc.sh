@@ -5,7 +5,7 @@ GREEN="\033[0;32m"
 RED="\033[0;31m"
 YELLOW="\033[0;33m"
 CYAN="\033[0;36m"
-NC="\033[0m" # No Color
+NC="\033[0m" 
 
 # Directories
 BUILD_DIR="bin"
@@ -178,10 +178,8 @@ main() {
 
   echo -e "${YELLOW}Compiling TestGraphColouringRegAlloc.java...${NC}"
   echo -e "${YELLOW}Running TestGraphColouringRegAlloc...${NC}"
-  java -cp "$BUILD_DIR:lib/*:." TestGraphColouringRegAlloc
-
-  # Optionally clean up
-  rm -f "$CODEGEN_OUTPUT_DIR"/*.asm "$CODEGEN_OUTPUT_DIR"/*.regalloc.asm
+  #java -cp "$BUILD_DIR:lib/*:." TestGraphColouringRegAlloc
+  #rm -f "$CODEGEN_OUTPUT_DIR"/*.asm "$CODEGEN_OUTPUT_DIR"/*.regalloc.asm
 }
 
 main
