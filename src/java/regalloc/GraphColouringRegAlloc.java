@@ -30,12 +30,9 @@ public class GraphColouringRegAlloc implements AssemblyPass {
 
   private static final Register SPILL_TEMP_1 = Register.Arch.s6;
   private static final Register SPILL_TEMP_2 = Register.Arch.s7;
-  private static final Register SPILL_TEMP_3 = Register.Arch.s5;
 
   private static int spillLabelCounter = 0;
-
-  private final Map<Register.Virtual, Label> spillLabelMap = new HashMap<>();
-  private final Set<Label> alignedSpillLabels = new HashSet<>();
+  private final Map<Register.Virtual, Label> spillLabelMap = new LinkedHashMap<>();
 
   private GraphColouringRegAlloc() {}
 
@@ -65,16 +62,16 @@ public class GraphColouringRegAlloc implements AssemblyPass {
           outProg.emitTextSection(newSection);
         });
 
-    System.out.println("Emitting spill slots in the data section...");
-    spillLabelMap.forEach(
-        (vr, spillLbl) -> {
-          if (!alignedSpillLabels.contains(spillLbl)) {
-            outProg.dataSection.emit(new Directive("align 2"));
-            outProg.dataSection.emit(spillLbl);
-            outProg.dataSection.emit(new Directive("space 4"));
-            alignedSpillLabels.add(spillLbl);
-          }
-        });
+    if (!spillLabelMap.isEmpty()) {
+      outProg.dataSection.emit(new Directive("align 2"));
+      spillLabelMap
+          .values()
+          .forEach(
+              spillLbl -> {
+                outProg.dataSection.emit(spillLbl);
+                outProg.dataSection.emit(new Directive("space 4"));
+              });
+    }
 
     System.out.println("[GraphColouringRegAlloc] END\n");
     return outProg;
@@ -352,43 +349,31 @@ public class GraphColouringRegAlloc implements AssemblyPass {
             default -> {}
           }
         });
+
     return newSec;
   }
 
   private void expandPush(AssemblyProgram.TextSection out, Set<Register.Virtual> spilled) {
-    System.out.println("[expandPush] Expanding pushRegisters for spilled vregs: " + spilled);
-    List<Register.Virtual> sorted = new ArrayList<>(spilled);
-    sorted.sort(Comparator.comparing(v -> v.name));
-    sorted.forEach(
-        vr -> {
-          Label spillLbl = getSpillLabel(vr);
-          out.emit(OpCode.LA, Register.Arch.t0, spillLbl);
-          out.emit(OpCode.LW, Register.Arch.t0, Register.Arch.t0, 0);
-          out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -4);
-          out.emit(OpCode.SW, Register.Arch.t0, Register.Arch.sp, 0);
-          System.out.println("Pushed spilled " + vr);
-        });
+    out.emit("Original instruction: pushRegisters");
+    out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -4);
+    out.emit(OpCode.SW, Register.Arch.t0, Register.Arch.sp, 0);
+    out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -4);
+    out.emit(OpCode.SW, Register.Arch.t1, Register.Arch.sp, 0);
+    System.out.println("Pushed registers t0 and t1 onto the stack");
   }
 
   private void expandPop(AssemblyProgram.TextSection out, Set<Register.Virtual> spilled) {
-    System.out.println("[expandPop] Expanding popRegisters for spilled vregs: " + spilled);
-    List<Register.Virtual> sorted = new ArrayList<>(spilled);
-    sorted.sort(Comparator.comparing(v -> v.name));
-    Collections.reverse(sorted);
-    sorted.forEach(
-        vr -> {
-          Label spillLbl = getSpillLabel(vr);
-          out.emit(OpCode.LW, Register.Arch.t0, Register.Arch.sp, 0);
-          out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, 4);
-          out.emit(OpCode.LA, Register.Arch.t1, spillLbl);
-          out.emit(OpCode.SW, Register.Arch.t0, Register.Arch.t1, 0);
-          System.out.println("Popped spilled " + vr);
-        });
+    out.emit("Original instruction: popRegisters");
+    out.emit(OpCode.LW, Register.Arch.t1, Register.Arch.sp, 0);
+    out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, 4);
+    out.emit(OpCode.LW, Register.Arch.t0, Register.Arch.sp, 0);
+    out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, 4);
+    System.out.println("Popped registers t0 and t1 from the stack");
   }
 
   private void rewriteInstruction(
       AssemblyProgram.TextSection out, Instruction insn, ColorResult cr) {
-    List<Register> ephemerals = new ArrayList<>(List.of(SPILL_TEMP_1, SPILL_TEMP_2, SPILL_TEMP_3));
+    List<Register> ephemerals = new ArrayList<>(List.of(SPILL_TEMP_1, SPILL_TEMP_2));
     Map<Register, Register> regMap = new HashMap<>();
     insn.registers()
         .forEach(
@@ -401,19 +386,21 @@ public class GraphColouringRegAlloc implements AssemblyPass {
                 regMap.put(r, color);
               }
             });
-    insn.uses()
-        .forEach(
-            r -> {
-              if (r instanceof Register.Virtual vr && cr.spilled.contains(vr)) {
-                if (ephemerals.isEmpty()) {
-                  throw new RuntimeException(
-                      "[rewriteInstruction] Not enough ephemeral registers for spilled use " + vr);
-                }
-                Register tmp = ephemerals.remove(0);
-                loadSpill(out, vr, tmp);
-                regMap.put(r, tmp);
-              }
-            });
+    Set<Register.Virtual> spilledUsed = new HashSet<>();
+    for (Register r : insn.uses()) {
+      if (r instanceof Register.Virtual vr && cr.spilled.contains(vr)) {
+        spilledUsed.add(vr);
+      }
+    }
+    for (Register.Virtual vr : spilledUsed) {
+      if (ephemerals.isEmpty()) {
+        throw new RuntimeException(
+            "[rewriteInstruction] Not enough ephemeral registers for spilled use " + vr);
+      }
+      Register tmp = ephemerals.remove(0);
+      loadSpill(out, vr, tmp);
+      regMap.put(vr, tmp);
+    }
     Register.Virtual defVr = null;
     if (insn.def() instanceof Register.Virtual vr && cr.spilled.contains(vr)) {
       defVr = vr;
@@ -425,13 +412,6 @@ public class GraphColouringRegAlloc implements AssemblyPass {
       regMap.put(vr, tmp);
     }
     Instruction newInsn = insn.rebuild(regMap);
-    if (newInsn instanceof Instruction.LoadAddress la) {
-      if (la.label.name.startsWith("v")) {
-        newInsn =
-            new Instruction.TernaryArithmetic(
-                OpCode.ADDU, la.dst, Register.Arch.zero, Register.Arch.zero);
-      }
-    }
     out.emit(newInsn);
     System.out.println("      [rewrite] Emitted: " + newInsn);
     if (defVr != null) {
