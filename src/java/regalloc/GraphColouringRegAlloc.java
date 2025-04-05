@@ -30,9 +30,12 @@ public class GraphColouringRegAlloc implements AssemblyPass {
 
   private static final Register SPILL_TEMP_1 = Register.Arch.s6;
   private static final Register SPILL_TEMP_2 = Register.Arch.s7;
+  private static final Register SPILL_TEMP_3 = Register.Arch.s5;
 
   private static int spillLabelCounter = 0;
-  private final Map<Register.Virtual, Label> spillLabelMap = new LinkedHashMap<>();
+
+  private final Map<Register.Virtual, Label> spillLabelMap = new HashMap<>();
+  private final Set<Label> alignedSpillLabels = new HashSet<>();
 
   private GraphColouringRegAlloc() {}
 
@@ -349,31 +352,43 @@ public class GraphColouringRegAlloc implements AssemblyPass {
             default -> {}
           }
         });
-
     return newSec;
   }
 
   private void expandPush(AssemblyProgram.TextSection out, Set<Register.Virtual> spilled) {
-    out.emit("Original instruction: pushRegisters");
-    out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -4);
-    out.emit(OpCode.SW, Register.Arch.t0, Register.Arch.sp, 0);
-    out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -4);
-    out.emit(OpCode.SW, Register.Arch.t1, Register.Arch.sp, 0);
-    System.out.println("Pushed registers t0 and t1 onto the stack");
+    System.out.println("[expandPush] Expanding pushRegisters for spilled vregs: " + spilled);
+    List<Register.Virtual> sorted = new ArrayList<>(spilled);
+    sorted.sort(Comparator.comparing(v -> v.name));
+    sorted.forEach(
+        vr -> {
+          Label spillLbl = getSpillLabel(vr);
+          out.emit(OpCode.LA, Register.Arch.t0, spillLbl);
+          out.emit(OpCode.LW, Register.Arch.t0, Register.Arch.t0, 0);
+          out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -4);
+          out.emit(OpCode.SW, Register.Arch.t0, Register.Arch.sp, 0);
+          System.out.println("Pushed spilled " + vr);
+        });
   }
 
   private void expandPop(AssemblyProgram.TextSection out, Set<Register.Virtual> spilled) {
-    out.emit("Original instruction: popRegisters");
-    out.emit(OpCode.LW, Register.Arch.t1, Register.Arch.sp, 0);
-    out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, 4);
-    out.emit(OpCode.LW, Register.Arch.t0, Register.Arch.sp, 0);
-    out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, 4);
-    System.out.println("Popped registers t0 and t1 from the stack");
+    System.out.println("[expandPop] Expanding popRegisters for spilled vregs: " + spilled);
+    List<Register.Virtual> sorted = new ArrayList<>(spilled);
+    sorted.sort(Comparator.comparing(v -> v.name));
+    Collections.reverse(sorted);
+    sorted.forEach(
+        vr -> {
+          Label spillLbl = getSpillLabel(vr);
+          out.emit(OpCode.LW, Register.Arch.t0, Register.Arch.sp, 0);
+          out.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, 4);
+          out.emit(OpCode.LA, Register.Arch.t1, spillLbl);
+          out.emit(OpCode.SW, Register.Arch.t0, Register.Arch.t1, 0);
+          System.out.println("Popped spilled " + vr);
+        });
   }
 
   private void rewriteInstruction(
       AssemblyProgram.TextSection out, Instruction insn, ColorResult cr) {
-    List<Register> ephemerals = new ArrayList<>(List.of(SPILL_TEMP_1, SPILL_TEMP_2));
+    List<Register> ephemerals = new ArrayList<>(List.of(SPILL_TEMP_1, SPILL_TEMP_2, SPILL_TEMP_3));
     Map<Register, Register> regMap = new HashMap<>();
     insn.registers()
         .forEach(
@@ -386,21 +401,19 @@ public class GraphColouringRegAlloc implements AssemblyPass {
                 regMap.put(r, color);
               }
             });
-    Set<Register.Virtual> spilledUsed = new HashSet<>();
-    for (Register r : insn.uses()) {
-      if (r instanceof Register.Virtual vr && cr.spilled.contains(vr)) {
-        spilledUsed.add(vr);
-      }
-    }
-    for (Register.Virtual vr : spilledUsed) {
-      if (ephemerals.isEmpty()) {
-        throw new RuntimeException(
-            "[rewriteInstruction] Not enough ephemeral registers for spilled use " + vr);
-      }
-      Register tmp = ephemerals.remove(0);
-      loadSpill(out, vr, tmp);
-      regMap.put(vr, tmp);
-    }
+    insn.uses()
+        .forEach(
+            r -> {
+              if (r instanceof Register.Virtual vr && cr.spilled.contains(vr)) {
+                if (ephemerals.isEmpty()) {
+                  throw new RuntimeException(
+                      "[rewriteInstruction] Not enough ephemeral registers for spilled use " + vr);
+                }
+                Register tmp = ephemerals.remove(0);
+                loadSpill(out, vr, tmp);
+                regMap.put(r, tmp);
+              }
+            });
     Register.Virtual defVr = null;
     if (insn.def() instanceof Register.Virtual vr && cr.spilled.contains(vr)) {
       defVr = vr;
@@ -412,6 +425,13 @@ public class GraphColouringRegAlloc implements AssemblyPass {
       regMap.put(vr, tmp);
     }
     Instruction newInsn = insn.rebuild(regMap);
+    if (newInsn instanceof Instruction.LoadAddress la) {
+      if (la.label.name.startsWith("v")) {
+        newInsn =
+            new Instruction.TernaryArithmetic(
+                OpCode.ADDU, la.dst, Register.Arch.zero, Register.Arch.zero);
+      }
+    }
     out.emit(newInsn);
     System.out.println("      [rewrite] Emitted: " + newInsn);
     if (defVr != null) {
