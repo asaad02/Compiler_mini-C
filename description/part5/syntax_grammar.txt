@@ -17,6 +17,8 @@ fundef    ::= type IDENT "(" params ")" block       # function definition
 
 fundecl   ::= type IDENT "(" params ")" ";"         # function declaration
 
+classdecl  ::= classtype ["extends" IDENT] "{" (vardecl)* (fundef)* "}" # Part V
+
 type       ::= ("int" | "char" | "void" | structtype | classtype) ("*")*   # Part V
 
 structtype ::= "struct" IDENT
