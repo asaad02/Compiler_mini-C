@@ -2,15 +2,19 @@
 Program    ::= (Decl)*
 
 // Declarations/definitions
-Decl       ::= StructTypeDecl | VarDecl | FunDecl | FunDef
+Decl       ::= ClassDecl | StructTypeDecl | VarDecl | FunDecl | FunDef // Part V
 
 // Types
-Type        ::= BaseType | PointerType | StructType | ArrayType
+Type        ::= BaseType | PointerType | StructType | ArrayType | ClassType // Part V
 
-BaseType    ::= INT | CHAR | VOID | NONE | UNKNOWN  // NONE should be used mostly for statements and UNKNOWN in case where no type can be inferred
-PoInterType ::= Type              // use to represent pointers to other types
+BaseType    ::= INT | CHAR | VOID | NONE | UNKNOWN  // NONE should be used mostly for statements and UNKNOWN in case where no type cam be inferred
+PointerType ::= Type              // use to represent pointers to other types
 StructType  ::= String            // represents a struct type (the String is the name of the declared struct type)
 ArrayType   ::= Type Int          // Type represents the element type, Int represents the number of elements in the declared array
+ClassType	::= String 			  // Part V - represents a class type (the String is the name of the declared class type)
+
+// Class Declaration
+ClassDecl ::= (ClassType ClassType | ClassType) (VarDecl)* (FunDef)* // Part V - First ClassType is for newly-declared class and second one is dedicated to optional parent name
 
 // Struct declaration
 StructTypeDecl ::= StructType VarDecl*
@@ -25,12 +29,15 @@ FunDef     ::= Type String VarDecl* Block
 FunDecl    ::= Type String VarDecl*
 
 // Expressions
-Expr       ::= IntLiteral | StrLiteral | ChrLiteral | VarExpr | FunCallExpr | BinOp | ArrayAccessExpr | FieldAccessExpr | ValueAtExpr | AddressOfExpr | SizeOfExpr | TypecastExpr | Assign
+Expr       ::= IntLiteral | StrLiteral | ChrLiteral | VarExpr | FunCallExpr | BinOp | ArrayAccessExpr | FieldAccessExpr | ValueAtExpr | AddressOfExpr | SizeOfExpr | TypecastExpr | Assign | InstanceFunCallExpr | NewInstance // Part V
 
 // Literals
 IntLiteral ::= Int     // Int stores the value of the Integer
 StrLiteral ::= String  // String stores the value of the String
 ChrLiteral ::= Char    // char stores the value of the Character
+
+// Class function call expression (e.g. Course.hasExam() )
+InstanceFunCallExpr ::= Expr FunCallExpr // Part V - the Expr represents the instance of a class
 
 // Variable (the String is the name of the variable)
 VarExpr     ::= String
@@ -46,7 +53,7 @@ Op         ::= ADD | SUB | MUL | DIV | MOD | GT | LT | GE | LE | NE | EQ | OR | 
 ArrayAccessExpr ::= Expr Expr // the first Expr is the array, the second one the index
 
 // Field access expression : Expr.String (e.g. *a.b)
-FieldAccessExpr ::= Expr String // the Expr represents the structure, the String represents the name of the field
+FieldAccessExpr ::= Expr String // Part V - the Expr represents the structure or an instance of a class, the String represents the name of the field
 
 // Value at expression : *Expr (e.g. *p)
 ValueAtExpr ::= Expr
@@ -57,12 +64,14 @@ AddressOfExpr ::= Expr
 // Sizeof expression : sizeof(Type) (e.g. sizeof(int*))
 SizeOfExpr   ::= Type
 
-// Typecast expression : (Type)Expr (e.g. (int*) malloc(4))
+// Typecast expression : (Type)Expr (e.g. (int*) malloc(4)) // Part V - Type can be an ancestor's type of Expr's type if we are dealing with classes
 TypecastExpr ::= Type Expr
 
 // Assignment expression: Expr = Expr; (e.g. x[3] = 2)
 Assign       ::= Expr Expr
 
+// Class instantiation expression : ClassType() (e.g. new Course() )
+NewInstance ::= ClassType // Part V
 
 // Statements
 Stmt       ::= Block | While | If | Return | Continue | Break | ExprStmt
