@@ -1,20 +1,19 @@
 #!/bin/bash
 
-# Define colors for output
+
 GREEN="\033[0;32m"
 RED="\033[0;31m"
 YELLOW="\033[0;33m"
 CYAN="\033[0;36m"
-NC="\033[0m" # No Color
-
+NC="\033[0m" 
 # Set paths
 BUILD_DIR="bin"
 SRC_DIR="."
-TEST_PARSER_DIR="$SRC_DIR/tests/test/test_parser"
-TEST_LEXER_DIR="$SRC_DIR/tests/test/test_lexing"
-TEST_AST_DIR="$SRC_DIR/tests/test/test_ast"
-TEST_SEMANTIC_DIR="$SRC_DIR/tests/test/old_test"
-TEST_CODEGEN_DIR="$SRC_DIR/tests/test/old_test"
+TEST_PARSER_DIR="$SRC_DIR/tests/test/OO_test"
+TEST_LEXER_DIR="$SRC_DIR/tests/test/OO_test"
+TEST_AST_DIR="$SRC_DIR/tests/test/OO_test"
+TEST_SEMANTIC_DIR="$SRC_DIR/tests/test/OO_test"
+TEST_CODEGEN_DIR="$SRC_DIR/tests/test/OO_test"
 CODEGEN_OUTPUT_DIR="./description/part3"
 MARS_JAR="./description/part3/Mars4_5.jar"
 
@@ -58,10 +57,10 @@ run_tests() {
     if [ -f "$file" ]; then
       echo -e "${CYAN}Running test: $file${NC}"
       case $mode in
-        "parser") java -cp "$BUILD_DIR" Main1 -parser "$file" ;;
-        "lexer") java -cp "$BUILD_DIR" Main1 -lexer "$file" ;;
-        "ast") java -cp "$BUILD_DIR" Main2 -ast "$file" ;;
-        "sem") java -cp "$BUILD_DIR" Main2 -sem "$file" ;;
+        "parser") java -cp "$BUILD_DIR" Main4 -parser "$file" ;;
+        "lexer") java -cp "$BUILD_DIR" Main4 -lexer "$file" ;;
+        "ast") java -cp "$BUILD_DIR" Main4 -ast "$file" ;;
+        "sem") java -cp "$BUILD_DIR" Main4 -sem "$file" ;;
         "gen")
           output_file="$CODEGEN_OUTPUT_DIR/$(basename "$file" .c).ast"
           java -cp "$BUILD_DIR" Main4 -gen  naive "$file" "$output_file"
@@ -93,9 +92,9 @@ run_mars_simulation() {
       fi
     fi
   done
-            # after running remove all ast files with ending .ast
-        rm -f "$CODEGEN_OUTPUT_DIR"/*.ast
-        rm -f "$CODEGEN_OUTPUT_DIR"/*regalloc.asm
+  # after running remove all ast files with ending .ast
+  rm -f "$CODEGEN_OUTPUT_DIR"/*.ast
+  rm -f "$CODEGEN_OUTPUT_DIR"/*regalloc.asm
 }
 
 # Function to display a completion message
@@ -108,18 +107,18 @@ main() {
   display_header
   check_build_file
   run_ant_build
-            # after running remove all ast files with ending .ast
-        rm -f "$CODEGEN_OUTPUT_DIR"/*.ast
-        rm -f "$CODEGEN_OUTPUT_DIR"/*regalloc.asm
+  # after running remove all ast files with ending .ast
+  #rm -f "$CODEGEN_OUTPUT_DIR"/*.ast
+  #rm -f "$CODEGEN_OUTPUT_DIR"/*regalloc.asm
   # Run various test phases
   #run_tests "$TEST_PARSER_DIR" "parser"
-  #run_tests "$TEST_LEXER_DIR" "lexer"
+  run_tests "$TEST_LEXER_DIR" "lexer"
   #run_tests "$TEST_AST_DIR" "ast"
   #run_tests "$TEST_SEMANTIC_DIR" "sem"
-  run_tests "$TEST_CODEGEN_DIR" "gen"
+  #run_tests "$TEST_CODEGEN_DIR" "gen"
 
   # Run MARS on all .ast files
-  run_mars_simulation
+  #run_mars_simulation
 
   display_completion_message
 }
