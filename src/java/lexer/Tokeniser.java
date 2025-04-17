@@ -180,23 +180,13 @@ public class Tokeniser extends CompilerPass {
         return new Token(Token.Category.COMMA, line, column);
     }
 
-    /*
-     *   [types]
-     *   INT,  'int'
-     *   VOID, 'void'
-     *   CHAR, 'char'
+    /**
+     * [ OO keywords ] CLASS, 'class' EXTENDS, 'extends' NEW, 'new' [types] INT, 'int' VOID, 'void'
+     * CHAR, 'char'
      *
-     *   [keywords]
-     *   IF,      'if'
-     *   ELSE,    'else'
-     *   WHILE,   'while'
-     *   RETURN,  'return'
-     *   STRUCT,  'struct'
-     *   SIZEOF,  'sizeof'
-     *   CONTINUE,  'continue'
-     *   BREAK, 'break'
+     * <p>[keywords] IF, 'if' ELSE, 'else' WHILE, 'while' RETURN, 'return' STRUCT, 'struct' SIZEOF,
+     * 'sizeof' CONTINUE, 'continue' BREAK, 'break'
      */
-
     if (isValidIdentifierStart(c)) {
       StringBuilder sb = new StringBuilder();
       sb.append(c);
@@ -205,6 +195,12 @@ public class Tokeniser extends CompilerPass {
       }
       String lexeme = sb.toString();
       switch (lexeme) {
+        case "class":
+          return new Token(Token.Category.CLASS, line, column);
+        case "extends":
+          return new Token(Token.Category.EXTENDS, line, column);
+        case "new":
+          return new Token(Token.Category.NEW, line, column);
         case "int":
           return new Token(Token.Category.INT, line, column);
         case "void":
