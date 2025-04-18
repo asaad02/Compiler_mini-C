@@ -273,7 +273,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             }
             if (indexExpr instanceof IntLiteral intLit) {
               int index = intLit.value;
-              System.out.println("Array index: " + index);
+              // System.out.println("Array index: " + index);
               if (index < 0 || index >= dimensions.get(i)) {
                 error(
                     "Array index "
