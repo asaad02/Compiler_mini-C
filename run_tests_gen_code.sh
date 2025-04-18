@@ -10,7 +10,7 @@ NC="\033[0m" # No Color
 # Set paths
 BUILD_DIR="bin"
 SRC_DIR="."
-TEST_CODEGEN_DIR="$SRC_DIR/tests/test/test_codegen"
+TEST_CODEGEN_DIR="$SRC_DIR/tests/test/OO_test"
 CODEGEN_OUTPUT_DIR="./description/part3"
 MARS_JAR="./description/part3/Mars4_5.jar"
 

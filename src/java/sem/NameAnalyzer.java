@@ -58,6 +58,60 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
           visit(decl);
         }
       }
+      // Class declaration register class symbol and fields anmd methods and link to parent
+      case ClassDecl cd -> {
+        // check if the class already exists
+        if (currentScope.lookupCurrent(cd.name) != null) {
+          error("Class " + cd.name + " is already declared.");
+          return;
+        }
+        // add the class to the current scope
+        ClassSymbol cs = new ClassSymbol(cd.name, cd.parent);
+        currentScope.put(cs);
+        // add variables and methods to the class symbol
+        for (VarDecl f : cd.fields) {
+          // check if the field is already declared
+          if (cs.fields.containsKey(f.name)) {
+            error("Field override: " + f.name + " in class " + cd.name);
+          }
+          cs.addField(f.name, f.type);
+        }
+        for (FunDef m : cd.methods) {
+          // prvenet class method redefined
+          if (cs.methods.containsKey(m.name)) {
+            error("Method " + m.name + " is already defined in class " + cd.name);
+          }
+          FunSymbol fm = new FunSymbol(m);
+          cs.addMethod(fm);
+        }
+        if (cd.parent != null) {
+          ClassSymbol parent = currentScope.lookupClass(cd.parent);
+          // check if filed override and report an error
+          if (parent != null) {
+            for (VarDecl f : cd.fields) {
+              if (parent.fields.containsKey(f.name)) {
+                error("Field override: " + f.name + " in class " + cd.name);
+              }
+            }
+          }
+          if (parent == null) {
+            // report an error if the parent class is not declared
+            error("Unknown parent class: " + cd.parent);
+          } else {
+            cs.parent = parent;
+          }
+        }
+      }
+
+      // ensure class exists
+      case NewInstance ni -> {
+        // check if the class is declared
+        ClassSymbol cs = currentScope.lookupClass(ni.className);
+        // report an error if the class is not declared
+        if (cs == null) {
+          error("Class " + ni.className + " must be declared before instantiation.");
+        }
+      }
       // Function declaration
       case FunDecl fd -> {
         // Check if the function is a built-in function

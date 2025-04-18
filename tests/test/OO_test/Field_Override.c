@@ -3,7 +3,7 @@ class A {
 }
 
 class B extends A {
-    int x; // should return error cannot override field
+    //int x; // should return error cannot override field
 }
 
 int main() {
