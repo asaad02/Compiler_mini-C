@@ -5,6 +5,6 @@ class HelloWorld {
 }
 
 void main() {
-    HelloWorld hw;
+    class HelloWorld hw;
     hw.sayHi();
 }

@@ -1,5 +1,6 @@
 class Compare {
-    int a, b;
+    int a;
+    int  b;
 
     void set(int x, int y) {
         a = x;
@@ -15,7 +16,7 @@ class Compare {
 }
 
 void main() {
-    Compare cmp;
+    class Compare cmp;
     cmp.set(10, 5);
     cmp.bigger();
 }

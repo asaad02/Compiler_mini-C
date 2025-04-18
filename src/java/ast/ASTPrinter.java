@@ -141,7 +141,45 @@ public class ASTPrinter {
               writer.print(",");
               visit(vd);
             }
+            newline();
           }
+          // ==== P5 cases ====
+          case ClassDecl cd -> {
+            // print class name and parent if not null
+            visit(new ClassType(cd.name)); // prints “class Foo”
+            if (cd.parent != null) {
+              writer.print(",");
+              visit(new ClassType(cd.parent));
+            }
+
+            // fields
+            for (VarDecl f : cd.fields) {
+              writer.print(",");
+              newline();
+              visit(f);
+            }
+            // methods
+            for (FunDef m : cd.methods) {
+              writer.print(",");
+              newline();
+              visit(m);
+            }
+          }
+
+          case ClassType ct -> writer.print(ct.name);
+
+          case NewInstance ni -> {
+            // new class hi()
+            writer.print(ni.className);
+          }
+
+          case InstanceFunCallExpr ifc -> {
+            // print target.method(args)
+            visit(ifc.target);
+            writer.print(",");
+            visit(ifc.call);
+          }
+          // ==== end P5 cases ====
           case PointerType pt -> {
             visit(pt.baseType);
           }

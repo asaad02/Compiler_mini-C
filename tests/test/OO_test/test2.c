@@ -16,7 +16,7 @@ class Student {
 }
 
 void main() {
-    Student s;
+    class Student s;
     s.setName();
     s.greet();
 }

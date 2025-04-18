@@ -2,6 +2,11 @@ package ast;
 
 import java.util.List;
 
+/*
+ * // Field access expression : Expr.String (e.g. *a.b)
+ * FieldAccessExpr ::= Expr String
+ * Part V - the Expr represents the structure or an instance of a class, the String represents the name of the field
+ */
 // field access in a structure (struct.field).
 public final class FieldAccessExpr extends Expr {
   // The structure from which the field is accessed
