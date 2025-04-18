@@ -131,4 +131,10 @@ public class Scope {
     Symbol sym = lookup(name);
     return (sym instanceof StructSymbol) ? (StructSymbol) sym : null;
   }
+
+  /** lookup class declarations in the current and parent scopes */
+  public ClassSymbol lookupClass(String name) {
+    Symbol sym = lookup(name);
+    return (sym instanceof ClassSymbol) ? (ClassSymbol) sym : null;
+  }
 }
