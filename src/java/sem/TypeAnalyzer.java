@@ -43,11 +43,64 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       // Program ::= (Decl)*
       // Decl ::= StructTypeDecl | VarDecl | FunDecl | FunDef
       case Program p -> {
+        // Register every class so that class names exist in the scope
+        for (ASTNode decl : p.decls) {
+          if (decl instanceof ClassDecl cd) {
+            // create ClassSymbol and put it in scope
+            ClassSymbol cs = new ClassSymbol(cd.name, cd.parent);
+            currentScope.put(cs);
+          }
+        }
         for (ASTNode decl : p.decls) {
           visit(decl);
         }
         yield BaseType.NONE;
       }
+      case ClassDecl cd -> {
+        // looking for the class in the current scope
+        ClassSymbol cs = currentScope.lookupClass(cd.name);
+        // add fields in the class scope
+        for (VarDecl f : cd.fields) {
+          cs.addField(f.name, f.type);
+        }
+        // add methods in the class scope
+        for (FunDef m : cd.methods) {
+          FunSymbol fm = new FunSymbol(m);
+          cs.addMethod(fm);
+        }
+        // link the parent pointer
+        if (cd.parent != null) {
+          ClassSymbol parent = currentScope.lookupClass(cd.parent);
+          if (parent == null) {
+            // report error if parent class is not found
+            error("Unknown parent class: " + cd.parent);
+          } else {
+            cs.parent = parent;
+            // override checking checking overridden method matches signature
+            for (FunDef m : cd.methods) {
+              // bring in the method from the parent class
+              FunSymbol superMethod = parent.getMethod(m.name);
+              if (superMethod != null) {
+                // check if the method is overridden correctly
+                if (!superMethod.getParamTypes().equals(m.getParamTypes())
+                    || !superMethod.type.equals(m.type)) {
+                  error("Method override mismatch: " + m.name + " in class " + cd.name);
+                }
+              }
+            }
+          }
+        }
+        // type check each field
+        for (VarDecl f : cd.fields) {
+          visit(f);
+        }
+        // type check each method body
+        for (FunDef m : cd.methods) {
+          visit(m);
+        }
+        yield BaseType.NONE;
+      }
+
       // **Function Declaration**
       // FunDecl ::= Type String VarDecl*`
       case FunDecl fd -> {
@@ -270,6 +323,39 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 
             yield leftArray;
           }
+          case ClassType leftClass -> {
+            right = visit(a.right);
+            // must be class type
+            if (right instanceof ClassType rightClass) {
+              if (leftClass.name.equals(rightClass.name)) {
+                // same type
+                a.type = leftClass;
+                yield leftClass;
+              }
+
+              // check if the right class is a subclass of the left class
+              ClassSymbol cur = currentScope.lookupClass(rightClass.name);
+              while (cur != null) {
+                if (cur.name.equals(leftClass.name)) {
+                  error(
+                      "Cannot implicitly assign subclass "
+                          + rightClass.name
+                          + " to superclass "
+                          + leftClass.name
+                          + "; cast required.");
+                  yield BaseType.UNKNOWN;
+                }
+                cur = cur.parent;
+              }
+
+              error("Cannot assign class type " + rightClass.name + " to " + leftClass.name);
+              yield BaseType.UNKNOWN;
+            } else {
+              error("Cannot assign non‐class value to class variable");
+              yield BaseType.UNKNOWN;
+            }
+          }
+
           default -> {
             yield BaseType.UNKNOWN;
           }
@@ -340,6 +426,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           if ((left instanceof PointerType && right.equals(BaseType.INT))
               || (right instanceof PointerType && left.equals(BaseType.INT))
               || (left instanceof PointerType && right instanceof PointerType)) {
+            yield BaseType.INT;
+          }
+          // if the left-hand side or right-hand side is type of class
+          if (left instanceof ClassType && right instanceof ClassType) {
             yield BaseType.INT;
           }
           if (!left.equals(right)) {
@@ -558,6 +648,21 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           structType = pt.baseType;
           // System.out.println("[TypeAnalyzer] Dereferencing pointer to struct: " + structType);
         }
+        // is it (struct style) or (class‐style)
+        if (structType instanceof ClassType ct) {
+          ClassSymbol cls = currentScope.lookupClass(ct.name);
+          if (cls == null) {
+            error("Unknown class: " + ct.name);
+            yield BaseType.UNKNOWN;
+          }
+          Type fld = cls.getField(fa.field);
+          if (fld == null) {
+            error("Class " + ct.name + " has no field " + fa.field);
+            yield BaseType.UNKNOWN;
+          }
+          fa.type = fld;
+          yield fld;
+        }
 
         if (!(structType instanceof StructType st)) {
           error("Field access on non-struct type. Received type: " + structType);
@@ -582,6 +687,27 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         // System.out.println("[TypeAnalyzer] FieldAccessExpr assigned type: " + fa.type);
         yield fieldType;
       }
+      case InstanceFunCallExpr ifc -> {
+        Type rcv = visit(ifc.target);
+        if (!(rcv instanceof ClassType ct)) {
+          error("Method call on non class type.");
+          yield BaseType.UNKNOWN;
+        }
+        ClassSymbol cls = currentScope.lookupClass(ct.name);
+        if (cls == null) {
+          error("Unknown class: " + ct.name);
+          yield BaseType.UNKNOWN;
+        }
+        // look up the method
+        FunSymbol fs = cls.getMethod(ifc.call.name);
+        if (fs == null) {
+          error("Class " + ct.name + " has no method " + ifc.call.name);
+          yield BaseType.UNKNOWN;
+        }
+        Type ret = visit(ifc.call);
+        ifc.type = fs.type;
+        yield fs.type;
+      }
 
       // typecast expression
       case TypecastExpr tc -> {
@@ -601,6 +727,32 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 
         if (tc.type instanceof PointerType pt && exprType instanceof ArrayType at) {
           yield new PointerType(at.elementType);
+        }
+        // class cast subclass to  ancestor
+        if (tc.type instanceof ClassType target && exprType instanceof ClassType source) {
+          // check if the source class is a subclass of the target class
+          ClassSymbol cur = currentScope.lookupClass(source.name);
+          while (cur != null) {
+            if (cur.name.equals(target.name)) {
+              yield target;
+            }
+            cur = cur.parent;
+          }
+          error("Invalid class cast from " + source.name + " to " + target.name);
+          yield BaseType.UNKNOWN;
+        }
+        Type to = tc.type;
+        if (to instanceof ClassType TC && exprType instanceof ClassType FC) {
+          // check if the source class is a subclass of the target class
+          ClassSymbol cur = currentScope.lookupClass(FC.name);
+          while (cur != null) {
+            if (cur.name.equals(TC.name)) {
+              yield to;
+            }
+            cur = cur.parent;
+          }
+          error("Invalid class cast from " + FC.name + " to " + TC.name);
+          yield BaseType.UNKNOWN;
         }
         yield BaseType.UNKNOWN;
       }
@@ -678,6 +830,18 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             yield BaseType.UNKNOWN;
           }
         }
+      }
+      // new instance expression
+      case NewInstance ni -> {
+        // check if the class is declared
+        ClassSymbol cls = currentScope.lookupClass(ni.className);
+        if (cls == null) {
+          error("Cannot instantiate unknown class: " + ni.className);
+          yield BaseType.UNKNOWN;
+        }
+        // assign the class type to the new instance
+        ni.type = new ClassType(ni.className);
+        yield ni.type;
       }
       default -> BaseType.UNKNOWN;
     };
