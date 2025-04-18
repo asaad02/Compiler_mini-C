@@ -18,7 +18,7 @@ class Box {
 }
 
 void main() {
-    Box b;
+    class Box b;
     b.setSize(3, 4);
     b.printArea();
 }

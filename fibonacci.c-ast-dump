@@ -1,0 +1,18 @@
+Program(ClassDecl(A,
+    FunDef(VOID,hello,
+      Block(
+        ExprStmt(FunCallExpr(print_s,TypecastExpr(PointerType(CHAR),StrLiteral(Hello from A
+))))))),ClassDecl(B extends A,
+    FunDef(VOID,hello,
+      Block(
+        ExprStmt(FunCallExpr(print_s,TypecastExpr(PointerType(CHAR),StrLiteral(Hello from B
+))))))),ClassDecl(C extends B,
+    FunDef(VOID,hello,
+      Block(
+        ExprStmt(FunCallExpr(print_s,TypecastExpr(PointerType(CHAR),StrLiteral(Hello from C
+))))))),FunDef(INT,main,
+    Block(
+      VarDecl(ClassType(A),x)
+      ,ExprStmt(Assign(VarExpr(x),TypecastExpr(ClassType(A),NewInstance(C))))
+      ,ExprStmt(InstanceFunCallExpr(VarExpr(x)FunCallExpr(hello)))
+      ,Return(IntLiteral(0)))))

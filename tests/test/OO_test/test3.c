@@ -14,7 +14,7 @@ class Grade {
 }
 
 void main() {
-    Grade g;
+    class Grade g;
     g.setScore(70);
     g.passStatus();
 }

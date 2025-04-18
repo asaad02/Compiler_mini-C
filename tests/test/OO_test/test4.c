@@ -4,13 +4,14 @@ class Math {
     }
 
     void test() {
-        int result = square(5);
+        int result ;
+        result = square(5);
         print_i(result);
         print_s((char*)"\n");
     }
 }
 
 void main() {
-    Math m;
+    class Math m;
     m.test();
 }

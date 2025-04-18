@@ -15,7 +15,7 @@ class Code {
 }
 
 void main() {
-    Code c;
+    class Code c;
     c.setTag();
     c.showTag();
 }

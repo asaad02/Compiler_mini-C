@@ -116,6 +116,9 @@ public class Parser extends CompilerPass {
    * The program top AST node (a list of declarations)
    * AST : Program    ::= (Decl)*
    * A program consists of zero or more declarations.
+   *
+   * For P5 :
+   * program    ::= (include)* (classdecl | structdecl | vardecl | fundecl | fundef)* EOF # Part V
    */
   private Program parseProgram() {
     // includes are ignored, so does not need to return an AST node
@@ -155,16 +158,32 @@ public class Parser extends CompilerPass {
    */
   private Decl parseDecl() {
     /*
-     *  ===================== STRUCT DECLARATION PARSING =====================
-     * structdecl ::= structtype "{" (vardecl)+ "}" ";"
-     * structtype ::= "struct" IDENT
-     * if the token is a struct and we have an identifier and a left brace ["{"]
-     * AST : StructType  ::= String
-     * AST : StructTypeDecl ::= StructType VarDecl*
-     * represents a struct type (the String is the name of the declared struct type)Struct declaration
-     */
+    *  ===================== STRUCT DECLARATION PARSING =====================
+    * structdecl ::= structtype "{" (vardecl)+ "}" ";"
+    * structtype ::= "struct" IDENT
+    * if the token is a struct and we have an identifier and a left brace ["{"]
+    * AST : StructType  ::= String
+    * AST : StructTypeDecl ::= StructType VarDecl*
+    * represents a struct type (the String is the name of the declared struct type)Struct declaration
+    *
+    * for P5 we have to regnize the class Decl
+    * // Declarations/definitions
+    * Decl       ::= ClassDecl | StructTypeDecl | VarDecl | FunDecl | FunDef // Part V
+
+    */
     // if the token is a struct or an int or a char or a void
-    if (accept(Category.STRUCT, Category.INT, Category.CHAR, Category.VOID)) {
+    if (accept(Category.CLASS, Category.STRUCT, Category.INT, Category.CHAR, Category.VOID)) {
+
+      // Handle class declarations
+      /*
+       * classdecl  ::= classtype ["extends" IDENT] "{" (vardecl)* (fundef)* "}" # Part V
+       */
+      if (token.category == Category.CLASS
+          && lookAhead(1).category == Category.IDENTIFIER
+          && (lookAhead(2).category == Category.LBRA
+              || lookAhead(2).category == Category.EXTENDS)) {
+        return parseClassDecl();
+      }
       // Handle struct declarations
       // if the token is a struct and we have an identifier and a left brace ["{"] then parse the
       // struct declaration
@@ -237,6 +256,9 @@ public class Parser extends CompilerPass {
    * StructType  ::= String
    * Type represents the element type, Int represents the number of elements in the declared array
    * ArrayType   ::= Type Int
+   *
+   * for P5 :
+   * type       ::= ("int" | "char" | "void" | structtype | classtype) ("*")*   # Part V
    */
   private Type parseType() {
     Type baseType;
@@ -261,9 +283,17 @@ public class Parser extends CompilerPass {
     // Parse Struct Types (struct Node)
     else if (accept(Category.STRUCT)) {
       baseType = structtype();
-
+    }
+    /*
+     * classtype ::= "class" IDENT # Part V
+     */
+    else if (accept(Category.CLASS)) {
+      // consume class
+      nextToken();
+      String cname = expect(Category.IDENTIFIER).data;
+      baseType = new ClassType(cname);
     } else {
-      error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
+      error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT, Category.CLASS);
       recovery();
       return BaseType.UNKNOWN;
     }
@@ -314,6 +344,67 @@ public class Parser extends CompilerPass {
     expect(Category.SC);
     // return the struct type declaration AST node
     return new StructTypeDecl((StructType) structType, varDecls);
+  }
+
+  /*
+   *  ===================== CLASS DECLARATION PARSING =====================
+   * ClassDecl ::= (ClassType ClassType | ClassType) (VarDecl)* (FunDef)*
+   * Part V - First ClassType is for newly-declared class
+   * second one is dedicated to optional parent name
+   *
+   * classdecl  ::= classtype ["extends" IDENT] "{" (vardecl)* (fundef)* "}" # Part V
+   * classtype  ::= "class" IDENT   # Part V
+   */
+
+  private Decl parseClassDecl() {
+    // Consume class
+    // classtype  ::= "class" IDENT   # Part V
+    expect(Category.CLASS);
+    String className = expect(Category.IDENTIFIER).data;
+
+    // Optional extends parent
+    String parentName = null;
+    if (accept(Category.EXTENDS)) {
+      nextToken();
+      parentName = expect(Category.IDENTIFIER).data;
+    }
+
+    // class body
+    expect(Category.LBRA);
+
+    // vardecl
+    List<VarDecl> fields = new ArrayList<>();
+    while (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT, Category.CLASS)) {
+      // lookAhead(1) is the IDENT, lookAhead(2) is what follows
+      if (lookAhead(2).category == Category.LPAR) {
+        break;
+      }
+      fields.add(parseVarDecl());
+    }
+
+    // Methods
+    List<FunDef> methods = new ArrayList<>();
+    while (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT, Category.CLASS)) {
+      // Parse the return type and name
+      Type returnType = parseType();
+      Token nameMethod = expect(Category.IDENTIFIER);
+      // Only definitions allowed inside
+      Decl decl = parseFuncDefOrDecl(returnType, nameMethod);
+      if (decl instanceof FunDef fd) {
+        methods.add(fd);
+      } else {
+        // declaration instead of a definition will show erorr
+        error(Category.LBRA);
+        recovery();
+      }
+    }
+
+    // End body
+    expect(Category.RBRA);
+
+    // AST node
+    // ClassDecl ::= (ClassType ClassType | ClassType) (VarDecl)* (FunDef)*
+    return new ClassDecl(className, parentName, fields, methods);
   }
 
   /*
@@ -428,7 +519,7 @@ public class Parser extends CompilerPass {
     List<Stmt> stmts = new ArrayList<>(); // Store Stmt
 
     while (!accept(Category.RBRA) && !accept(Category.EOF)) {
-      if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
+      if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT, Category.CLASS)) {
         // elements.add(parseVarDecl());
         vds.add(parseVarDecl());
       } else {
@@ -729,7 +820,7 @@ public class Parser extends CompilerPass {
       if (op == Category.SIZEOF) {
         expect(Category.LPAR);
 
-        if (!accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
+        if (!accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT, Category.CLASS)) {
           error(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT);
           recovery();
           return new SizeOfExpr(BaseType.UNKNOWN);
@@ -769,7 +860,7 @@ public class Parser extends CompilerPass {
   }
 
   // parse the function call expression
-  private Expr parseFuncCallExpr(Token id) {
+  private FunCallExpr parseFuncCallExpr(Token id) {
     expect(Category.LPAR);
     List<Expr> args = new ArrayList<>();
     // Check if there are arguments
@@ -820,6 +911,7 @@ public class Parser extends CompilerPass {
         expect(Category.RSBR);
         return new ArrayAccessExpr(new VarExpr(id.data), dimensionsExper1, index);
       }
+      /*
       // here the error for sort list
       else if (accept(Category.DOT)) {
         nextToken();
@@ -828,13 +920,31 @@ public class Parser extends CompilerPass {
         // to test for sort link list
         return new FieldAccessExpr(new VarExpr(id.data), field);
       }
+        */
       return new VarExpr(id.data);
+    }
+    // Class instantiation
+    /*
+     * newInstance     ::= "new" classtype"()"
+     * Part V - new class object instantiation
+     */
+    else if (accept(Category.NEW)) {
+      // new class nameofclass()
+      // consume NEW
+      nextToken();
+      // consume CLASS keyword
+      expect(Category.CLASS);
+      String cname = expect(Category.IDENTIFIER).data;
+      expect(Category.LPAR);
+      expect(Category.RPAR);
+      // AST node
+      return new NewInstance(cname);
     }
     // '(' expr ')' typecast ::= "(" type ")" exp
     else if (accept(Category.LPAR)) {
       nextToken();
       // Check if it's a type cast
-      if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT)) {
+      if (accept(Category.INT, Category.CHAR, Category.VOID, Category.STRUCT, Category.CLASS)) {
         Type castType = parseType();
         expect(Category.RPAR);
         Expr expr = parseUnaryExpr();
@@ -921,13 +1031,25 @@ public class Parser extends CompilerPass {
         expect(Category.RSBR);
         dimensionsExper3.add(index);
         expr = new ArrayAccessExpr(expr, dimensionsExper3, index);
-      } else if (accept(Category.DOT)) {
+      }
+      /*
+       *  instanceFuncall ::= exp "." funcall
+       * Part V : call to an instance method
+       * */
+      else if (accept(Category.DOT)) {
+        // consume '.'
         nextToken();
-        String field = expect(Category.IDENTIFIER).data;
-        expr = new FieldAccessExpr(expr, field);
-      } else if (accept(Category.LPAR)) {
         Token id = expect(Category.IDENTIFIER);
-        expr = parseFuncCallExpr(id);
+        if (accept(Category.LPAR)) {
+          // P5 : instance method: exp.method(args)
+          // instanceFuncall ::= exp "." funcall
+          FunCallExpr call = parseFuncCallExpr(id);
+          // P5 : AST node
+          expr = new InstanceFunCallExpr(expr, call);
+        } else {
+          // field access: exp.field
+          expr = new FieldAccessExpr(expr, id.data);
+        }
       } else {
         break;
       }

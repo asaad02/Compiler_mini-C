@@ -1,6 +1,15 @@
 package ast;
 
 /** represents all expression types in the AST. */
+/*
+* Expressions
+* Expr       ::= IntLiteral | StrLiteral | ChrLiteral |
+* VarExpr | FunCallExpr | BinOp | ArrayAccessExpr |
+*  FieldAccessExpr | ValueAtExpr | AddressOfExpr |
+*  SizeOfExpr | TypecastExpr | Assign |
+*  InstanceFunCallExpr | NewInstance // Part V
+
+*/
 public abstract sealed class Expr implements ASTNode
     permits IntLiteral,
         StrLiteral,
@@ -14,7 +23,9 @@ public abstract sealed class Expr implements ASTNode
         AddressOfExpr,
         SizeOfExpr,
         TypecastExpr,
-        Assign {
+        Assign,
+        NewInstance,
+        InstanceFunCallExpr {
   // Expr       ::= IntLiteral | StrLiteral | ChrLiteral | VarExpr | FunCallExpr | BinOp |
   // ArrayAccessExpr | FieldAccessExpr | ValueAtExpr | AddressOfExpr | SizeOfExpr | TypecastExpr |
   // Assign

@@ -142,6 +142,43 @@ public class ASTPrinter {
               visit(vd);
             }
           }
+          // ==== P5 cases ====
+          case ClassDecl cd -> {
+            // print class name and parent if not null
+            writer.print(cd.name);
+            if (cd.parent != null) {
+              writer.print(" extends " + cd.parent);
+            }
+            // fields
+            for (VarDecl f : cd.fields) {
+              writer.print(",");
+              newline();
+              visit(f);
+            }
+            // methods
+            for (FunDef m : cd.methods) {
+              writer.print(",");
+              newline();
+              visit(m);
+            }
+          }
+
+          case ClassType ct -> {
+            // print class type asw (class hi)
+            writer.print(ct.name);
+          }
+
+          case NewInstance ni -> {
+            // new class hi()
+            writer.print(ni.className);
+          }
+
+          case InstanceFunCallExpr ifc -> {
+            // print target.method(args)
+            visit(ifc.target);
+            visit(ifc.call);
+          }
+          // ==== end P5 cases ====
           case PointerType pt -> {
             visit(pt.baseType);
           }

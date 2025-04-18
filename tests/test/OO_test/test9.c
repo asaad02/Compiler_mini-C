@@ -12,14 +12,15 @@ class Exam {
     }
 
     void printExamStatus() {
-        int result = hasExam();
+        int result ;
+        result = hasExam();
         print_i(result);
         print_s((char*)"\n");
     }
 }
 
 void main() {
-    Exam e;
+    class Exam e;
     e.setScore(100);
     e.printExamStatus();
 }
