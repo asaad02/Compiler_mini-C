@@ -141,14 +141,17 @@ public class ASTPrinter {
               writer.print(",");
               visit(vd);
             }
+            newline();
           }
           // ==== P5 cases ====
           case ClassDecl cd -> {
             // print class name and parent if not null
-            writer.print(cd.name);
+            visit(new ClassType(cd.name)); // prints “class Foo”
             if (cd.parent != null) {
-              writer.print(" extends " + cd.parent);
+              writer.print(",");
+              visit(new ClassType(cd.parent));
             }
+
             // fields
             for (VarDecl f : cd.fields) {
               writer.print(",");
@@ -163,10 +166,7 @@ public class ASTPrinter {
             }
           }
 
-          case ClassType ct -> {
-            // print class type asw (class hi)
-            writer.print(ct.name);
-          }
+          case ClassType ct -> writer.print(ct.name);
 
           case NewInstance ni -> {
             // new class hi()
@@ -176,6 +176,7 @@ public class ASTPrinter {
           case InstanceFunCallExpr ifc -> {
             // print target.method(args)
             visit(ifc.target);
+            writer.print(",");
             visit(ifc.call);
           }
           // ==== end P5 cases ====
