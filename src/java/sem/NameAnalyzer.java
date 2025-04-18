@@ -149,7 +149,6 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
             error("Function " + fd.name + " is already defined.");
             return;
           }
-          /*
           // function declaration matches definition
           if (existingSymbol.decl != null && !(existingSymbol.decl.type instanceof PointerType)) {
 
@@ -180,7 +179,6 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
               }
             }
           }
-            */
 
           // Link the definition to the previously declared function
           existingSymbol.setDefinition(fd);
