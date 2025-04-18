@@ -5,7 +5,7 @@ class Student {
         name[0] = 'A';
         name[1] = 'l';
         name[2] = 'i';
-        name[3] = 0;
+        name[3] = '0';
     }
 
     void greet() {

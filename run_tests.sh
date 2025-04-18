@@ -9,7 +9,7 @@ NC="\033[0m"
 # Set paths
 BUILD_DIR="bin"
 SRC_DIR="."
-TEST_PARSER_DIR="$SRC_DIR/tests/test/test_parser"
+TEST_PARSER_DIR="$SRC_DIR/tests/test/OO_test"
 TEST_LEXER_DIR="$SRC_DIR/tests/test/new_test"
 TEST_AST_DIR="$SRC_DIR/tests/test/new_test"
 TEST_SEMANTIC_DIR="$SRC_DIR/tests/test/new_test"
@@ -59,7 +59,7 @@ run_tests() {
       case $mode in
         "parser") java -cp "$BUILD_DIR" Main4 -parser "$file" ;;
         "lexer") java -cp "$BUILD_DIR" Main4 -lexer "$file" ;;
-        #"ast") java -cp "$BUILD_DIR" Main4 -ast "$file" ;;
+        "ast") java -cp "$BUILD_DIR" Main4 -ast "$file" ;;
         "sem") java -cp "$BUILD_DIR" Main4 -sem "$file" ;;
         #"gen")
           #output_file="$CODEGEN_OUTPUT_DIR/$(basename "$file" .c).ast"
@@ -111,7 +111,7 @@ main() {
   #rm -f "$CODEGEN_OUTPUT_DIR"/*.ast
   #rm -f "$CODEGEN_OUTPUT_DIR"/*regalloc.asm
   # Run various test phases
-  run_tests "$TEST_PARSER_DIR" "parser"
+  run_tests "$TEST_PARSER_DIR" "sem"
   #run_tests "$TEST_LEXER_DIR" "lexer"
   #run_tests "$TEST_AST_DIR" "ast"
   #run_tests "$TEST_SEMANTIC_DIR" "sem"

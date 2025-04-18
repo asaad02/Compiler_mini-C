@@ -5,7 +5,7 @@ class Code {
         tag[0] = 'C';
         tag[1] = 'S';
         tag[2] = '1';
-        tag[3] = 0;
+        tag[3] = '0';
     }
 
     void showTag() {
