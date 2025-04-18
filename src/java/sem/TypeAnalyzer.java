@@ -246,31 +246,51 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         // visit the right-hand side of the assignment
         Type right = visit(a.right);
 
-        //  assigning string literal to an array element and the size is equal
+        // Check for invalid array index access
         if (a.left instanceof ArrayAccessExpr arrayAccessExpr
             && arrayAccessExpr.array instanceof VarExpr varExpr
-            && varExpr.vd.type instanceof ArrayType arrayType
-            && a.right instanceof StrLiteral strLiteral
-            && arrayType.getDimensionSize(numErrors) < strLiteral.value.length() + 1) {
-          arrayAccessExpr.type = arrayType.elementType; // Assign
-          // if the left-hand side of the assignment is not an lvalue, return an error
-          if (!arrayType.elementType.equals(BaseType.CHAR)) {
-            error("Array element type mismatch.");
-            yield BaseType.UNKNOWN;
+            && varExpr.vd.type instanceof ArrayType arrayType) {
+
+          List<Integer> dimensions = arrayType.dimensions;
+
+          for (int i = 0; i < arrayAccessExpr.indices.size(); i++) {
+            Expr indexExpr = arrayAccessExpr.indices.get(i);
+            Type indexType = visit(indexExpr);
+
+            // Index must be int
+            if (!indexType.equals(BaseType.INT)) {
+              error("Array index must be of type int.");
+              yield BaseType.UNKNOWN;
+            }
+
+            // bound checking
+            // System.out.println("Array index: " + indexExpr);
+            if (indexExpr instanceof IntLiteral intLit) {
+              int index = intLit.value;
+              System.out.println("Array index: " + index);
+              if (index < 0 || index >= dimensions.get(i)) {
+                error(
+                    "Array index "
+                        + index
+                        + " out of bounds for dimension size "
+                        + dimensions.get(i));
+                yield BaseType.UNKNOWN;
+              }
+            }
           }
-          // if both array not the same size
-          if (arrayType.getDimensionSize(numErrors) != strLiteral.value.length() + 1) {
-            error("Array size mismatch.");
-            yield BaseType.UNKNOWN;
-          }
-          yield BaseType.NONE;
         }
+
         // switch on the left-hand side of the assignment
         switch (left) {
           case BaseType bt -> {
             // if the left-hand side is of type void, return an error
             if (bt.equals(BaseType.VOID)) {
               error("Variable cannot be of type void.");
+              yield BaseType.UNKNOWN;
+            }
+            // Check for class assignment to base type
+            if (right instanceof ClassType) {
+              error("Cannot assign class value to base type variable.");
               yield BaseType.UNKNOWN;
             }
             // if the left-hand side is not equal to the right-hand side, return an error
@@ -348,7 +368,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 cur = cur.parent;
               }
 
-              error("Cannot assign class type " + rightClass.name + " to " + leftClass.name);
+              // error("Cannot assign class type " + rightClass.name + " to " + leftClass.name);
               yield BaseType.UNKNOWN;
             } else {
               error("Cannot assign non‐class value to class variable");
@@ -469,7 +489,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         } else {
           // visit the return expression
           Type returnType = visit(r.expr);
-          /*
           if (currentFunctionReturnType instanceof StructType expectedStruct
               && returnType instanceof StructType actualStruct) {
             if (!expectedStruct.name.equals(actualStruct.name)) {
@@ -489,7 +508,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                     + returnType);
             yield BaseType.UNKNOWN;
           }
-            */
           yield returnType;
         }
       }
