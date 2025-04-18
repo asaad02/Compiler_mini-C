@@ -264,7 +264,13 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             }
 
             // bound checking
-            // System.out.println("Array index: " + indexExpr);
+            if (indexExpr instanceof BinOp binOp
+                && binOp.op.equals(Op.SUB)
+                && binOp.left instanceof IntLiteral intLit
+                && intLit.value == 0) {
+              error("Array index cannot be negative.");
+              yield BaseType.UNKNOWN;
+            }
             if (indexExpr instanceof IntLiteral intLit) {
               int index = intLit.value;
               System.out.println("Array index: " + index);
