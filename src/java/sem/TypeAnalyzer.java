@@ -653,21 +653,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           newDimensions.remove(0);
         }
 
-        // must match the bound of the array
-        if (a.indices.size() == at.dimensions.size()
-            && (a.array instanceof VarExpr varExpr || a.array instanceof FieldAccessExpr fo)) {
-          for (int i = 0; i < a.indices.size(); i++) {
-            Expr indexExpr = a.indices.get(i);
-            if (indexExpr instanceof IntLiteral intLit) {
-              int index = intLit.value;
-              if (index < 0 || index >= at.dimensions.get(i)) {
-                error("Array index out of bounds: " + index);
-                yield BaseType.UNKNOWN;
-              }
-            }
-          }
-        }
-
         a.type =
             newDimensions.isEmpty()
                 ? at.elementType
