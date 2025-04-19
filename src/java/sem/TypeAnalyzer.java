@@ -61,6 +61,14 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         ClassSymbol cs = currentScope.lookupClass(cd.name);
         // add fields in the class scope
         for (VarDecl f : cd.fields) {
+          if (cs.getField(f.name) != null) {
+            error(
+                "Field '"
+                    + f.name
+                    + "' is already declared in ancestor of class '"
+                    + cd.name
+                    + "'");
+          }
           cs.addField(f.name, f.type);
         }
         // add methods in the class scope
@@ -506,9 +514,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                       + actualStruct.name);
               yield BaseType.UNKNOWN;
             }
-          }
-          /*
-          else if (!currentFunctionReturnType.equals(returnType)) {
+          } // and not pointer type
+          else if (!currentFunctionReturnType.equals(returnType)
+              && !(currentFunctionReturnType instanceof PointerType)
+              && !(returnType instanceof PointerType)) {
             error(
                 "Return statement type mismatch: expected "
                     + currentFunctionReturnType
@@ -516,7 +525,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                     + returnType);
             yield BaseType.UNKNOWN;
           }
-            */
+
           yield returnType;
         }
       }
@@ -761,6 +770,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Invalid class cast from " + source.name + " to " + target.name);
           yield BaseType.UNKNOWN;
         }
+        /*
         Type to = tc.type;
         if (to instanceof ClassType TC && exprType instanceof ClassType FC) {
           // check if the source class is a subclass of the target class
@@ -774,6 +784,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Invalid class cast from " + FC.name + " to " + TC.name);
           yield BaseType.UNKNOWN;
         }
+          */
         yield BaseType.UNKNOWN;
       }
       // value at expression
