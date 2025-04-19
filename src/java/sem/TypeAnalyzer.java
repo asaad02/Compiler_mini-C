@@ -578,18 +578,11 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         for (int i = 0; i < f.args.size(); i++) {
           Type expected = expectedParams.get(i);
           Type actual = visit(f.args.get(i));
-
-          if (!typesAreEquivalent(expected, actual)) {
-            error(
-                "Argument "
-                    + (i + 1)
-                    + " type mismatch: expected "
-                    + expected
-                    + " but got "
-                    + actual);
+          // check if int and char mismatch arguments
+          if (expected.equals(BaseType.INT) && actual.equals(BaseType.CHAR)) {
+            error("Implicit conversion from 'char' to 'int' is not allowed.");
             yield BaseType.UNKNOWN;
           }
-
           switch (expected) {
             case BaseType bt -> {
               if (bt.equals(BaseType.VOID)) {
@@ -658,6 +651,21 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             yield BaseType.UNKNOWN;
           }
           newDimensions.remove(0);
+        }
+
+        // must match the bound of the array
+        if (a.indices.size() == at.dimensions.size()
+            && (a.array instanceof VarExpr varExpr || a.array instanceof FieldAccessExpr fo)) {
+          for (int i = 0; i < a.indices.size(); i++) {
+            Expr indexExpr = a.indices.get(i);
+            if (indexExpr instanceof IntLiteral intLit) {
+              int index = intLit.value;
+              if (index < 0 || index >= at.dimensions.get(i)) {
+                error("Array index out of bounds: " + index);
+                yield BaseType.UNKNOWN;
+              }
+            }
+          }
         }
 
         a.type =
@@ -852,6 +860,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           case PointerType pt -> {
             yield BaseType.INT;
           }
+
           // if the sizeof operator is applied to an unknown type, return an error
           default -> {
             yield BaseType.UNKNOWN;
@@ -890,21 +899,5 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
     return std.fields.stream()
         .anyMatch(
             field -> field.type instanceof StructType st && st.name.equals(std.structType.name));
-  }
-
-  // check structural equivalence of types
-  private boolean typesAreEquivalent(Type expected, Type actual) {
-    if (expected == actual) return true;
-
-    if (expected instanceof PointerType expectedPtr && actual instanceof PointerType actualPtr) {
-      return typesAreEquivalent(expectedPtr.baseType, actualPtr.baseType);
-    } else if (expected instanceof StructType expectedSt && actual instanceof StructType actualSt) {
-      return expectedSt.name.equals(actualSt.name);
-    } else if (expected instanceof ArrayType expectedArr && actual instanceof ArrayType actualArr) {
-      return expectedArr.size == actualArr.size
-          && typesAreEquivalent(expectedArr.elementType, actualArr.elementType);
-    } else {
-      return expected.equals(actual);
-    }
   }
 }
