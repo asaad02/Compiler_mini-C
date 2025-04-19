@@ -495,6 +495,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         } else {
           // visit the return expression
           Type returnType = visit(r.expr);
+
           if (currentFunctionReturnType instanceof StructType expectedStruct
               && returnType instanceof StructType actualStruct) {
             if (!expectedStruct.name.equals(actualStruct.name)) {
@@ -505,8 +506,9 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                       + actualStruct.name);
               yield BaseType.UNKNOWN;
             }
-
-          } else if (!currentFunctionReturnType.equals(returnType)) {
+          }
+          /*
+          else if (!currentFunctionReturnType.equals(returnType)) {
             error(
                 "Return statement type mismatch: expected "
                     + currentFunctionReturnType
@@ -514,6 +516,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                     + returnType);
             yield BaseType.UNKNOWN;
           }
+            */
           yield returnType;
         }
       }
@@ -575,8 +578,8 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         for (int i = 0; i < f.args.size(); i++) {
           Type expected = expectedParams.get(i);
           Type actual = visit(f.args.get(i));
-          /*
-          if (!typesAreEquivalent(expected, actual) &) {
+
+          if (!typesAreEquivalent(expected, actual)) {
             error(
                 "Argument "
                     + (i + 1)
@@ -586,7 +589,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                     + actual);
             yield BaseType.UNKNOWN;
           }
-            */
+
           switch (expected) {
             case BaseType bt -> {
               if (bt.equals(BaseType.VOID)) {
@@ -887,5 +890,21 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
     return std.fields.stream()
         .anyMatch(
             field -> field.type instanceof StructType st && st.name.equals(std.structType.name));
+  }
+
+  // check structural equivalence of types
+  private boolean typesAreEquivalent(Type expected, Type actual) {
+    if (expected == actual) return true;
+
+    if (expected instanceof PointerType expectedPtr && actual instanceof PointerType actualPtr) {
+      return typesAreEquivalent(expectedPtr.baseType, actualPtr.baseType);
+    } else if (expected instanceof StructType expectedSt && actual instanceof StructType actualSt) {
+      return expectedSt.name.equals(actualSt.name);
+    } else if (expected instanceof ArrayType expectedArr && actual instanceof ArrayType actualArr) {
+      return expectedArr.size == actualArr.size
+          && typesAreEquivalent(expectedArr.elementType, actualArr.elementType);
+    } else {
+      return expected.equals(actual);
+    }
   }
 }
