@@ -60,7 +60,7 @@ run_tests() {
         "sem") java -cp "$BUILD_DIR" Main2 -sem "$file" ;;
         "gen")
           output_file="$CODEGEN_OUTPUT_DIR/$(basename "$file" .c).ast"
-          java -cp "$BUILD_DIR" Main3 -gen "$file" "$output_file"
+          java -cp "$BUILD_DIR" Main4 -gen naive "$file" "$output_file"
           ;;
       esac
       
@@ -93,7 +93,7 @@ run_mars_simulation() {
   
   # Remove all .ast files after simulation
   rm -f "$CODEGEN_OUTPUT_DIR"/*.ast
-  rm -f "$CODEGEN_OUTPUT_DIR"/*.asm
+  #rm -f "$CODEGEN_OUTPUT_DIR"/*.asm
 }
 
 display_results() {
