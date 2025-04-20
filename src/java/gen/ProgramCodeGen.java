@@ -19,6 +19,30 @@ public class ProgramCodeGen extends CodeGen {
   void generate(Program p) {
     System.out.println("[ProgramCodeGen] Starting program generation...");
 
+    // Label Creation
+
+    VirtualLabelGen lblGen = new VirtualLabelGen();
+    lblGen.collect(p);
+    // methodLabels now in CodeGenContext
+
+    // Ancestor Collection
+
+    AncestorCollector.collect(p);
+    // classAncestors now in CodeGenContext
+
+    // Build Virtual Tables
+
+    VirtualTableGen vtGen = new VirtualTableGen();
+    vtGen.build(p);
+    // vtables now in CodeGenContext
+    System.out.println("[ProgramCodeGen] Verifying virtual tables...");
+    for (var entry : CodeGenContext.getVTables().entrySet()) {
+      String cls = entry.getKey();
+      System.out.println("VTable for " + cls + ": " + entry.getValue());
+    }
+
+    // Prepare memory allocator
+
     MemAllocCodeGen allocator = new MemAllocCodeGen(asmProg);
 
     // pass to collect function names
@@ -41,7 +65,20 @@ public class ProgramCodeGen extends CodeGen {
       }
     }
 
-    // alocate function has array parameters
+    // Emit vtables in the .data section ────────────────────────
+
+    for (var entry : CodeGenContext.getVTables().entrySet()) {
+      String cls = entry.getKey();
+      // Label for the start of this class's vtable
+      asmProg.dataSection.emit(Label.get("vtable_" + cls));
+      // Each method label in order
+      for (String methodLabel : entry.getValue().values()) {
+        asmProg.dataSection.emit(new Directive("word " + Label.get(methodLabel)));
+      }
+    }
+
+    // allocate functions with array or struct parameters first
+    // collect all toplevel and class method names
     for (Decl d : p.decls) {
       if (d instanceof FunDef fd
           && !fd.name.equals("main")
@@ -49,8 +86,15 @@ public class ProgramCodeGen extends CodeGen {
         allocator.visit(fd);
         System.out.println("[ProgramCodeGen] Generating code for function: " + fd.name);
         new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
+      } else if (d instanceof ClassDecl cd) {
+        // register each method under ClassName_method_arity
+        for (FunDef m : cd.methods) {
+          String methodName = cd.name + "_" + m.name + "_" + m.params.size();
+          definedFunctions.add(methodName);
+        }
       }
     }
+
     for (Decl d : p.decls) {
       if (d instanceof VarDecl vd) {
         allocator.allocateGlobalVariable(vd);
@@ -74,13 +118,23 @@ public class ProgramCodeGen extends CodeGen {
           && !arrayParams(fd)
           && !structParams(fd)) {
         System.out.println("[ProgramCodeGen] Generating code for function: " + fd.name);
+        // free‐standing functions use the 3‑arg ctor (no class context)
         new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
       }
     }
+    // ─── now generate code for class methods ───────────────────
+    for (Decl d : p.decls) {
+      if (d instanceof ClassDecl cd) {
+        for (FunDef m : cd.methods) {
+          System.out.println(
+              "[ProgramCodeGen] Generating code for method: " + cd.name + "." + m.name);
+          allocator.visit(m);
+          // now supply cd.name so the code‐gens know which class’s fields to use
+          new FunCodeGen(asmProg, allocator, definedFunctions, cd.name).visit(m);
+        }
+      }
+    }
 
-    // Print Assembly Sections and Debug Table
-    // printAssemblySections();
-    // allocator.printAllMemory();
     System.out.println("[ProgramCodeGen] Program generation completed successfully.");
   }
 
@@ -94,7 +148,7 @@ public class ProgramCodeGen extends CodeGen {
     return false;
   }
 
-  // check if a struct is passed as a parameter
+  // check if the function has a struct parameter
   private boolean structParams(FunDef fd) {
     for (VarDecl vd : fd.params) {
       if (vd.type instanceof StructType) {
