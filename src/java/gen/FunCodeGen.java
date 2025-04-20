@@ -11,6 +11,7 @@ public class FunCodeGen extends CodeGen {
   private final MemAllocCodeGen allocator;
   // list of defined functions
   private final List<String> definedFunctions;
+  private final String currentClass;
 
   public FunCodeGen(
       AssemblyProgram asmProg, MemAllocCodeGen allocator, Set<String> definedFunctions) {
@@ -19,13 +20,30 @@ public class FunCodeGen extends CodeGen {
     this.allocator = allocator;
     // convert set to list
     this.definedFunctions = new ArrayList<>(definedFunctions);
+    this.currentClass = null;
+  }
+
+  public FunCodeGen(
+      AssemblyProgram asmProg,
+      MemAllocCodeGen allocator,
+      Set<String> definedFunctions,
+      String currentClass) {
+    this.asmProg = asmProg;
+    this.allocator = allocator;
+    this.definedFunctions = new ArrayList<>(definedFunctions);
+    this.currentClass = currentClass;
   }
 
   void visit(FunDef fd) {
     AssemblyProgram.TextSection textSection = asmProg.emitNewTextSection();
 
-    // create a unique function label
-    String functionLabel = getUniqueFunctionName(fd);
+    // pick the label if this is a class method and grab the exact label from CodeGenContext
+    String functionLabel;
+    if (currentClass != null) {
+      functionLabel = CodeGenContext.getMethodLabels().get(currentClass).get(fd.name);
+    } else {
+      functionLabel = getUniqueFunctionName(fd);
+    }
     textSection.emit(Label.get(functionLabel));
 
     if (fd.name.equals("main")) {
@@ -37,10 +55,18 @@ public class FunCodeGen extends CodeGen {
     int frameSize = allocator.alignTo16(allocator.getFrameSize(fd) + 16);
 
     generateFunctionPrologue(textSection, frameSize);
+    // save all parameters including 'this' for methods into their locals
     saveFunctionParameters(fd, textSection, frameSize);
+    // if this is a class method reload 'this' pointer into $a0
+    if (!fd.name.equals("main") && !fd.params.isEmpty()) {
+      VarDecl thisDecl = fd.params.get(0);
+      int thisOffset = allocator.getLocalOffset(thisDecl);
+      // load the saved 'this' first arg back into $a0
+      textSection.emit(OpCode.LW, Register.Arch.a0, Register.Arch.fp, thisOffset);
+    }
 
     // Generate function body
-    new StmtCodeGen(asmProg, allocator, fd, definedFunctions).visit(fd.block);
+    new StmtCodeGen(asmProg, allocator, fd, definedFunctions, currentClass).visit(fd.block);
     // Generate function epilogue
     generateFunctionEpilogue(fd, textSection, frameSize);
   }
