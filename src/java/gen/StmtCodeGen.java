@@ -14,6 +14,7 @@ public class StmtCodeGen extends CodeGen {
   private final FunDef currentFunctionDef;
   private final Stack<LoopLabels> loopStack = new Stack<>();
   private final List<String> definedFunctions;
+  private final String currentClass;
 
   /** class to store labels for break and continue statements inside loops. */
   private static class LoopLabels {
@@ -35,6 +36,21 @@ public class StmtCodeGen extends CodeGen {
     this.allocator = allocator;
     this.currentFunctionDef = currentFunctionDef;
     this.definedFunctions = definedFunctions;
+    this.currentClass = null;
+  }
+
+  /** overload */
+  public StmtCodeGen(
+      AssemblyProgram asmProg,
+      MemAllocCodeGen allocator,
+      FunDef currentFunctionDef,
+      List<String> definedFunctions,
+      String currentClass) {
+    this.asmProg = asmProg;
+    this.allocator = allocator;
+    this.currentFunctionDef = currentFunctionDef;
+    this.definedFunctions = definedFunctions;
+    this.currentClass = currentClass;
   }
 
   /** Dispatches statement processing based on statement type. */
@@ -82,8 +98,10 @@ public class StmtCodeGen extends CodeGen {
     if (es.expr instanceof Assign a) {
       System.out.println("[StmtCodeGen] Resolving assignment: " + a.left);
 
-      Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a.left);
-      Register rhsReg = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(a.right);
+      Register addrReg =
+          new ExprAddrCodeGen(asmProg, allocator, definedFunctions, currentClass).visit(a.left);
+      Register rhsReg =
+          new ExprValCodeGen(asmProg, allocator, definedFunctions, currentClass).visit(a.right);
 
       if (a.left.type instanceof StructType structType) {
         int structSize = allocator.computeSize(structType);
@@ -135,14 +153,14 @@ public class StmtCodeGen extends CodeGen {
     }
 
     // Evaluate Expression
-    new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(es.expr);
+    new ExprValCodeGen(asmProg, allocator, definedFunctions, currentClass).visit(es.expr);
   }
 
   /** Handles if else statements by generating conditional branching. */
   private void handleIf(If i) {
     System.out.println("[StmtCodeGen] Processing if statement...");
     AssemblyProgram.TextSection text = asmProg.getCurrentTextSection();
-    ExprValCodeGen exprGen = new ExprValCodeGen(asmProg, allocator, definedFunctions);
+    ExprValCodeGen exprGen = new ExprValCodeGen(asmProg, allocator, definedFunctions, currentClass);
 
     // Generate unique labels for else and end
     Label elseLabel =
@@ -150,7 +168,8 @@ public class StmtCodeGen extends CodeGen {
     Label endLabel = Label.create(currentFunctionDef.name + "_if_end");
 
     // Evaluate condition
-    Register condReg = exprGen.visit(i.condition);
+    Register condReg =
+        new ExprValCodeGen(asmProg, allocator, definedFunctions, currentClass).visit(i.condition);
     if (elseLabel != null) {
       text.emit(OpCode.BEQ, condReg, Register.Arch.zero, elseLabel);
     } else {
@@ -185,7 +204,8 @@ public class StmtCodeGen extends CodeGen {
 
     // While loop condition check first
     text.emit(conditionLabel);
-    Register condReg = new ExprValCodeGen(asmProg, allocator, definedFunctions).visit(w.condition);
+    Register condReg =
+        new ExprValCodeGen(asmProg, allocator, definedFunctions, currentClass).visit(w.condition);
 
     // If condition is false, exit loop
     text.emit(OpCode.BEQZ, condReg, endLabel);
@@ -207,8 +227,10 @@ public class StmtCodeGen extends CodeGen {
     System.out.println("[StmtCodeGen] Processing return statement...");
 
     if (rs.expr != null) {
-      ExprValCodeGen valGen = new ExprValCodeGen(asmProg, allocator, definedFunctions);
-      ExprAddrCodeGen addrGen = new ExprAddrCodeGen(asmProg, allocator, definedFunctions);
+      ExprValCodeGen valGen =
+          new ExprValCodeGen(asmProg, allocator, definedFunctions, currentClass);
+      ExprAddrCodeGen addrGen =
+          new ExprAddrCodeGen(asmProg, allocator, definedFunctions, currentClass);
 
       if (rs.expr.type instanceof StructType structType) {
         int structSize = allocator.computeSize(structType);

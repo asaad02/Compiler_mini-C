@@ -150,6 +150,11 @@ public class MemAllocCodeGen extends CodeGen {
               computeSize(at.elementType) * at.dimensions.stream().reduce(1, (a, b) -> a * b),
               computeAlignment(at.elementType));
       case StructType st -> alignTo(structSizes.getOrDefault(st.name, 0), computeAlignment(st));
+      case ClassType ct ->
+          4
+              + CodeGenContext.getClassFieldOffsets(ct.name).values().stream()
+                  .mapToInt(Integer::intValue)
+                  .sum();
       default -> throw new UnsupportedOperationException("Unknown type: " + type);
     };
   }
@@ -162,6 +167,7 @@ public class MemAllocCodeGen extends CodeGen {
       case PointerType p -> 4;
       case ArrayType at -> computeAlignment(at.elementType);
       case StructType st -> Math.max(alignTo(structSizes.getOrDefault(st.name, 8), 8), 8);
+      case ClassType ct -> 4; // vtable pointer + fields are 4 byte aligned
       default -> throw new UnsupportedOperationException("Unknown type: " + type);
     };
   }
@@ -284,7 +290,7 @@ public class MemAllocCodeGen extends CodeGen {
     if (globalVars.containsKey(name)) {
       return globalVars.get(name);
     }
-    throw new IllegalStateException("[MemAllocCodeGen] ERROR: Variable not found: " + name);
+    return null;
   }
 
   // Returns the total stack frame size for a function.
@@ -378,10 +384,5 @@ public class MemAllocCodeGen extends CodeGen {
       }
     }
     throw new IllegalStateException("[MemAllocCodeGen] ERROR: Variable not found: " + varName);
-  }
-
-  // call printAllMemoryDebug
-  public void printAllMemory() {
-    MemDebugUtils.printAllMemoryDebug(this);
   }
 }

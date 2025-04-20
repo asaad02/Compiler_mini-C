@@ -13,12 +13,25 @@ import java.util.List;
 public class ExprAddrCodeGen extends CodeGen {
   private final MemAllocCodeGen allocator;
   private final List<String> definedFunctions;
+  private final String currentClass;
 
   public ExprAddrCodeGen(
       AssemblyProgram asmProg, MemAllocCodeGen allocator, List<String> definedFunctions) {
     this.asmProg = asmProg;
     this.allocator = allocator;
     this.definedFunctions = definedFunctions;
+    this.currentClass = null;
+  }
+
+  public ExprAddrCodeGen(
+      AssemblyProgram asmProg,
+      MemAllocCodeGen allocator,
+      List<String> definedFunctions,
+      String currentClass) {
+    this.asmProg = asmProg;
+    this.allocator = allocator;
+    this.definedFunctions = definedFunctions;
+    this.currentClass = currentClass;
   }
 
   /** Computes the address of an expression. */
@@ -29,49 +42,62 @@ public class ExprAddrCodeGen extends CodeGen {
     switch (e) {
       case VarExpr v -> {
         System.out.println("[ExprAddrCodeGen] Resolving variable address: " + v.name);
-
-        // Retrieve the  variable declaration local or global
-        VarDecl varDecl = allocator.getVarDecl(v.name);
-
-        if (varDecl == null) {
-          throw new IllegalStateException("[ExprAddrCodeGen] ERROR: Variable not found: " + v.name);
+        // try locals or globals
+        VarDecl varDecl = null;
+        try {
+          varDecl = allocator.getVarDecl(v.name);
+        } catch (IllegalStateException ise) {
+          // not found as var try field fallback
         }
 
-        // Check if variable is an array
-        if (varDecl.type instanceof ArrayType at) {
-          System.out.println("[ExprAddrCodeGen] Variable is an array: " + v.name);
-          v.type = at;
-        } else {
-          System.out.println("[ExprAddrCodeGen] Variable is NOT an array: " + v.name);
-        }
-
-        // Determine the correct scope level
-        int scopeLevel = allocator.getScopeLevel(v.name);
-        System.out.println(
-            "[ExprAddrCodeGen] Variable '" + v.name + "' found at scope level: " + scopeLevel);
-
-        // If the variable is local, use the local offset
-        if (scopeLevel >= 0) {
-          int offset = allocator.getLocalOffset(varDecl);
-          System.out.printf(
-              "[ExprAddrCodeGen] Using local variable '%s' at offset: %d\n", v.name, offset);
-          text.emit(OpCode.ADDIU, addrReg, Register.Arch.fp, offset);
-          // For array parameters small offsets load the stored pointer
-          if (varDecl.type instanceof ArrayType && Math.abs(offset) <= 16) {
-            Register temp = Register.Virtual.create();
-            text.emit(OpCode.LW, temp, addrReg, 0);
-            return temp;
+        if (varDecl != null) {
+          // local/global logic
+          if (varDecl.type instanceof ArrayType at) {
+            System.out.println("[ExprAddrCodeGen] Variable is an array: " + v.name);
+            v.type = at;
+          } else {
+            System.out.println("[ExprAddrCodeGen] Variable is NOT an array: " + v.name);
           }
-        } else if (allocator.isGlobal(v.name)) {
-          // If the variable is global, load the global address
-          System.out.println("[ExprAddrCodeGen] Accessing global variable: " + v.name);
-          text.emit(OpCode.LA, addrReg, Label.get(v.name));
-        } else {
-          throw new IllegalStateException(
-              "[ExprAddrCodeGen] ERROR: Variable '" + v.name + "' not found in any scope!");
+
+          int scopeLevel = allocator.getScopeLevel(v.name);
+          System.out.printf(
+              "[ExprAddrCodeGen] Variable '%s' found at scope level: %d\n", v.name, scopeLevel);
+
+          if (scopeLevel >= 0) {
+            int offset = allocator.getLocalOffset(varDecl);
+            System.out.printf(
+                "[ExprAddrCodeGen] Using local variable '%s' at offset: %d\n", v.name, offset);
+            text.emit(OpCode.ADDIU, addrReg, Register.Arch.fp, offset);
+            if (varDecl.type instanceof ArrayType && Math.abs(offset) <= 16) {
+              Register tmp = Register.Virtual.create();
+              text.emit(OpCode.LW, tmp, addrReg, 0);
+              return tmp;
+            }
+          } else if (allocator.isGlobal(v.name)) {
+            System.out.println("[ExprAddrCodeGen] Accessing global variable: " + v.name);
+            text.emit(OpCode.LA, addrReg, Label.get(v.name));
+          } else {
+            throw new IllegalStateException(
+                "[ExprAddrCodeGen] ERROR unexpected lookup for: " + v.name);
+          }
+
+          return addrReg;
         }
 
-        return addrReg;
+        // class field
+        if (currentClass != null
+            && CodeGenContext.getClassFieldOffsets(currentClass).containsKey(v.name)) {
+          System.out.println("[ExprAddrCodeGen] Falling back to field: " + v.name);
+          // 'this' pointer in $a0 and field offset = 4 + base
+          text.emit(OpCode.ADDU, addrReg, Register.Arch.a0, Register.Arch.zero);
+          int fieldOff = CodeGenContext.getClassFieldOffsets(currentClass).get(v.name);
+          text.emit(OpCode.ADDIU, addrReg, addrReg, 4 + fieldOff);
+          return addrReg;
+        }
+
+        // neither var nor field
+        throw new IllegalStateException(
+            "[ExprAddrCodeGen] ERROR: Variable or field not found: " + v.name);
       }
 
       case ArrayAccessExpr a -> {
@@ -126,9 +152,16 @@ public class ExprAddrCodeGen extends CodeGen {
       case FieldAccessExpr fa -> {
         Register baseReg = visit(fa.structure);
 
+        if (fa.structure.type instanceof ClassType ct) {
+          // field offset after 4‑byte vptr
+          int base = CodeGenContext.getClassFieldOffsets(ct.name).get(fa.field);
+          text.emit(OpCode.ADDIU, addrReg, visit(fa.structure), 4 + base);
+          return addrReg;
+        }
+
         if (!(fa.structure.type instanceof StructType structType)) {
           throw new IllegalStateException(
-              "[ExprAddrCodeGen] ERROR: Field access on non-struct type.");
+              "[ExprAddrCodeGen] ERROR: Field access on non-struct/type.");
         }
 
         int offset = allocator.computeFieldOffset(structType, fa.field);

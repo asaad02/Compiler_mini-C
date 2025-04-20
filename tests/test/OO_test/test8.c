@@ -17,6 +17,7 @@ class Compare {
 
 void main() {
     class Compare cmp;
+    cmp = new class Compare();
     cmp.set(10, 5);
     cmp.bigger();
 }

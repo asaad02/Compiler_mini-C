@@ -25,6 +25,7 @@ class Course {
 
 void main() {
     class Course c;
+    c = new class Course();
     c.setScore(80);
     c.testAll();
 }

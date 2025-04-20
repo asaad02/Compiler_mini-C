@@ -16,12 +16,25 @@ public class ExprValCodeGen extends CodeGen {
   private final MemAllocCodeGen allocator;
   private static int strCounter = 0;
   private final List<String> definedFunctions;
+  private final String currentClass;
 
   public ExprValCodeGen(
       AssemblyProgram asmProg, MemAllocCodeGen allocator, List<String> definedFunctions) {
     this.asmProg = asmProg;
     this.allocator = allocator;
     this.definedFunctions = definedFunctions;
+    this.currentClass = null;
+  }
+
+  public ExprValCodeGen(
+      AssemblyProgram asmProg,
+      MemAllocCodeGen allocator,
+      List<String> definedFunctions,
+      String currentClass) {
+    this.asmProg = asmProg;
+    this.allocator = allocator;
+    this.definedFunctions = definedFunctions;
+    this.currentClass = currentClass;
   }
 
   // generates assembly code for evaluating an expression.
@@ -190,61 +203,116 @@ public class ExprValCodeGen extends CodeGen {
         }
         return rhsReg;
       }
-
       case VarExpr v -> {
-        VarDecl varDecl = allocator.getVarDecl(v.name);
-        // get the address from ExprAddrCodeGen  handles parameters correctly
-        Register addrReg = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(v);
+        // locals or globals
+        VarDecl varDecl = null;
+        Register addrReg = null;
 
-        if (varDecl == null || varDecl.type == null) {
-          throw new IllegalStateException(
-              "[ExprValCodeGen] ERROR: Variable type not found: " + v.name);
+        try {
+          varDecl = allocator.getVarDecl(v.name);
+          addrReg =
+              new ExprAddrCodeGen(asmProg, allocator, definedFunctions, currentClass).visit(v);
+        } catch (IllegalStateException ei) {
+          // fall  to field check
         }
 
-        Type type = varDecl.type;
-        if (type instanceof StructType structType) {
-          int structSize = allocator.computeSize(structType);
-          structSize = allocator.alignTo8(structSize);
+        if (varDecl != null) {
+          Type t = varDecl.type;
+          if (t instanceof StructType st) {
+            int sz = allocator.computeSize(st);
+            sz = allocator.alignTo8(sz);
 
-          Register structAddr = Register.Virtual.create();
-          Register counter = Register.Virtual.create();
-          Register temp = Register.Virtual.create();
-          Register loadAddr = Register.Virtual.create();
-          Register storeAddr = Register.Virtual.create();
-          Register sizeReg = Register.Virtual.create();
-          Label copyLoop = Label.create();
-          Label endCopy = Label.create();
+            Register base = addrReg;
+            Register result = Register.Virtual.create();
+            Register cnt = Register.Virtual.create();
+            Register tmp = Register.Virtual.create();
+            Register lwAddr = Register.Virtual.create();
+            Register stAddr = Register.Virtual.create();
+            Register szReg = Register.Virtual.create();
+            Label loopL = Label.create();
+            Label endL = Label.create();
 
-          text.emit(OpCode.ADDIU, structAddr, Register.Arch.sp, -structSize); // Reserve space
-          text.emit(OpCode.LI, counter, 0);
-          text.emit(OpCode.LI, sizeReg, structSize);
+            text.emit(OpCode.ADDIU, result, Register.Arch.sp, -sz);
+            text.emit(OpCode.LI, cnt, 0);
+            text.emit(OpCode.LI, szReg, sz);
 
-          text.emit(copyLoop);
-          Register cmpReg = Register.Virtual.create();
-          text.emit(OpCode.SLT, cmpReg, counter, sizeReg);
-          text.emit(OpCode.BEQZ, cmpReg, endCopy);
+            text.emit(loopL);
+            text.emit(OpCode.SLT, tmp, cnt, szReg);
+            text.emit(OpCode.BEQZ, tmp, endL);
 
-          text.emit(OpCode.ADDU, loadAddr, addrReg, counter);
-          text.emit(OpCode.LW, temp, loadAddr, 0);
-          text.emit(OpCode.ADDU, storeAddr, structAddr, counter);
-          text.emit(OpCode.SW, temp, storeAddr, 0);
+            text.emit(OpCode.ADDU, lwAddr, base, cnt);
+            text.emit(OpCode.LW, tmp, lwAddr, 0);
+            text.emit(OpCode.ADDU, stAddr, result, cnt);
+            text.emit(OpCode.SW, tmp, stAddr, 0);
 
-          text.emit(OpCode.ADDI, counter, counter, 4);
-          text.emit(OpCode.J, copyLoop);
-          text.emit(endCopy);
+            text.emit(OpCode.ADDI, cnt, cnt, 4);
+            text.emit(OpCode.J, loopL);
+            text.emit(endL);
 
-          return structAddr;
-        } else if (type instanceof ArrayType) {
-          // For array return the pointer computed by ExprAddrCodeGen.
-          return addrReg;
+            return result;
+          } else if (t instanceof ArrayType) {
+            return addrReg;
+          } else {
+            // primitive
+            if (t.equals(BaseType.CHAR)) {
+              text.emit(OpCode.LBU, resReg, addrReg, 0);
+            } else {
+              text.emit(OpCode.LW, resReg, addrReg, 0);
+            }
+            return resReg;
+          }
         }
 
-        if (type.equals(BaseType.CHAR)) {
-          text.emit(OpCode.LBU, resReg, addrReg, 0);
-        } else {
-          text.emit(OpCode.LW, resReg, addrReg, 0);
+        // fallback class field
+        if (currentClass != null
+            && CodeGenContext.getClassFieldOffsets(currentClass).containsKey(v.name)) {
+          System.out.println("[ExprValCodeGen] Falling back to field load: " + v.name);
+          int off = CodeGenContext.getClassFieldOffsets(currentClass).get(v.name);
+          Register fldAddr = Register.Virtual.create();
+          asmProg.getCurrentTextSection().emit(OpCode.ADDIU, fldAddr, Register.Arch.a0, 4 + off);
+          text.emit(OpCode.LW, resReg, fldAddr, 0);
+          return resReg;
         }
-        return resReg;
+
+        // neither var nor field
+        throw new IllegalStateException(
+            "[ExprValCodeGen] ERROR: Variable or field not found: " + v.name);
+      }
+
+      // Instance method calls dynamic dispatch
+
+      case InstanceFunCallExpr x -> {
+
+        // Evaluate the receiver and put it into $a0
+        Register objReg = visit(x.target);
+
+        text.emit(OpCode.ADDU, Register.Arch.a0, objReg, Register.Arch.zero);
+
+        // Evaluate up to three other args into $a1–$a3
+        for (int i = 0; i < x.call.args.size() && i < 3; i++) {
+          Register argReg = visit(x.call.args.get(i));
+          text.emit(OpCode.ADDU, getArgReg(i + 1), argReg, Register.Arch.zero);
+        }
+
+        // Look up vtable pointer & load method address
+        Register vptr = Register.Virtual.create();
+        text.emit(OpCode.LW, vptr, objReg, 0);
+        String className = ((ClassType) x.target.type).name;
+        int idx = CodeGenContext.getMethodIndex(className, x.call.name);
+        Register offReg = Register.Virtual.create();
+        text.emit(OpCode.LI, offReg, idx * 4);
+        Register slotAddr = Register.Virtual.create();
+        text.emit(OpCode.ADDU, slotAddr, vptr, offReg);
+        Register target = Register.Virtual.create();
+        text.emit(OpCode.LW, target, slotAddr, 0);
+
+        // Call it
+        text.emit(OpCode.JALR, target);
+
+        // Grab return value
+        Register result = Register.Virtual.create();
+        text.emit(OpCode.ADDU, result, Register.Arch.v0, Register.Arch.zero);
+        return result;
       }
 
       case FunCallExpr fc -> {
@@ -294,8 +362,22 @@ public class ExprValCodeGen extends CodeGen {
           text.emit(OpCode.SW, argumentRegs.get(i), Register.Arch.sp, i * 4);
         }
 
-        // Call Function
-        text.emit(OpCode.JAL, funcLabel);
+        // Dynamic dispatch for class methods
+        if (!fc.args.isEmpty()
+            && fc.args.get(0).type instanceof ClassType ct
+            && CodeGenContext.hasVirtualMethod(ct.name, fc.name)) {
+          Register obj = argumentRegs.remove(0);
+          Register vptr = Register.Virtual.create();
+          text.emit(OpCode.LW, vptr, obj, 0);
+          int idx = CodeGenContext.getMethodIndex(ct.name, fc.name);
+          text.emit(OpCode.LI, Register.Arch.t1, idx * 4);
+          text.emit(OpCode.ADDU, Register.Arch.t1, vptr, Register.Arch.t1);
+          Register target = Register.Virtual.create();
+          text.emit(OpCode.LW, target, Register.Arch.t1, 0);
+          text.emit(OpCode.JALR, target);
+        } else {
+          text.emit(OpCode.JAL, funcLabel);
+        }
 
         // Cleanup Stack
         text.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, totalStackSize);
@@ -326,53 +408,12 @@ public class ExprValCodeGen extends CodeGen {
       }
 
       case ArrayAccessExpr a -> {
-        Register baseAddr =
-            new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a.array);
-
-        if (!(a.array.type instanceof ArrayType arrayType)) {
-          throw new IllegalStateException(
-              "[ExprValCodeGen] ERROR: ArrayAccessExpr on non-array type.");
-        }
-
-        Type elementType = arrayType.elementType;
-        int elementSize = allocator.computeSize(elementType);
-
-        Register offsetReg = Register.Virtual.create();
-        text.emit(OpCode.LI, offsetReg, 0); // Initialize offset to zero
-
-        for (int i = 0; i < a.indices.size(); i++) {
-          Register indexReg = visit(a.indices.get(i)); // Compute index value
-
-          // Compute correct stride for each dimension
-          Register strideReg = Register.Virtual.create();
-          int stride = 1;
-          for (int j = i + 1; j < a.indices.size(); j++) {
-            stride *= arrayType.dimensions.get(j);
-          }
-          text.emit(OpCode.LI, strideReg, stride);
-
-          // Multiply index by stride
-          text.emit(OpCode.MUL, indexReg, indexReg, strideReg);
-
-          // Accumulate into final offset
-          text.emit(OpCode.ADDU, offsetReg, offsetReg, indexReg);
-        }
-
-        // Multiply final offset by element size
-        Register sizeReg = Register.Virtual.create();
-        text.emit(OpCode.LI, sizeReg, elementSize);
-        text.emit(OpCode.MUL, offsetReg, offsetReg, sizeReg);
-
-        // Compute the final address
-        Register finalAddr = Register.Virtual.create();
-        text.emit(OpCode.ADDU, finalAddr, baseAddr, offsetReg);
-
-        System.out.println("[ExprValCodeGen] Computed array element address.");
-
-        if (elementType.equals(BaseType.CHAR)) {
-          text.emit(OpCode.LBU, resReg, finalAddr, 0); // Load byte for char
+        Register elemAddr = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a);
+        // Load the actual element
+        if (a.array.type instanceof ArrayType at && at.elementType.equals(BaseType.CHAR)) {
+          text.emit(OpCode.LBU, resReg, elemAddr, 0);
         } else {
-          text.emit(OpCode.LW, resReg, finalAddr, 0); // Load word for other types
+          text.emit(OpCode.LW, resReg, elemAddr, 0);
         }
         return resReg;
       }
@@ -390,6 +431,22 @@ public class ExprValCodeGen extends CodeGen {
           }
           return resReg;
         }
+      }
+      case NewInstance ne -> {
+        // allocate object
+        int size = allocator.computeSize(ne.type);
+        // Syscall mcmalloc(size)
+        text.emit(OpCode.LI, Register.Arch.a0, size);
+        text.emit(OpCode.LI, Register.Arch.v0, 9);
+        text.emit(OpCode.SYSCALL);
+        // v0 now has object ptr
+        Register objPtr = Register.Virtual.create();
+        text.emit(OpCode.ADDU, objPtr, Register.Arch.v0, Register.Arch.zero);
+        // store vtable pointer at offset 0
+        Label vtLabel = Label.get("vtable_" + ((ClassType) ne.type).name);
+        text.emit(OpCode.LA, Register.Arch.t0, vtLabel);
+        text.emit(OpCode.SW, Register.Arch.t0, objPtr, 0);
+        return objPtr;
       }
 
       default ->

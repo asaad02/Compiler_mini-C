@@ -13,5 +13,6 @@ class Math {
 
 void main() {
     class Math m;
+    m = new class Math();
     m.test();
 }

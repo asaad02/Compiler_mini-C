@@ -17,6 +17,7 @@ class Student {
 
 void main() {
     class Student s;
+    s = new class Student();
     s.setName();
     s.greet();
 }

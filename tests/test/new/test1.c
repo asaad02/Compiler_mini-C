@@ -6,5 +6,6 @@ class HelloWorld {
 
 void main() {
     class HelloWorld hw;
+    hw = new  class HelloWorld();
     hw.sayHi();
 }
