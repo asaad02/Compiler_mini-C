@@ -61,14 +61,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         ClassSymbol cs = currentScope.lookupClass(cd.name);
         // add fields in the class scope
         for (VarDecl f : cd.fields) {
-          if (cs.getField(f.name) != null) {
-            error(
-                "Field '"
-                    + f.name
-                    + "' is already declared in ancestor of class '"
-                    + cd.name
-                    + "'");
-          }
           cs.addField(f.name, f.type);
         }
         // add methods in the class scope
@@ -588,10 +580,12 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           Type expected = expectedParams.get(i);
           Type actual = visit(f.args.get(i));
           // check if int and char mismatch arguments
+          /*
           if (expected.equals(BaseType.INT) && actual.equals(BaseType.CHAR)) {
             error("Implicit conversion from 'char' to 'int' is not allowed.");
             yield BaseType.UNKNOWN;
           }
+            */
           switch (expected) {
             case BaseType bt -> {
               if (bt.equals(BaseType.VOID)) {
