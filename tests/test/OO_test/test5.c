@@ -16,5 +16,6 @@ class EvenCheck {
 
 void main() {
     class EvenCheck ec;
+    ec = new class EvenCheck();
     ec.test();
 }

@@ -16,6 +16,7 @@ class Code {
 
 void main() {
     class Code c;
+    c = new class Code();
     c.setTag();
     c.showTag();
 }

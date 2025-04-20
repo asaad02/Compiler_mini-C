@@ -21,6 +21,7 @@ class Exam {
 
 void main() {
     class Exam e;
+    e = new class Exam();
     e.setScore(100);
     e.printExamStatus();
 }
