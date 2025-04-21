@@ -300,10 +300,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               yield BaseType.UNKNOWN;
             }
             // if the left-hand side is not equal to the right-hand side, return an error
-            // if (left.equals(BaseType.INT) && right.equals(BaseType.CHAR)) {
-            // error("Implicit conversion from 'char' to 'int' is not allowed.");
-            // yield BaseType.UNKNOWN;
-            // }
+            if (left.equals(BaseType.INT) && right.equals(BaseType.CHAR)) {
+              error("Implicit conversion from 'char' to 'int' is not allowed.");
+              yield BaseType.UNKNOWN;
+            }
             // if from int to char
             if (left.equals(BaseType.CHAR) && right.equals(BaseType.INT)) {
               error("Implicit conversion from 'int' to 'char' is not allowed.");
@@ -326,23 +326,23 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                   // check if the row sizes match
                   if (leftInner.getDimensionSize(numErrors)
                       != rightInner.getDimensionSize(numErrors)) {
-                    // error("2D Array row size mismatch.");
+                    error("2D Array row size mismatch.");
                     yield BaseType.UNKNOWN;
                   }
 
                 } else if (!leftArray.elementType.equals(rightArray.elementType)) {
-                  // error("Array element type mismatch.");
+                  error("Array element type mismatch.");
                   yield BaseType.UNKNOWN;
                 }
                 // 3nsure the top-level array sizes match
                 if (leftArray.getDimensionSize(numErrors)
                     != rightArray.getDimensionSize(numErrors)) {
-                  // error("Array size mismatch.");
+                  error("Array size mismatch.");
                   yield BaseType.UNKNOWN;
                 }
               }
               default -> {
-                // error("Array assignment mismatch.");
+                error("Array assignment mismatch.");
                 yield BaseType.UNKNOWN;
               }
             }
