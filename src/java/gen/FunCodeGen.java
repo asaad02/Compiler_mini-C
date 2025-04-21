@@ -16,9 +16,7 @@ public class FunCodeGen extends CodeGen {
   public FunCodeGen(
       AssemblyProgram asmProg, MemAllocCodeGen allocator, Set<String> definedFunctions) {
     this.asmProg = asmProg;
-    // Store allocator
     this.allocator = allocator;
-    // convert set to list
     this.definedFunctions = new ArrayList<>(definedFunctions);
     this.currentClass = null;
   }
@@ -53,6 +51,7 @@ public class FunCodeGen extends CodeGen {
     int frameSize = allocator.alignTo16(allocator.getFrameSize(fd) + 16);
 
     generateFunctionPrologue(textSection, frameSize);
+    saveFunctionParameters(fd, textSection, frameSize);
 
     // Generate the body
     new StmtCodeGen(asmProg, allocator, fd, definedFunctions, currentClass).visit(fd.block);
