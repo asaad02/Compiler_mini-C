@@ -65,15 +65,20 @@ public class ProgramCodeGen extends CodeGen {
       }
     }
 
-    // Emit vtables in the .data section ────────────────────────
+    // Emit vtables in the .data section
+    // allocate global variables
+    for (Decl d : p.decls) {
+      if (d instanceof VarDecl vd) {
+        allocator.allocateGlobalVariable(vd);
+      }
+    }
 
+    // Now emit vtables as data *after* all globals
     for (var entry : CodeGenContext.getVTables().entrySet()) {
       String cls = entry.getKey();
-      // Label for the start of this class's vtable
       asmProg.dataSection.emit(Label.get("vtable_" + cls));
-      // Each method label in order
-      for (String methodLabel : entry.getValue().values()) {
-        asmProg.dataSection.emit(new Directive("word " + Label.get(methodLabel)));
+      for (String mlabel : entry.getValue().values()) {
+        asmProg.dataSection.emit(new Directive("word " + Label.get(mlabel)));
       }
     }
 
@@ -96,9 +101,6 @@ public class ProgramCodeGen extends CodeGen {
     }
 
     for (Decl d : p.decls) {
-      if (d instanceof VarDecl vd) {
-        allocator.allocateGlobalVariable(vd);
-      }
       if (d instanceof FunDef fd) {
         System.out.println("[ProgramCodeGen] Calling MemAllocCodeGen for function: " + fd.name);
         allocator.visit(fd);
@@ -122,7 +124,7 @@ public class ProgramCodeGen extends CodeGen {
         new FunCodeGen(asmProg, allocator, definedFunctions).visit(fd);
       }
     }
-    // ─── now generate code for class methods ───────────────────
+    // generate code for class methods
     for (Decl d : p.decls) {
       if (d instanceof ClassDecl cd) {
         for (FunDef m : cd.methods) {
