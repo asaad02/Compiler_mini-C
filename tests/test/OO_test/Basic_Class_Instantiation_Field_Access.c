@@ -11,6 +11,7 @@ int main() {
     class Course c;
     c = new class Course();
     c.credit = 5;
-    c.printCredits(); // will print 5
+    print_i(c.credit); // will print 5
+    //c.printCredits(); // will print 5
     return 0;
 }

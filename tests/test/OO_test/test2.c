@@ -10,7 +10,14 @@ class Student {
 
     void greet() {
         print_s((char*)"Hello ");
-        print_s(name);
+        int i ;
+        i = 0;
+        while (i < 20) {
+            if (name[i] == '0') {
+                break;
+            }
+            i = i + 1;
+        }
         print_s((char*)"\n");
     }
 }

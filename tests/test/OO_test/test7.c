@@ -9,7 +9,15 @@ class Code {
     }
 
     void showTag() {
-        print_s(tag);
+        int i;
+        i = 0;
+        while (i < 4) {
+            if (tag[i] == '0') {
+                break;
+            }
+            print_c(tag[i]);
+            i = i + 1;
+        }
         print_s((char*)"\n");
     }
 }
