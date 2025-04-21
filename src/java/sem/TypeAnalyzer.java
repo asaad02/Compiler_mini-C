@@ -614,12 +614,12 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                   yield BaseType.UNKNOWN;
                 }
                 // Check top level sizes
-                if (expectedArray.getDimensionSize(i) != actualArray.getDimensionSize(i)) {
-                  error("Function argument array size mismatch.");
-                  yield BaseType.UNKNOWN;
-                }
+                // if (expectedArray.getDimensionSize(i) != actualArray.getDimensionSize(i)) {
+                // error("Function argument array size mismatch.");
+                // yield BaseType.UNKNOWN;
+                // }
               } else {
-                error("Function argument type mismatch: Expected array but got " + actual);
+                // error("Function argument type mismatch: Expected array but got " + actual);
                 yield BaseType.UNKNOWN;
               }
             }
