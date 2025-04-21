@@ -152,10 +152,17 @@ public class ExprAddrCodeGen extends CodeGen {
       case FieldAccessExpr fa -> {
         Register baseReg = visit(fa.structure);
 
+        // Handle class field access dynamic object
         if (fa.structure.type instanceof ClassType ct) {
-          // field offset after 4‑byte vptr
-          int base = CodeGenContext.getClassFieldOffsets(ct.name).get(fa.field);
-          text.emit(OpCode.ADDIU, addrReg, visit(fa.structure), 4 + base);
+          // compute address of the variable holding the object pointer
+          Register varAddr = visit(fa.structure);
+          // Load the object pointer from that variable
+          Register objPtr = Register.Virtual.create();
+          text.emit(OpCode.LW, objPtr, varAddr, 0);
+          // Compute field offset after the 4 byte vptr
+          int fieldOff = CodeGenContext.getClassFieldOffsets(ct.name).get(fa.field);
+          // addrReg = objPtr + 4 + fieldOff
+          text.emit(OpCode.ADDIU, addrReg, objPtr, 4 + fieldOff);
           return addrReg;
         }
 

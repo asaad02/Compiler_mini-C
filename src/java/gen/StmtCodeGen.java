@@ -260,8 +260,16 @@ public class StmtCodeGen extends CodeGen {
         text.emit(OpCode.ADDU, Register.Arch.v0, resultReg, Register.Arch.zero);
       }
     }
+    // Determine the label FunCodeGen used
+    String functionLabel =
+        (currentClass != null)
+            ? CodeGenContext.getMethodLabels().get(currentClass).get(currentFunctionDef.name)
+            : (currentFunctionDef.name.equals("main")
+                ? "main"
+                : currentFunctionDef.name + "_" + currentFunctionDef.params.size());
 
-    text.emit(OpCode.J, Label.get("func_epilogue_" + currentFunctionDef.name));
+    // Jump to the unique epilogue label
+    text.emit(OpCode.J, Label.get(functionLabel + "_epilogue"));
   }
 
   // handles continue statements by jumping to the start of the nearest enclosing loop.

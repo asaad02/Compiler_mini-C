@@ -316,6 +316,28 @@ public class ExprValCodeGen extends CodeGen {
       }
 
       case FunCallExpr fc -> {
+        // Dynamic dispatch for methods of the current class called
+        if (currentClass != null && CodeGenContext.hasVirtualMethod(currentClass, fc.name)) {
+          for (int i = 0; i < fc.args.size() && i < 3; i++) {
+            Register argReg = visit(fc.args.get(i));
+            text.emit(OpCode.ADDU, getArgReg(i + 1), argReg, Register.Arch.zero);
+          }
+          // Look up vtable pointer  and will load method address
+          Register vptr = Register.Virtual.create();
+          text.emit(OpCode.LW, vptr, Register.Arch.a0, 0);
+          int idx = CodeGenContext.getMethodIndex(currentClass, fc.name);
+          Register offReg = Register.Virtual.create();
+          text.emit(OpCode.LI, offReg, idx * 4);
+          Register slotAddr = Register.Virtual.create();
+          text.emit(OpCode.ADDU, slotAddr, vptr, offReg);
+          Register target = Register.Virtual.create();
+          text.emit(OpCode.LW, target, slotAddr, 0);
+          // Call it
+          text.emit(OpCode.JALR, target);
+          // Grab return value
+          text.emit(OpCode.ADDU, resReg, Register.Arch.v0, Register.Arch.zero);
+          return resReg;
+        }
         if (SyscallCodeGen.isSyscall(fc.name)) {
           Register argReg = fc.args.isEmpty() ? null : visit(fc.args.get(0));
           SyscallCodeGen.generateSyscall(text, fc.name, argReg);
@@ -408,7 +430,8 @@ public class ExprValCodeGen extends CodeGen {
       }
 
       case ArrayAccessExpr a -> {
-        Register elemAddr = new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(a);
+        Register elemAddr =
+            new ExprAddrCodeGen(asmProg, allocator, definedFunctions, currentClass).visit(a);
         // Load the actual element
         if (a.array.type instanceof ArrayType at && at.elementType.equals(BaseType.CHAR)) {
           text.emit(OpCode.LBU, resReg, elemAddr, 0);
@@ -419,6 +442,15 @@ public class ExprValCodeGen extends CodeGen {
       }
 
       case FieldAccessExpr fa -> {
+        // Class field access load field value from heap object
+        if (fa.structure.type instanceof ClassType ct) {
+          // get address of the field
+          Register addr =
+              new ExprAddrCodeGen(asmProg, allocator, definedFunctions, currentClass).visit(fa);
+          // load the value
+          text.emit(OpCode.LW, resReg, addr, 0);
+          return resReg;
+        }
         Register baseReg =
             new ExprAddrCodeGen(asmProg, allocator, definedFunctions).visit(fa.structure);
         if (fa.structure.type instanceof StructType structType) {

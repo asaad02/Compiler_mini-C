@@ -5,6 +5,7 @@ import ast.Decl;
 import ast.Program;
 import ast.VarDecl;
 import gen.asm.*;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,9 +21,17 @@ public class VirtualTableGen extends CodeGen {
 
   /** Walk all ClassDecls build each vtable & field layout store in CodeGenContext. */
   public void build(Program p) {
+    // Build a lookup from class name to its AST node for field inheritance
+    Map<String, ClassDecl> classByName = new HashMap<>();
     for (Decl d : p.decls) {
       if (d instanceof ClassDecl cd) {
-        // Build vtable
+        classByName.put(cd.name, cd);
+      }
+    }
+
+    for (Decl d : p.decls) {
+      if (d instanceof ClassDecl cd) {
+        // --- Build vtable ---
         LinkedHashMap<String, String> table = new LinkedHashMap<>();
 
         // insert ancestor methods
@@ -37,8 +46,17 @@ public class VirtualTableGen extends CodeGen {
 
         // build object field layout for this class
         LinkedHashMap<String, Integer> fieldMap = new LinkedHashMap<>();
-        // after vptr (4 bytes) fields start at offset 0
         int offset = 0;
+        for (String anc : classAncestors.getOrDefault(cd.name, List.of())) {
+          ClassDecl parent = classByName.get(anc);
+          if (parent != null) {
+            for (VarDecl f : parent.fields) {
+              fieldMap.put(f.name, offset);
+              offset += computeFieldSize(f);
+            }
+          }
+        }
+        // now append this class's own fields
         for (VarDecl f : cd.fields) {
           fieldMap.put(f.name, offset);
           offset += computeFieldSize(f);
@@ -51,7 +69,6 @@ public class VirtualTableGen extends CodeGen {
 
   /** compute a field's size 4 byte aligned */
   private int computeFieldSize(VarDecl f) {
-    // assume all fields are 4 byte (
     return 4;
   }
 }

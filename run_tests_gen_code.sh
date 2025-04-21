@@ -92,7 +92,7 @@ run_mars_simulation() {
   done
   
   # Remove all .ast files after simulation
-  rm -f "$CODEGEN_OUTPUT_DIR"/*.ast
+  #rm -f "$CODEGEN_OUTPUT_DIR"/*.ast
   #rm -f "$CODEGEN_OUTPUT_DIR"/*.asm
 }
 

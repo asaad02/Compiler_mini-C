@@ -77,9 +77,22 @@ public class NameAnalyzer extends BaseSemanticAnalyzer {
           cs.addField(f.name, f.type);
         }
         for (FunDef m : cd.methods) {
+          Set<String> parameterseen = new HashSet<>();
           // prvenet class method redefined
           if (cs.methods.containsKey(m.name)) {
             error("Method " + m.name + " is already defined in class " + cd.name);
+          }
+          for (VarDecl param : m.params) {
+            if (!parameterseen.add(param.name)) {
+              error(
+                  "Method '"
+                      + m.name
+                      + "' in class '"
+                      + cd.name
+                      + "' has duplicate parameter '"
+                      + param.name
+                      + "'.");
+            }
           }
           FunSymbol fm = new FunSymbol(m);
           cs.addMethod(fm);

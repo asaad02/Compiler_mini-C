@@ -14,6 +14,7 @@ int main() {
     c = new class Course();
     c.courseWorkScore = 90;
     if (c.hasExam()) {
+        print_i(c.hasExam());
         print_s((char*)"Has exam\n");
     } else {
         print_s((char*)"No exam\n");
