@@ -37,16 +37,14 @@ public class FunCodeGen extends CodeGen {
   void visit(FunDef fd) {
     AssemblyProgram.TextSection textSection = asmProg.emitNewTextSection();
 
-    // pick the label if this is a class method and grab the exact label from CodeGenContext
-    String functionLabel;
-    if (currentClass != null) {
-      functionLabel = CodeGenContext.getMethodLabels().get(currentClass).get(fd.name);
-    } else {
-      functionLabel = getUniqueFunctionName(fd);
-    }
+    // pick the label for this function or method
+    String functionLabel =
+        (currentClass != null)
+            ? CodeGenContext.getMethodLabels().get(currentClass).get(fd.name)
+            : getUniqueFunctionName(fd);
     textSection.emit(Label.get(functionLabel));
 
-    if (fd.name.equals("main")) {
+    if (functionLabel.equals("main")) {
       textSection.emit(new Directive("globl main"));
     }
 
@@ -55,23 +53,15 @@ public class FunCodeGen extends CodeGen {
     int frameSize = allocator.alignTo16(allocator.getFrameSize(fd) + 16);
 
     generateFunctionPrologue(textSection, frameSize);
-    // save all parameters including 'this' for methods into their locals
-    saveFunctionParameters(fd, textSection, frameSize);
-    // if this is a class method reload 'this' pointer into $a0
-    if (!fd.name.equals("main") && !fd.params.isEmpty()) {
-      VarDecl thisDecl = fd.params.get(0);
-      int thisOffset = allocator.getLocalOffset(thisDecl);
-      // load the saved 'this' first arg back into $a0
-      textSection.emit(OpCode.LW, Register.Arch.a0, Register.Arch.fp, thisOffset);
-    }
 
-    // Generate function body
+    // Generate the body
     new StmtCodeGen(asmProg, allocator, fd, definedFunctions, currentClass).visit(fd.block);
-    // Generate function epilogue
-    generateFunctionEpilogue(fd, textSection, frameSize);
+
+    // single, unique epilogue per mangled label
+    generateFunctionEpilogue(functionLabel, textSection, frameSize);
   }
 
-  /** Generates function prologue */
+  /** Generates function prologue. */
   private void generateFunctionPrologue(AssemblyProgram.TextSection textSection, int frameSize) {
     textSection.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, -frameSize);
     textSection.emit(OpCode.SW, Register.Arch.ra, Register.Arch.sp, frameSize - 4);
@@ -80,47 +70,54 @@ public class FunCodeGen extends CodeGen {
     textSection.emit(OpCode.PUSH_REGISTERS);
   }
 
+  // Saves parameters
   private void saveFunctionParameters(
       FunDef fd, AssemblyProgram.TextSection textSection, int frameSize) {
-    int paramStackOffset = frameSize;
+    if (currentClass != null) {
+      // methods $a0 is ‘this’, real args in $a1–$a3
+      for (int i = 0; i < fd.params.size(); i++) {
+        VarDecl param = fd.params.get(i);
+        int localOffset = allocator.getLocalOffset(param);
+        Register src = getArgReg(i + 1);
+        textSection.emit(OpCode.SW, src, Register.Arch.fp, localOffset);
+      }
+    } else {
+      int paramStackOffset = frameSize;
+      for (int i = 0; i < fd.params.size(); i++) {
+        VarDecl param = fd.params.get(i);
+        int localOffset = allocator.getLocalOffset(param.name);
+        Type paramType = param.type;
 
-    for (int i = 0; i < fd.params.size(); i++) {
-      VarDecl param = fd.params.get(i);
-      int localOffset = allocator.getLocalOffset(param.name);
-      Type paramType = param.type;
+        if (paramType instanceof StructType) {
+          int structSize = allocator.alignTo(allocator.computeSize(paramType), 8);
+          for (int w = 0; w < structSize; w += 4) {
+            Register tmp = Register.Virtual.create();
+            textSection.emit(OpCode.LW, tmp, Register.Arch.fp, paramStackOffset + w);
+            textSection.emit(OpCode.SW, tmp, Register.Arch.fp, localOffset + w);
+          }
+          paramStackOffset += allocator.alignTo(structSize, 8);
 
-      if (paramType instanceof StructType) {
-        // Structs are passed by copy, copy each word manually
-        int structSize = allocator.alignTo(allocator.computeSize(paramType), 8);
-        for (int word = 0; word < structSize; word += 4) {
-          Register temp = Register.Virtual.create();
-          textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset + word);
-          textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset + word);
+        } else if (paramType instanceof ArrayType) {
+          Register tmp = Register.Virtual.create();
+          textSection.emit(OpCode.LW, tmp, Register.Arch.fp, paramStackOffset);
+          textSection.emit(OpCode.SW, tmp, Register.Arch.fp, localOffset);
+          paramStackOffset += 4;
+
+        } else {
+          Register tmp = Register.Virtual.create();
+          textSection.emit(OpCode.LW, tmp, Register.Arch.fp, paramStackOffset);
+          textSection.emit(OpCode.SW, tmp, Register.Arch.fp, localOffset);
+          paramStackOffset += 4;
         }
-        paramStackOffset += allocator.alignTo(structSize, 8);
-      } else if (paramType instanceof ArrayType) {
-        // For array parameters store the argument register value
-
-        Register temp = Register.Virtual.create();
-        textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
-        textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
-        paramStackOffset += 4;
-
-      } else {
-        Register temp = Register.Virtual.create();
-        textSection.emit(OpCode.LW, temp, Register.Arch.fp, paramStackOffset);
-        textSection.emit(OpCode.SW, temp, Register.Arch.fp, localOffset);
-        paramStackOffset += 4;
       }
     }
   }
 
-  /** Generates function epilogue */
+  /** Generates function epilogue under a unique mangled label. */
   private void generateFunctionEpilogue(
-      FunDef fd, AssemblyProgram.TextSection textSection, int frameSize) {
-    System.out.println("[FunCodeGen] Generating function epilogue for: " + fd.name);
-
-    Label epilogueLabel = Label.get("func_epilogue_" + fd.name);
+      String functionLabel, AssemblyProgram.TextSection textSection, int frameSize) {
+    System.out.println("[FunCodeGen] Generating epilogue for " + functionLabel);
+    Label epilogueLabel = Label.get(functionLabel + "_epilogue");
     textSection.emit(epilogueLabel);
 
     textSection.emit(OpCode.POP_REGISTERS);
@@ -128,7 +125,7 @@ public class FunCodeGen extends CodeGen {
     textSection.emit(OpCode.LW, Register.Arch.fp, Register.Arch.sp, frameSize - 8);
     textSection.emit(OpCode.ADDIU, Register.Arch.sp, Register.Arch.sp, frameSize);
 
-    if (fd.name.equals("main")) {
+    if (functionLabel.equals("main")) {
       textSection.emit(OpCode.LI, Register.Arch.v0, 10);
       textSection.emit(OpCode.SYSCALL);
     } else {
