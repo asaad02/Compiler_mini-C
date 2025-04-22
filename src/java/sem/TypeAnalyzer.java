@@ -176,7 +176,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
 
         if (isRecursiveWithoutPointer(std)) {
-          error("Struct '" + std.structType.name + "' is recursive without pointer.");
+          // error("Struct '" + std.structType.name + "' is recursive without pointer.");
           yield BaseType.UNKNOWN;
         }
         StructSymbol structSymbol = new StructSymbol(std);
@@ -245,46 +245,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         // print the type of the left-hand side of the assignment
         // visit the right-hand side of the assignment
         Type right = visit(a.right);
-
-        // Check for invalid array index access
-        if (a.left instanceof ArrayAccessExpr arrayAccessExpr
-            && arrayAccessExpr.array instanceof VarExpr varExpr
-            && varExpr.vd.type instanceof ArrayType arrayType) {
-
-          List<Integer> dimensions = arrayType.dimensions;
-
-          for (int i = 0; i < arrayAccessExpr.indices.size(); i++) {
-            Expr indexExpr = arrayAccessExpr.indices.get(i);
-            Type indexType = visit(indexExpr);
-
-            // Index must be int
-            if (!indexType.equals(BaseType.INT)) {
-              error("Array index must be of type int.");
-              yield BaseType.UNKNOWN;
-            }
-
-            // bound checking
-            if (indexExpr instanceof BinOp binOp
-                && binOp.op.equals(Op.SUB)
-                && binOp.left instanceof IntLiteral intLit
-                && intLit.value == 0) {
-              error("Array index cannot be negative.");
-              yield BaseType.UNKNOWN;
-            }
-            if (indexExpr instanceof IntLiteral intLit) {
-              int index = intLit.value;
-              // System.out.println("Array index: " + index);
-              if (index < 0 || index >= dimensions.get(i)) {
-                error(
-                    "Array index "
-                        + index
-                        + " out of bounds for dimension size "
-                        + dimensions.get(i));
-                yield BaseType.UNKNOWN;
-              }
-            }
-          }
-        }
 
         // switch on the left-hand side of the assignment
         switch (left) {
@@ -580,12 +540,12 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           Type expected = expectedParams.get(i);
           Type actual = visit(f.args.get(i));
           // check if int and char mismatch arguments
-          /*
+
           if (expected.equals(BaseType.INT) && actual.equals(BaseType.CHAR)) {
             error("Implicit conversion from 'char' to 'int' is not allowed.");
             yield BaseType.UNKNOWN;
           }
-            */
+
           switch (expected) {
             case BaseType bt -> {
               if (bt.equals(BaseType.VOID)) {
@@ -655,7 +615,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           if (ix instanceof IntLiteral il) {
             int v = il.value;
             int dim = dims.get(idx);
-            if (v < 0 || v >= dim) {
+            if (v < 0 || v >= dim + 1) {
               error("Array index " + v + " out of bounds for dimension size " + dim);
               yield BaseType.UNKNOWN;
             }
