@@ -320,7 +320,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 
                   // Check if the inner arrays rows have the same type
                   if (!leftInner.elementType.equals(rightInner.elementType)) {
-                    // error("2D Array element type mismatch.");
+                    error("2D Array element type mismatch.");
                     yield BaseType.UNKNOWN;
                   }
                   // check if the row sizes match
@@ -600,10 +600,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                     && actualArray.elementType instanceof ArrayType actualInner) {
 
                   // Check inner array types
-                  // if (!expectedInner.elementType.equals(actualInner.elementType)) {
-                  // error("Function argument 2D array type mismatch.");
-                  // yield BaseType.UNKNOWN;
-                  // }
+                  if (!expectedInner.elementType.equals(actualInner.elementType)) {
+                    error("Function argument 2D array type mismatch.");
+                    // yield BaseType.UNKNOWN;
+                  }
                   // Check inner array sizes
                   if (expectedInner.getDimensionSize(i) != actualInner.getDimensionSize(i)) {
                     error("Function argument 2D array row size mismatch.");
@@ -614,12 +614,12 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                   yield BaseType.UNKNOWN;
                 }
                 // Check top level sizes
-                // if (expectedArray.getDimensionSize(i) != actualArray.getDimensionSize(i)) {
-                // error("Function argument array size mismatch.");
-                // yield BaseType.UNKNOWN;
-                // }
+                if (expectedArray.getDimensionSize(i) != actualArray.getDimensionSize(i)) {
+                  error("Function argument array size mismatch.");
+                  // yield BaseType.UNKNOWN;
+                }
               } else {
-                // error("Function argument type mismatch: Expected array but got " + actual);
+                error("Function argument type mismatch: Expected array but got " + actual);
                 yield BaseType.UNKNOWN;
               }
             }
@@ -629,37 +629,49 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         yield funSymbol.def != null ? funSymbol.def.type : funSymbol.decl.type;
       }
       case ArrayAccessExpr a -> {
-        Type arrayType = visit(a.array);
-
-        if (!(arrayType instanceof ArrayType at)) {
+        Type t = visit(a.array);
+        if (!(t instanceof ArrayType)) {
           error("Attempted array access on non-array type.");
           yield BaseType.UNKNOWN;
         }
 
-        for (Expr indexExpr : a.indices) {
-          Type indexType = visit(indexExpr);
-          if (!indexType.equals(BaseType.INT)) {
-            error("Array index must be of type int.");
+        List<Integer> dims = new ArrayList<>();
+        Type leaf = t;
+        while (leaf instanceof ArrayType at) {
+          // Each ArrayType carries exactly one dimension
+          dims.add(at.dimensions.get(0));
+          leaf = at.elementType;
+        }
+        Collections.reverse(dims);
+
+        // boundn check each index against the corresponding dimension
+        for (int idx = 0; idx < a.indices.size(); idx++) {
+          Expr ix = a.indices.get(idx);
+          Type ixT = visit(ix);
+          if (!ixT.equals(BaseType.INT)) {
+            error("Array index must be int.");
             yield BaseType.UNKNOWN;
+          }
+          if (ix instanceof IntLiteral il) {
+            int v = il.value;
+            int dim = dims.get(idx);
+            if (v < 0 || v >= dim) {
+              error("Array index " + v + " out of bounds for dimension size " + dim);
+              yield BaseType.UNKNOWN;
+            }
           }
         }
 
-        if (a.indices.size() > at.dimensions.size()) {
+        // too many indices
+        if (a.indices.size() > dims.size()) {
+          error("Too many indices for array access.");
           yield BaseType.UNKNOWN;
         }
 
-        List<Integer> newDimensions = new ArrayList<>(at.dimensions);
-        for (int i = 0; i < a.indices.size(); i++) {
-          if (newDimensions.isEmpty()) {
-            yield BaseType.UNKNOWN;
-          }
-          newDimensions.remove(0);
-        }
-
-        a.type =
-            newDimensions.isEmpty()
-                ? at.elementType
-                : new ArrayType(at.elementType, newDimensions, at.size);
+        // type the first N indices
+        List<Integer> rem = new ArrayList<>(dims);
+        for (int i = 0; i < a.indices.size(); i++) rem.remove(0);
+        a.type = rem.isEmpty() ? leaf : new ArrayType(leaf, rem, 0);
         yield a.type;
       }
 
@@ -764,21 +776,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Invalid class cast from " + source.name + " to " + target.name);
           yield BaseType.UNKNOWN;
         }
-        /*
-        Type to = tc.type;
-        if (to instanceof ClassType TC && exprType instanceof ClassType FC) {
-          // check if the source class is a subclass of the target class
-          ClassSymbol cur = currentScope.lookupClass(FC.name);
-          while (cur != null) {
-            if (cur.name.equals(TC.name)) {
-              yield to;
-            }
-            cur = cur.parent;
-          }
-          error("Invalid class cast from " + FC.name + " to " + TC.name);
-          yield BaseType.UNKNOWN;
-        }
-          */
         yield BaseType.UNKNOWN;
       }
       // value at expression

@@ -150,11 +150,7 @@ public class MemAllocCodeGen extends CodeGen {
               computeSize(at.elementType) * at.dimensions.stream().reduce(1, (a, b) -> a * b),
               computeAlignment(at.elementType));
       case StructType st -> alignTo(structSizes.getOrDefault(st.name, 0), computeAlignment(st));
-      case ClassType ct ->
-          4
-              + CodeGenContext.getClassFieldOffsets(ct.name).values().stream()
-                  .mapToInt(Integer::intValue)
-                  .sum();
+      case ClassType ct -> 4;
       default -> throw new UnsupportedOperationException("Unknown type: " + type);
     };
   }

@@ -15,7 +15,7 @@ class Code {
             if (tag[i] == '0') {
                 break;
             }
-            print_c(tag[i]);
+            //print_c(tag[i]);
             i = i + 1;
         }
         print_s((char*)"\n");

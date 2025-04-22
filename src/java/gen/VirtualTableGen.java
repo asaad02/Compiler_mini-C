@@ -1,9 +1,6 @@
 package gen;
 
-import ast.ClassDecl;
-import ast.Decl;
-import ast.Program;
-import ast.VarDecl;
+import ast.*;
 import gen.asm.*;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -69,6 +66,15 @@ public class VirtualTableGen extends CodeGen {
 
   /** compute a field's size 4 byte aligned */
   private int computeFieldSize(VarDecl f) {
+    Type t = f.type;
+    if (t instanceof ArrayType at) {
+      // BaseType.CHAR and BaseType.INT  occupy 4 bytes
+      int elemSize = 4;
+      // multiply by all dimensions
+      int count = at.dimensions.stream().reduce(1, (a, b) -> a * b);
+      return elemSize * count;
+    }
+    // pointers or ints or chars or object 4 bytes
     return 4;
   }
 }

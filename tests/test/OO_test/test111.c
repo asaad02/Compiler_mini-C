@@ -18,7 +18,7 @@ class Course {
 
     void testAll() {
         whereToAttend();
-        print_i(hasExam());
+        //print_i(hasExam());
         print_s((char*)"\n");
     }
 }
