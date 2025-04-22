@@ -320,7 +320,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
 
                   // Check if the inner arrays rows have the same type
                   if (!leftInner.elementType.equals(rightInner.elementType)) {
-                    // error("2D Array element type mismatch.");
+                    error("2D Array element type mismatch.");
                     yield BaseType.UNKNOWN;
                   }
                   // check if the row sizes match
@@ -600,10 +600,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                     && actualArray.elementType instanceof ArrayType actualInner) {
 
                   // Check inner array types
-                  // if (!expectedInner.elementType.equals(actualInner.elementType)) {
-                  // error("Function argument 2D array type mismatch.");
-                  // yield BaseType.UNKNOWN;
-                  // }
+                  if (!expectedInner.elementType.equals(actualInner.elementType)) {
+                    error("Function argument 2D array type mismatch.");
+                    // yield BaseType.UNKNOWN;
+                  }
                   // Check inner array sizes
                   if (expectedInner.getDimensionSize(i) != actualInner.getDimensionSize(i)) {
                     error("Function argument 2D array row size mismatch.");
@@ -614,12 +614,12 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                   yield BaseType.UNKNOWN;
                 }
                 // Check top level sizes
-                // if (expectedArray.getDimensionSize(i) != actualArray.getDimensionSize(i)) {
-                // error("Function argument array size mismatch.");
-                // yield BaseType.UNKNOWN;
-                // }
+                if (expectedArray.getDimensionSize(i) != actualArray.getDimensionSize(i)) {
+                  error("Function argument array size mismatch.");
+                  // yield BaseType.UNKNOWN;
+                }
               } else {
-                // error("Function argument type mismatch: Expected array but got " + actual);
+                error("Function argument type mismatch: Expected array but got " + actual);
                 yield BaseType.UNKNOWN;
               }
             }
@@ -764,21 +764,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Invalid class cast from " + source.name + " to " + target.name);
           yield BaseType.UNKNOWN;
         }
-        /*
-        Type to = tc.type;
-        if (to instanceof ClassType TC && exprType instanceof ClassType FC) {
-          // check if the source class is a subclass of the target class
-          ClassSymbol cur = currentScope.lookupClass(FC.name);
-          while (cur != null) {
-            if (cur.name.equals(TC.name)) {
-              yield to;
-            }
-            cur = cur.parent;
-          }
-          error("Invalid class cast from " + FC.name + " to " + TC.name);
-          yield BaseType.UNKNOWN;
-        }
-          */
         yield BaseType.UNKNOWN;
       }
       // value at expression
