@@ -1,18 +1,76 @@
-Program(ClassDecl(A,
-    FunDef(VOID,hello,
+Program(ClassDecl(ClassType(Course),
+    VarDecl(ArrayType(CHAR,20),name),
+    VarDecl(ArrayType(ArrayType(CHAR,10),20),code),
+    VarDecl(INT,credit),
+    VarDecl(INT,courseWorkScore),
+    FunDef(VOID,whereToAttend,
       Block(
-        ExprStmt(FunCallExpr(print_s,TypecastExpr(PointerType(CHAR),StrLiteral(Hello from A
-))))))),ClassDecl(B extends A,
-    FunDef(VOID,hello,
+        ExprStmt(FunCallExpr(print_s,TypecastExpr(PointerType(CHAR),StrLiteral(Not determined! The course will be held virtually or in person!
+)))))),
+    FunDef(INT,hasExam,
       Block(
-        ExprStmt(FunCallExpr(print_s,TypecastExpr(PointerType(CHAR),StrLiteral(Hello from B
-))))))),ClassDecl(C extends B,
-    FunDef(VOID,hello,
+        If(BinOp(VarExpr(courseWorkScore),EQ,IntLiteral(100)),Return(IntLiteral(0)),Return(IntLiteral(1)))))),ClassDecl(ClassType(VirtualCourse),ClassType(Course),
+    VarDecl(ArrayType(CHAR,200),zoomLink),
+    VarDecl(INT,isOnZoom),
+    FunDef(VOID,whereToAttend,
       Block(
-        ExprStmt(FunCallExpr(print_s,TypecastExpr(PointerType(CHAR),StrLiteral(Hello from C
-))))))),FunDef(INT,main,
+        ExprStmt(FunCallExpr(print_s,TypecastExpr(PointerType(CHAR),StrLiteral(The course is going to be held on Zoom!
+))))))),FunDef(VOID,main,
     Block(
-      VarDecl(ClassType(A),x)
-      ,ExprStmt(Assign(VarExpr(x),TypecastExpr(ClassType(A),NewInstance(C))))
-      ,ExprStmt(InstanceFunCallExpr(VarExpr(x)FunCallExpr(hello)))
-      ,Return(IntLiteral(0)))))
+      VarDecl(ArrayType(CHAR,20),name)
+      ,VarDecl(ClassType(Course),comp520)
+      ,VarDecl(INT,credit)
+      ,VarDecl(INT,i)
+      ,VarDecl(ClassType(Course),vcourse)
+      ,VarDecl(ClassType(Course),course)
+      ,ExprStmt(Assign(ArrayAccessExpr(VarExpr(name),IntLiteral(0)),ChrLiteral(a)))
+      ,ExprStmt(Assign(ArrayAccessExpr(VarExpr(name),IntLiteral(1)),ChrLiteral(b)))
+      ,ExprStmt(Assign(ArrayAccessExpr(VarExpr(name),IntLiteral(2)),ChrLiteral(c)))
+      ,ExprStmt(Assign(ArrayAccessExpr(VarExpr(name),IntLiteral(3)),ChrLiteral(d)))
+      ,ExprStmt(Assign(ArrayAccessExpr(VarExpr(name),IntLiteral(4)),ChrLiteral(e)))
+      ,ExprStmt(Assign(ArrayAccessExpr(VarExpr(name),IntLiteral(5)),ChrLiteral(f)))
+      ,ExprStmt(Assign(ArrayAccessExpr(VarExpr(name),IntLiteral(6)),ChrLiteral(g)))
+      ,ExprStmt(Assign(ArrayAccessExpr(VarExpr(name),IntLiteral(7)),ChrLiteral(h)))
+      ,ExprStmt(Assign(ArrayAccessExpr(VarExpr(name),IntLiteral(8)),ChrLiteral(0)))
+      ,ExprStmt(Assign(VarExpr(comp520),NewInstance(Course)))
+      ,ExprStmt(Assign(VarExpr(credit),FieldAccessExpr(VarExpr(comp520),credit)))
+      ,ExprStmt(Assign(FieldAccessExpr(VarExpr(comp520),courseWorkScore),IntLiteral(100)))
+      ,ExprStmt(Assign(VarExpr(i),IntLiteral(0)))
+      ,While(BinOp(VarExpr(i),LT,IntLiteral(20)),
+        Block(
+          ExprStmt(Assign(ArrayAccessExpr(FieldAccessExpr(VarExpr(comp520),name),VarExpr(i)),ArrayAccessExpr(VarExpr(name),VarExpr(i))))
+          ,ExprStmt(Assign(VarExpr(i),BinOp(VarExpr(i),ADD,IntLiteral(1))))
+          ,If(BinOp(ArrayAccessExpr(VarExpr(name),VarExpr(i)),EQ,ChrLiteral(0)),Block(
+              Break())))
+        )
+      ,ExprStmt(InstanceFunCallExpr(VarExpr(comp520),FunCallExpr(whereToAttend)))
+      ,If(BinOp(InstanceFunCallExpr(VarExpr(comp520),FunCallExpr(hasExam)),EQ,IntLiteral(0)),ExprStmt(FunCallExpr(print_s,TypecastExpr(PointerType(CHAR),StrLiteral(No exam!
+)))),ExprStmt(FunCallExpr(print_s,TypecastExpr(PointerType(CHAR),StrLiteral(Exam!
+)))))
+      ,ExprStmt(FunCallExpr(print_i,TypecastExpr(INT,FieldAccessExpr(VarExpr(comp520),credit))))
+      ,ExprStmt(FunCallExpr(print_c,ChrLiteral(
+)))
+      ,ExprStmt(Assign(VarExpr(i),IntLiteral(0)))
+      ,While(BinOp(VarExpr(i),LT,IntLiteral(20)),
+        Block(
+          ExprStmt(FunCallExpr(print_c,ArrayAccessExpr(FieldAccessExpr(VarExpr(comp520),name),VarExpr(i))))
+          ,If(BinOp(ArrayAccessExpr(VarExpr(name),VarExpr(i)),EQ,ChrLiteral(0)),Block(
+              Break()))
+          ,ExprStmt(Assign(VarExpr(i),BinOp(VarExpr(i),ADD,IntLiteral(1))))
+          ,ExprStmt(FunCallExpr(print_c,ChrLiteral(
+))))
+        )
+      ,ExprStmt(FunCallExpr(print_c,ChrLiteral(
+)))
+      ,ExprStmt(FunCallExpr(print_i,TypecastExpr(INT,FieldAccessExpr(VarExpr(comp520),courseWorkScore))))
+      ,ExprStmt(FunCallExpr(print_c,ChrLiteral(
+)))
+      ,ExprStmt(Assign(VarExpr(vcourse),TypecastExpr(ClassType(Course),NewInstance(VirtualCourse))))
+      ,ExprStmt(InstanceFunCallExpr(VarExpr(vcourse),FunCallExpr(whereToAttend)))
+      ,ExprStmt(Assign(VarExpr(course),TypecastExpr(ClassType(Course),VarExpr(vcourse))))
+      ,ExprStmt(Assign(FieldAccessExpr(VarExpr(course),credit),IntLiteral(4)))
+      ,ExprStmt(FunCallExpr(print_c,ArrayAccessExpr(FieldAccessExpr(VarExpr(comp520),name),IntLiteral(19))))
+      ,ExprStmt(Assign(ArrayAccessExpr(ArrayAccessExpr(FieldAccessExpr(VarExpr(comp520),code),IntLiteral(0)),IntLiteral(0)),ChrLiteral(C)))
+      ,ExprStmt(FunCallExpr(print_c,ChrLiteral(
+)))
+      ,ExprStmt(FunCallExpr(print_c,ArrayAccessExpr(ArrayAccessExpr(FieldAccessExpr(VarExpr(comp520),code),IntLiteral(0)),IntLiteral(10)))))))
