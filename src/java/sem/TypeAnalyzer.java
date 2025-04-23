@@ -12,6 +12,9 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
   private int loopDepth = 0;
   // declared structs
   private Set<String> declaredStructs = new HashSet<>();
+  // initialized class varibales
+  private Set<String> initializedVars = new HashSet<>();
+
   // built-in functions
   private static final List<FunDecl> BUILT_IN_FUNCTIONS =
       List.of(
@@ -235,6 +238,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         if (!isLValue(a.left)) {
           error("Left-hand side of assignment must be an lvalue.");
           yield BaseType.UNKNOWN;
+        }
+
+        if (a.left instanceof VarExpr v && a.left.type instanceof ClassType) {
+          initializedVars.add(v.name);
         }
         // visit the left-hand side of the assignment
         Type left = visit(a.left);
@@ -554,6 +561,14 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           structType = pt.baseType;
           // System.out.println("[TypeAnalyzer] Dereferencing pointer to struct: " + structType);
         }
+
+        if (fa.structure instanceof VarExpr v
+            && structType instanceof ClassType
+            && !initializedVars.contains(v.name)) {
+          error("class '" + v.name + "' used before initialization");
+          yield BaseType.UNKNOWN;
+        }
+
         // is it (struct style) or (class‐style)
         if (structType instanceof ClassType ct) {
           ClassSymbol cls = currentScope.lookupClass(ct.name);
