@@ -175,10 +175,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           }
         }
 
-        if (isRecursiveWithoutPointer(std)) {
-          // error("Struct '" + std.structType.name + "' is recursive without pointer.");
-          yield BaseType.UNKNOWN;
-        }
         StructSymbol structSymbol = new StructSymbol(std);
         currentScope.put(structSymbol);
         // assign the struct name to the struct type
@@ -269,45 +265,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               error("Implicit conversion from 'int' to 'char' is not allowed.");
               yield BaseType.UNKNOWN;
             }
-          }
-          // if the left-hand side is an array
-          case ArrayType leftArray -> {
-            switch (right) {
-              case ArrayType rightArray -> {
-                // ensure both are 2D arrays with matching inner types
-                if (leftArray.elementType instanceof ArrayType leftInner
-                    && rightArray.elementType instanceof ArrayType rightInner) {
-
-                  // Check if the inner arrays rows have the same type
-                  if (!leftInner.elementType.equals(rightInner.elementType)) {
-                    error("2D Array element type mismatch.");
-                    yield BaseType.UNKNOWN;
-                  }
-                  // check if the row sizes match
-                  if (leftInner.getDimensionSize(numErrors)
-                      != rightInner.getDimensionSize(numErrors)) {
-                    error("2D Array row size mismatch.");
-                    yield BaseType.UNKNOWN;
-                  }
-
-                } else if (!leftArray.elementType.equals(rightArray.elementType)) {
-                  error("Array element type mismatch.");
-                  yield BaseType.UNKNOWN;
-                }
-                // 3nsure the top-level array sizes match
-                if (leftArray.getDimensionSize(numErrors)
-                    != rightArray.getDimensionSize(numErrors)) {
-                  error("Array size mismatch.");
-                  yield BaseType.UNKNOWN;
-                }
-              }
-              default -> {
-                error("Array assignment mismatch.");
-                yield BaseType.UNKNOWN;
-              }
-            }
-
-            yield leftArray;
           }
           case ClassType leftClass -> {
             right = visit(a.right);
@@ -539,52 +496,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         for (int i = 0; i < f.args.size(); i++) {
           Type expected = expectedParams.get(i);
           Type actual = visit(f.args.get(i));
-          // check if int and char mismatch arguments
-
-          if (expected.equals(BaseType.INT) && actual.equals(BaseType.CHAR)) {
-            error("Implicit conversion from 'char' to 'int' is not allowed.");
-            yield BaseType.UNKNOWN;
-          }
-
-          switch (expected) {
-            case BaseType bt -> {
-              if (bt.equals(BaseType.VOID)) {
-                error("Function argument cannot be of type void.");
-                yield BaseType.UNKNOWN;
-              }
-            }
-            case ArrayType expectedArray -> {
-              if (actual instanceof ArrayType actualArray) {
-                // Handle 2D array case
-                if (expectedArray.elementType instanceof ArrayType expectedInner
-                    && actualArray.elementType instanceof ArrayType actualInner) {
-
-                  // Check inner array types
-                  if (!expectedInner.elementType.equals(actualInner.elementType)) {
-                    error("Function argument 2D array type mismatch.");
-                    // yield BaseType.UNKNOWN;
-                  }
-                  // Check inner array sizes
-                  if (expectedInner.getDimensionSize(i) != actualInner.getDimensionSize(i)) {
-                    error("Function argument 2D array row size mismatch.");
-                    yield BaseType.UNKNOWN;
-                  }
-                } else if (!expectedArray.elementType.equals(actualArray.elementType)) {
-                  error("Function argument array element type mismatch.");
-                  yield BaseType.UNKNOWN;
-                }
-                // Check top level sizes
-                if (expectedArray.getDimensionSize(i) != actualArray.getDimensionSize(i)) {
-                  error("Function argument array size mismatch.");
-                  // yield BaseType.UNKNOWN;
-                }
-              } else {
-                error("Function argument type mismatch: Expected array but got " + actual);
-                yield BaseType.UNKNOWN;
-              }
-            }
-            default -> {}
-          }
         }
         yield funSymbol.def != null ? funSymbol.def.type : funSymbol.decl.type;
       }
@@ -655,6 +566,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
             error("Class " + ct.name + " has no field " + fa.field);
             yield BaseType.UNKNOWN;
           }
+
           fa.type = fld;
           yield fld;
         }
@@ -839,12 +751,5 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       case ValueAtExpr va -> isLValue(va.expr);
       default -> false;
     };
-  }
-
-  // check if the struct is recursive without a pointer
-  private boolean isRecursiveWithoutPointer(StructTypeDecl std) {
-    return std.fields.stream()
-        .anyMatch(
-            field -> field.type instanceof StructType st && st.name.equals(std.structType.name));
   }
 }
