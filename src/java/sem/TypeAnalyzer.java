@@ -240,7 +240,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           yield BaseType.UNKNOWN;
         }
 
-        if (a.left instanceof VarExpr v && a.left.type instanceof ClassType) {
+        if (a.left instanceof VarExpr v) {
           initializedVars.add(v.name);
         }
         // visit the left-hand side of the assignment
