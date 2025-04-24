@@ -218,7 +218,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
         // if the variable is not declared, return an error
         if (varSymbol == null) {
-          // error("Variable '" + v.name + "' is not declared.");
+          error("Variable '" + v.name + "' is not declared.");
           v.type = BaseType.UNKNOWN;
           yield BaseType.UNKNOWN;
         }
@@ -276,9 +276,9 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               if (leftClass.name.equals(rightClass.name)) {
                 // same type
                 a.type = leftClass;
-                if (a.left instanceof VarExpr v) {
-                  initializedVars.add(v.name);
-                }
+                // if (a.left instanceof VarExpr v) {
+                // initializedVars.add(v.name);
+                // }
                 yield leftClass;
               }
 
@@ -555,12 +555,12 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       case FieldAccessExpr fa -> {
         Type structType = visit(fa.structure);
 
-        if (fa.structure instanceof VarExpr v
-            && structType instanceof ClassType
-            && !initializedVars.contains(v.name)) {
-          error("class '" + v.name + "' used before initialization");
-          yield BaseType.UNKNOWN;
-        }
+        // if (fa.structure instanceof VarExpr v
+        // && structType instanceof ClassType
+        // && !initializedVars.contains(v.name)) {
+        // error("class '" + v.name + "' used before initialization");
+        // yield BaseType.UNKNOWN;
+        // }
 
         // is it (struct style) or (class‐style)
         if (structType instanceof ClassType ct) {
