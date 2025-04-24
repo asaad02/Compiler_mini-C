@@ -239,10 +239,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           error("Left-hand side of assignment must be an lvalue.");
           yield BaseType.UNKNOWN;
         }
-
-        if (a.left instanceof VarExpr v) {
-          initializedVars.add(v.name);
-        }
         // visit the left-hand side of the assignment
         Type left = visit(a.left);
         // print the type of the left-hand side of the assignment
@@ -280,6 +276,9 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               if (leftClass.name.equals(rightClass.name)) {
                 // same type
                 a.type = leftClass;
+                if (a.left instanceof VarExpr v) {
+                  initializedVars.add(v.name);
+                }
                 yield leftClass;
               }
 
