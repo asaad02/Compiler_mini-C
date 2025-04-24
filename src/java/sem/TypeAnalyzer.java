@@ -218,7 +218,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         }
         // if the variable is not declared, return an error
         if (varSymbol == null) {
-          error("Variable '" + v.name + "' is not declared.");
+          // error("Variable '" + v.name + "' is not declared.");
           v.type = BaseType.UNKNOWN;
           yield BaseType.UNKNOWN;
         }
