@@ -555,12 +555,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       case FieldAccessExpr fa -> {
         Type structType = visit(fa.structure);
 
-        // Ensure struct pointers are correctly dereferenced
-        if (structType instanceof PointerType pt) {
-          structType = pt.baseType;
-          // System.out.println("[TypeAnalyzer] Dereferencing pointer to struct: " + structType);
-        }
-
         if (fa.structure instanceof VarExpr v
             && structType instanceof ClassType
             && !initializedVars.contains(v.name)) {
