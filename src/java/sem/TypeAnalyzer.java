@@ -12,8 +12,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
   private int loopDepth = 0;
   // declared structs
   private Set<String> declaredStructs = new HashSet<>();
-  // initialized class varibales
-  private Set<String> initializedVars = new HashSet<>();
 
   // built-in functions
   private static final List<FunDecl> BUILT_IN_FUNCTIONS =
@@ -142,11 +140,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           Type paramType = param.type;
           // put the parameter in the current scope
           currentScope.put(new VarSymbol(new VarDecl(paramType, param.name)));
-        }
-
-        initializedVars.clear();
-        for (VarDecl param : fd.params) {
-          initializedVars.add(param.name);
         }
         // set the current function return type
         currentFunctionReturnType = fd.type;
@@ -281,9 +274,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               if (leftClass.name.equals(rightClass.name)) {
                 // same type
                 a.type = leftClass;
-                if (a.left instanceof VarExpr v) {
-                  initializedVars.add(v.name);
-                }
                 yield leftClass;
               }
 
@@ -291,12 +281,21 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               ClassSymbol cur = currentScope.lookupClass(rightClass.name);
               while (cur != null) {
                 if (cur.name.equals(leftClass.name)) {
-                  yield leftClass;
+                  error(
+                      "Cannot implicitly assign subclass "
+                          + rightClass.name
+                          + " to superclass "
+                          + leftClass.name
+                          + "; cast required.");
+                  yield BaseType.UNKNOWN;
                 }
                 cur = cur.parent;
               }
 
-              error("Cannot assign class type " + rightClass.name + " to " + leftClass.name);
+              // error("Cannot assign class type " + rightClass.name + " to " + leftClass.name);
+              yield BaseType.UNKNOWN;
+            } else {
+              error("Cannot assign non‐class value to class variable");
               yield BaseType.UNKNOWN;
             }
           }
@@ -304,11 +303,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           default -> {
             yield BaseType.UNKNOWN;
           }
-        }
-        if (a.left instanceof VarExpr ve) {
-          initializedVars.add(ve.name);
-        } else if (a.left instanceof FieldAccessExpr fa && fa.structure instanceof VarExpr ve2) {
-          initializedVars.add(ve2.name);
         }
         a.type = left;
         a.left.type = left;
@@ -556,14 +550,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       case FieldAccessExpr fa -> {
         Type structType = visit(fa.structure);
 
-        if (fa.structure instanceof VarExpr) {
-          VarExpr ve = (VarExpr) fa.structure;
-          if (structType instanceof ClassType && !initializedVars.contains(ve.name)) {
-            error("Variable '" + ve.name + "' used before initialization");
-            yield BaseType.UNKNOWN;
-          }
-        }
-
         // is it (struct style) or (class‐style)
         if (structType instanceof ClassType ct) {
           ClassSymbol cls = currentScope.lookupClass(ct.name);
@@ -606,10 +592,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       }
       case InstanceFunCallExpr ifc -> {
         Type rcv = visit(ifc.target);
-        if (ifc.target instanceof VarExpr ve && !initializedVars.contains(ve.name)) {
-          error("Variable '" + ve.name + "' used before initialization");
-          yield BaseType.UNKNOWN;
-        }
         if (!(rcv instanceof ClassType ct)) {
           error("Method call on non class type.");
           yield BaseType.UNKNOWN;
