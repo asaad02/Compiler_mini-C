@@ -89,7 +89,8 @@ public class ExprAddrCodeGen extends CodeGen {
             && CodeGenContext.getClassFieldOffsets(currentClass).containsKey(v.name)) {
           System.out.println("[ExprAddrCodeGen] Falling back to field: " + v.name);
           // 'this' pointer in $a0 and field offset = 4 + base
-          text.emit(OpCode.ADDU, addrReg, Register.Arch.a0, Register.Arch.zero);
+          // text.emit(OpCode.ADDU, addrReg, Register.Arch.a0, Register.Arch.zero);
+          text.emit(OpCode.ADDU, addrReg, Register.Arch.s0, Register.Arch.zero);
           int fieldOff = CodeGenContext.getClassFieldOffsets(currentClass).get(v.name);
           text.emit(OpCode.ADDIU, addrReg, addrReg, 4 + fieldOff);
           return addrReg;

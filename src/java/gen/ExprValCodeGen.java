@@ -269,7 +269,7 @@ public class ExprValCodeGen extends CodeGen {
           System.out.println("[ExprValCodeGen] Falling back to field load: " + v.name);
           int off = CodeGenContext.getClassFieldOffsets(currentClass).get(v.name);
           Register fldAddr = Register.Virtual.create();
-          asmProg.getCurrentTextSection().emit(OpCode.ADDIU, fldAddr, Register.Arch.a0, 4 + off);
+          asmProg.getCurrentTextSection().emit(OpCode.ADDIU, fldAddr, Register.Arch.s0, 4 + off);
           text.emit(OpCode.LW, resReg, fldAddr, 0);
           return resReg;
         }

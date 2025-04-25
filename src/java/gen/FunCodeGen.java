@@ -80,6 +80,7 @@ public class FunCodeGen extends CodeGen {
         Register src = getArgReg(i + 1);
         textSection.emit(OpCode.SW, src, Register.Arch.fp, localOffset);
       }
+      textSection.emit(OpCode.ADDU, Register.Arch.s0, Register.Arch.a0, Register.Arch.zero);
     } else {
       int paramStackOffset = frameSize;
       for (int i = 0; i < fd.params.size(); i++) {
