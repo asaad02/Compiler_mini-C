@@ -414,28 +414,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
           // visit the return expression
           Type returnType = visit(r.expr);
 
-          if (currentFunctionReturnType instanceof StructType expectedStruct
-              && returnType instanceof StructType actualStruct) {
-            if (!expectedStruct.name.equals(actualStruct.name)) {
-              error(
-                  "Return statement type mismatch: expected "
-                      + expectedStruct.name
-                      + " but got "
-                      + actualStruct.name);
-              yield BaseType.UNKNOWN;
-            }
-          } // and not pointer type
-          else if (!currentFunctionReturnType.equals(returnType)
-              && !(currentFunctionReturnType instanceof PointerType)
-              && !(returnType instanceof PointerType)) {
-            error(
-                "Return statement type mismatch: expected "
-                    + currentFunctionReturnType
-                    + " but got "
-                    + returnType);
-            yield BaseType.UNKNOWN;
-          }
-
           yield returnType;
         }
       }
