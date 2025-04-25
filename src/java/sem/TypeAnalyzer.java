@@ -488,6 +488,16 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 error("Function argument cannot be of type void.");
                 yield BaseType.UNKNOWN;
               }
+              // if expected is a int
+              // if (bt.equals(BaseType.INT) && !actual.equals(BaseType.INT)) {
+              // error("Implicit conversion from 'char' to 'int' is not allowed.");
+              // yield BaseType.UNKNOWN;
+              // }
+              // if expected is a char
+              if (bt.equals(BaseType.CHAR) && !actual.equals(BaseType.CHAR)) {
+                error("expected char ");
+                yield BaseType.UNKNOWN;
+              }
             }
             case ArrayType expectedArray -> {
               if (actual instanceof ArrayType actualArray) {
@@ -551,7 +561,7 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
       case ArrayAccessExpr a -> {
         Type t = visit(a.array);
         if (!(t instanceof ArrayType)) {
-          error("Attempted array access on non-array type.");
+          // error("Attempted array access on non-array type.");
           yield BaseType.UNKNOWN;
         }
 
