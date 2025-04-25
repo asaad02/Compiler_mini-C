@@ -475,7 +475,77 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
         for (int i = 0; i < f.args.size(); i++) {
           Type expected = expectedParams.get(i);
           Type actual = visit(f.args.get(i));
+          // check if int and char mismatch arguments
+
+          if (expected.equals(BaseType.INT) && actual.equals(BaseType.CHAR)) {
+            error("Implicit conversion from 'char' to 'int' is not allowed.");
+            yield BaseType.UNKNOWN;
+          }
+
+          switch (expected) {
+            case BaseType bt -> {
+              if (bt.equals(BaseType.VOID)) {
+                error("Function argument cannot be of type void.");
+                yield BaseType.UNKNOWN;
+              }
+            }
+            case ArrayType expectedArray -> {
+              if (actual instanceof ArrayType actualArray) {
+                // Handle 2D array case
+                if (expectedArray.elementType instanceof ArrayType expectedInner
+                    && actualArray.elementType instanceof ArrayType actualInner) {
+
+                  // Check inner array types
+                  if (!expectedInner.elementType.equals(actualInner.elementType)) {
+                    error("Function argument 2D array type mismatch.");
+                    yield BaseType.UNKNOWN;
+                  }
+                  // Check inner array sizes
+                  if (expectedInner.getDimensionSize(i) != actualInner.getDimensionSize(i)) {
+                    error("Function argument 2D array row size mismatch.");
+                    yield BaseType.UNKNOWN;
+                  }
+                } else if (!expectedArray.elementType.equals(actualArray.elementType)) {
+                  error("Function argument array element type mismatch.");
+                  yield BaseType.UNKNOWN;
+                }
+                // Check top level sizes
+                if (expectedArray.getDimensionSize(i) != actualArray.getDimensionSize(i)) {
+                  error("Function argument array size mismatch.");
+                  yield BaseType.UNKNOWN;
+                }
+              } else {
+                // error("Function argument type mismatch: Expected array but got " + actual);
+                yield BaseType.UNKNOWN;
+              }
+            }
+            case StructType expectedStruct -> {
+              if (actual instanceof StructType actualStruct) {
+                if (!expectedStruct.name.equals(actualStruct.name)) {
+                  error("Function argument struct type mismatch.");
+                  yield BaseType.UNKNOWN;
+                }
+              } else {
+                error("Function argument type mismatch: Expected struct but got " + actual);
+                yield BaseType.UNKNOWN;
+              }
+            }
+            case ClassType expectedClass -> {
+              if (actual instanceof ClassType actualClass) {
+                if (!expectedClass.name.equals(actualClass.name)) {
+                  error("Function argument class type mismatch.");
+                  yield BaseType.UNKNOWN;
+                }
+              } else {
+                error("Function argument type mismatch: Expected class but got " + actual);
+                yield BaseType.UNKNOWN;
+              }
+            }
+
+            default -> {}
+          }
         }
+
         yield funSymbol.def != null ? funSymbol.def.type : funSymbol.decl.type;
       }
       case ArrayAccessExpr a -> {
