@@ -494,10 +494,10 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
               // yield BaseType.UNKNOWN;
               // }
               // if expected is a char
-              if (bt.equals(BaseType.CHAR) && !actual.equals(BaseType.CHAR)) {
-                error("expected char ");
-                yield BaseType.UNKNOWN;
-              }
+              // if (bt.equals(BaseType.CHAR) && !actual.equals(BaseType.CHAR)) {
+              // error("expected char ");
+              // yield BaseType.UNKNOWN;
+              // }
             }
             case ArrayType expectedArray -> {
               if (actual instanceof ArrayType actualArray) {
