@@ -540,17 +540,6 @@ public class TypeAnalyzer extends BaseSemanticAnalyzer {
                 yield BaseType.UNKNOWN;
               }
             }
-            case ClassType expectedClass -> {
-              if (actual instanceof ClassType actualClass) {
-                if (!expectedClass.name.equals(actualClass.name)) {
-                  error("Function argument class type mismatch.");
-                  yield BaseType.UNKNOWN;
-                }
-              } else {
-                error("Function argument type mismatch: Expected class but got " + actual);
-                yield BaseType.UNKNOWN;
-              }
-            }
 
             default -> {}
           }
