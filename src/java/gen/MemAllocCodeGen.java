@@ -153,11 +153,7 @@ public class MemAllocCodeGen extends CodeGen {
       }
       case StructType st ->
           structSizes.getOrDefault(st.name, computeStructSize(structDeclarations.get(st.name)));
-      case ClassType ct -> {
-        var fieldMap = CodeGenContext.getClassFieldOffsets(ct.name);
-        int maxOff = fieldMap.values().stream().mapToInt(i -> i).max().orElse(0);
-        yield maxOff + 4;
-      }
+      case ClassType ct -> 4;
       default -> throw new UnsupportedOperationException("Unknown type: " + type);
     };
   }
