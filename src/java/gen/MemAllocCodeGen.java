@@ -143,14 +143,21 @@ public class MemAllocCodeGen extends CodeGen {
   public int computeSize(Type type) {
     return switch (type) {
       case BaseType.INT -> 4;
-      case PointerType p -> 4;
       case BaseType.CHAR -> 4;
-      case ArrayType at ->
-          alignTo(
-              computeSize(at.elementType) * at.dimensions.stream().reduce(1, (a, b) -> a * b),
-              computeAlignment(at.elementType));
-      case StructType st -> alignTo(structSizes.getOrDefault(st.name, 0), computeAlignment(st));
-      case ClassType ct -> 4;
+      case PointerType p -> 4;
+      case ArrayType at -> {
+        int elemSize = computeSize(at.elementType);
+        int count = at.dimensions.stream().reduce(1, (a, b) -> a * b);
+        int rawSize = elemSize * count;
+        yield alignTo(rawSize, computeAlignment(at.elementType));
+      }
+      case StructType st ->
+          structSizes.getOrDefault(st.name, computeStructSize(structDeclarations.get(st.name)));
+      case ClassType ct -> {
+        var fieldMap = CodeGenContext.getClassFieldOffsets(ct.name);
+        int maxOff = fieldMap.values().stream().mapToInt(i -> i).max().orElse(0);
+        yield maxOff + 4;
+      }
       default -> throw new UnsupportedOperationException("Unknown type: " + type);
     };
   }
